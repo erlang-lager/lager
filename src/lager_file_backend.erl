@@ -67,8 +67,13 @@ handle_event(_Event, State) ->
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(_Reason, _State) ->
-    ok.
+terminate(_Reason, State) ->
+    io:format("lager file handler exiting~n"),
+    %% flush and close any file handles
+    lists:foreach(
+        fun({_, _, FD, _}) -> file:datasync(FD), file:close(FD);
+            (_) -> ok
+        end, State#state.files).
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

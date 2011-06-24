@@ -33,7 +33,8 @@ start_link() ->
     %application:start(riak_err),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
-            [{lager_console_backend, [info]}];
+            [{lager_console_backend, [info]},
+                {lager_file_backend, [{"error.log", error}, {"console.log", info}]}];
         Val ->
             Val
     end,
@@ -91,6 +92,7 @@ handle_info(Info, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
+    gen_event:stop(lager_event),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
