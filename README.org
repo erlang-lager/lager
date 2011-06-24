@@ -18,21 +18,29 @@
   some other way of including it in erlang's path. You can then add the
   following option to the erlang compiler flags
 
+#+BEGIN_EXAMPLE
   {parse_transform, lager_transform}
+#+END_EXAMPLE
 
   Alternately, you can add it to the module you which to compile with logging
   enabled:
 
+#+BEGIN_EXAMPLE
   -compile([{parse_transform, lager_transform}]).
+#+END_EXAMPLE
 
   Once you have built your code with lager, you can then generate log messages
   by doing the following:
 
+#+BEGIN_EXAMPLE
   lager:error("Some message")
+#+END_EXAMPLE
 
   Or:
 
+#+BEGIN_EXAMPLE
   lager:warning("Some message with a term: ~p", [Term])
+#+END_EXAMPLE
 
   The general form is lager:Severity() where Severity is one of the log levels
   mentioned above.
