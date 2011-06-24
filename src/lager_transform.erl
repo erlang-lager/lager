@@ -103,17 +103,12 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, boston_lager},
         end,
         transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
               {atom, Line3, Severity}}, NewArgs});
-transform_statement({'case', Line, Expr, Clauses}) ->
-    {'case', Line, Expr, walk_clauses([], Clauses)};
-transform_statement({'if', Line, Clauses}) ->
-    {'if', Line, walk_clauses([], Clauses)};
-transform_statement({block, Line, Body}) ->
-    {block, Line, walk_body([], Body)};
-transform_statement({lc, Line, Expression, Generator}) ->
-    {lc, Line, transform_statement(Expression), Generator};
-transform_statement({match, Line, Var, Expression}) ->
-    {match, Line, Var, transform_statement(Expression)};
+transform_statement(Stmt) when is_tuple(Stmt) ->
+    list_to_tuple(transform_statement(tuple_to_list(Stmt)));
+transform_statement(Stmt) when is_list(Stmt) ->
+    [transform_statement(S) || S <- Stmt];
 transform_statement(Stmt) ->
+    %io:format("Statement ~p~n", [Stmt]),
     Stmt.
 
 
