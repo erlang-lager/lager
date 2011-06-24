@@ -45,6 +45,22 @@ init(LogFiles) ->
         {Name, Level} <- LogFiles],
     {ok, #state{files=Files}}.
 
+handle_call({set_loglevel, _}, State) ->
+    {ok, {error, missing_identifier}, State};
+handle_call({set_loglevel, Ident, Level}, #state{files=Files} = State) ->
+    case lists:keyfind(Ident, 1, Files) of
+        false ->
+            %% no such file exists
+            {ok, {error, bad_identifier}, State};
+        _ ->
+            NewFiles = lists:map(
+                fun({Name, _, FD, Inode}) when Name == Ident ->
+                        lager:notice("Changed loglevel of ~s to ~p", [Ident, Level]),
+                        {Ident, lager_util:level_to_num(Level), FD, Inode};
+                    (X) -> X
+                end, Files),
+            {ok, ok, State#state{files=NewFiles}}
+    end;
 handle_call(get_loglevel, #state{files=Files} = State) ->
     Result = lists:foldl(fun({_, Level, _, _}, L) -> erlang:min(Level, L);
             (_, L) -> L end, 9,
@@ -68,7 +84,6 @@ handle_info(_Info, State) ->
     {ok, State}.
 
 terminate(_Reason, State) ->
-    io:format("lager file handler exiting~n"),
     %% flush and close any file handles
     lists:foreach(
         fun({_, _, FD, _}) -> file:datasync(FD), file:close(FD);

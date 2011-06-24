@@ -16,26 +16,25 @@
 
 -module(lager_util).
 
--export([levels/0, level_to_num/1]).
+-export([levels/0, level_to_num/1, num_to_level/1]).
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
 
-level_to_num(debug) ->
-    0;
-level_to_num(info) ->
-    1;
-level_to_num(notice) ->
-    2;
-level_to_num(warning) ->
-    3;
-level_to_num(error) ->
-    4;
-level_to_num(critical) ->
-    5;
-level_to_num(alert) ->
-    6;
-level_to_num(emergency) ->
-    7;
-level_to_num(_) ->
-    0.
+level_to_num(debug)     -> 0;
+level_to_num(info)      -> 1;
+level_to_num(notice)    -> 2;
+level_to_num(warning)   -> 3;
+level_to_num(error)     -> 4;
+level_to_num(critical)  -> 5;
+level_to_num(alert)     -> 6;
+level_to_num(emergency) -> 7.
+
+num_to_level(0) -> debug;
+num_to_level(1) -> info;
+num_to_level(2) -> notice;
+num_to_level(3) -> warning;
+num_to_level(4) -> error;
+num_to_level(5) -> critical;
+num_to_level(6) -> alert;
+num_to_level(7) -> emergency.

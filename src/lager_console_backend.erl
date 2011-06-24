@@ -21,17 +21,19 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, nlevel}).
+-record(state, {level}).
 
 init([Level]) ->
-    {ok, #state{level=Level, nlevel=lager_util:level_to_num(Level)}}.
+    {ok, #state{level=lager_util:level_to_num(Level)}}.
 
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
+handle_call({set_loglevel, Level}, State) ->
+    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, Level, Time, Message}, #state{nlevel=LogLevel} = State) when Level >= LogLevel ->
+handle_event({log, Level, Time, Message}, #state{level=LogLevel} = State) when Level >= LogLevel ->
     io:put_chars([Time, " ", Message, "\n"]),
     {ok, State};
 handle_event(_Event, State) ->

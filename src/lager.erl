@@ -18,8 +18,10 @@
 
 -behaviour(gen_server).
 
--export([start_link/0,start/0,sasl_log/3, log/7, log/8]).
+%% API
+-export([start_link/0,start/0,sasl_log/3, log/7, log/8, get_loglevel/1, set_loglevel/2, set_loglevel/3]).
 
+%% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
@@ -70,6 +72,19 @@ log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) -
             Function, Line, io_lib:format(Format, Args)]),
     gen_event:notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
+set_loglevel(Handler, Level) when is_atom(Level) ->
+    gen_server:call(?MODULE, {set_loglevel, Handler, Level}).
+
+set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
+    gen_server:call(?MODULE, {set_loglevel, Handler, Ident, Level}).
+
+get_loglevel(Handler) ->
+    case gen_server:call(?MODULE, {get_loglevel, Handler}) of
+        X when is_integer(X) ->
+            lager_util:num_to_level(X);
+        Y -> Y
+    end.
+
 %% gen_server callbacks
 
 init([Handlers]) ->
@@ -81,6 +96,21 @@ init([Handlers]) ->
     lager_mochiglobal:put(loglevel, MinLog),
     {ok, #state{}}.
 
+handle_call({set_loglevel, Handler, Level}, _From, State) ->
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
+    %% recalculate min log level
+    MinLog = minimum_log_level(get_log_levels()),
+    lager_mochiglobal:put(loglevel, MinLog),
+    {reply, Reply, State};
+handle_call({set_loglevel, Handler, Ident, Level}, _From, State) ->
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}),
+    %% recalculate min log level
+    MinLog = minimum_log_level(get_log_levels()),
+    lager_mochiglobal:put(loglevel, MinLog),
+    {reply, Reply, State};
+handle_call({get_loglevel, Handler}, _From, State) ->
+    Reply = gen_event:call(lager_event, Handler, get_loglevel),
+    {reply, Reply, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -108,4 +138,4 @@ get_log_levels() ->
 minimum_log_level([]) ->
     9; %% higher than any log level, logging off
 minimum_log_level(Levels) ->
-    erlang:hd(lists:sort(lists:map(fun(Level) -> lager_util:level_to_num(Level) end, Levels))).
+    erlang:hd(lists:sort(Levels)).
