@@ -8,8 +8,7 @@
             ]},
   {applications, [
                   kernel,
-                  stdlib,
-                  sasl
+                  stdlib
                  ]},
   {registered, []},
   {mod, {lager_app, []}},
