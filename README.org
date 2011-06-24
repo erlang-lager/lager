@@ -1,0 +1,41 @@
+* Overview
+  Lager (pronounced lAAger) is a logging framework for Erlang. Its purpose is
+  to provide a more traditional way to perform logging in an erlang application
+  that plays nicely with traditional UNIX logging tools like logrotate and
+  syslog.
+
+  Features
+    - Finer grained log levels (debug, info, notice, warning, error, critical,
+      alert, emergency)
+    - Logger calls are transformed using a parse transform to allow capturing
+      Module/Function/Line/Pid information
+    - When no handler is consuming a log level (eg. debug) no event is even sent
+      to the log handler
+    - Supports multiple backends, including console, file and syslog.
+
+* Usage
+  To use lager in your application, you need to define it as a rebar dep or have
+  some other way of including it in erlang's path. You can then add the
+  following option to the erlang compiler flags
+
+  {parse_transform, lager_transform}
+
+  Alternately, you can add it to the module you which to compile with logging
+  enabled:
+
+  -compile([{parse_transform, lager_transform}]).
+
+  Once you have built your code with lager, you can then generate log messages
+  by doing the following:
+
+  lager:error("Some message")
+
+  Or:
+
+  lager:warning("Some message with a term: ~p", [Term])
+
+  The general form is lager:Severity() where Severity is one of the log levels
+  mentioned above.
+
+* Configuration
+  TODO

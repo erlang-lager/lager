@@ -1,0 +1,18 @@
+%% -*- tab-width: 4;erlang-indent-level: 4;indent-tabs-mode: nil -*-
+%% ex: ts=4 sw=4 et
+{application, lager,
+ [
+  {description, "Custom error handler"},
+  {vsn, "1.0.0"},
+  {modules, [
+            ]},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  sasl
+                 ]},
+  {registered, []},
+  {mod, {riak_err_app, []}},
+  {env, [
+        ]}
+ ]}.
