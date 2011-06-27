@@ -21,7 +21,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, buffer}).
+-record(state, {level, buffer, ignored}).
 -compile([{parse_transform, lager_transform}]).
 
 -ifdef(TEST).
@@ -29,10 +29,12 @@
 -endif.
 
 init([Level]) ->
-    {ok, #state{level=lager_util:level_to_num(Level), buffer=[]}}.
+    {ok, #state{level=lager_util:level_to_num(Level), buffer=[], ignored=[]}}.
 
 handle_call(count, #state{buffer=Buffer} = State) ->
     {ok, length(Buffer), State};
+handle_call(count_ignored, #state{ignored=Ignored} = State) ->
+    {ok, length(Ignored), State};
 handle_call(pop, #state{buffer=Buffer} = State) ->
     case Buffer of
         [] ->
@@ -50,6 +52,8 @@ handle_call(_Request, State) ->
 handle_event({log, Level, Time, Message}, #state{level=LogLevel,
         buffer=Buffer} = State) when Level >= LogLevel ->
     {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
+handle_event({log, Level, Time, Message}, #state{ignored=Ignored} = State) ->
+    {ok, State#state{ignored=Ignored ++ [ignored]}};
 handle_event(_Event, State) ->
     {ok, State}.
 
@@ -69,6 +73,9 @@ pop() ->
 
 count() ->
     gen_event:call(lager_event, lager_test_backend, count).
+
+count_ignored() ->
+    gen_event:call(lager_event, lager_test_backend, count_ignored).
 
 lager_test_() ->
     {foreach,
@@ -105,7 +112,6 @@ lager_test_() ->
                         ok
                 end
             },
-
             {"test logging works from inside a begin/end block",
                 fun() ->
                         ?assertEqual(0, count()),
@@ -138,6 +144,24 @@ lager_test_() ->
                         [ [lager:warning("test message") || N <- lists:seq(1, 10)] ||
                             I <- lists:seq(1, 10)],
                         ?assertEqual(100, count()),
+                        ok
+                end
+            },
+            {"log messages below the threshold are ignored",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        lager:debug("this message will be ignored"),
+                        ?assertEqual(0, count()),
+                        ?assertEqual(0, count_ignored()),
+                        lager_mochiglobal:put(loglevel, 0),
+                        lager:debug("this message should be ignored"),
+                        ?assertEqual(0, count()),
+                        ?assertEqual(1, count_ignored()),
+                        lager:set_loglevel(lager_test_backend, debug),
+                        lager:debug("this message should be logged"),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(1, count_ignored()),
+                        ?assertEqual(debug, lager:get_loglevel(lager_test_backend)),
                         ok
                 end
             }
