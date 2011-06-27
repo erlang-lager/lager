@@ -37,7 +37,7 @@ start_link() ->
         undefined ->
             [{lager_console_backend, [info]},
                 {lager_file_backend, [{"error.log", error}, {"console.log", info}]}];
-        Val ->
+        {ok, Val} ->
             Val
     end,
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Handlers], []).
@@ -47,7 +47,7 @@ start() ->
         undefined ->
             [{lager_console_backend, [info]},
                 {lager_file_backend, [{"error.log", error}, {"console.log", info}]}];
-        Val ->
+        {ok, Val} ->
             Val
     end,
     gen_server:start({local, ?MODULE}, ?MODULE, [Handlers], []).
@@ -64,13 +64,13 @@ log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Message) ->
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
     Msg = io_lib:format("[~p] ~p@~p:~p:~p ~s", [Level, Pid, Module,
             Function, Line, Message]),
-    gen_event:notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
 log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) ->
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
     Msg = io_lib:format("[~p] ~p@~p:~p:~p ~s", [Level, Pid, Module,
             Function, Line, io_lib:format(Format, Args)]),
-    gen_event:notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
 set_loglevel(Handler, Level) when is_atom(Level) ->
     gen_server:call(?MODULE, {set_loglevel, Handler, Level}).
