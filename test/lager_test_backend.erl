@@ -69,13 +69,13 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 pop() ->
-    gen_event:call(lager_event, lager_test_backend, pop).
+    gen_event:call(lager_event, ?MODULE, pop).
 
 count() ->
-    gen_event:call(lager_event, lager_test_backend, count).
+    gen_event:call(lager_event, ?MODULE, count).
 
 count_ignored() ->
-    gen_event:call(lager_event, lager_test_backend, count_ignored).
+    gen_event:call(lager_event, ?MODULE, count_ignored).
 
 lager_test_() ->
     {foreach,
@@ -88,7 +88,7 @@ lager_test_() ->
                         ?assertEqual(0, count())
                 end
             },
-            {"test logging works",
+            {"logging works",
                 fun() ->
                         lager:warning("test message"),
                         ?assertEqual(1, count()),
@@ -100,7 +100,7 @@ lager_test_() ->
                         ok
                 end
             },
-            {"test logging with arguments works",
+            {"logging with arguments works",
                 fun() ->
                         lager:warning("test message ~p", [self()]),
                         ?assertEqual(1, count()),
@@ -112,7 +112,7 @@ lager_test_() ->
                         ok
                 end
             },
-            {"test logging works from inside a begin/end block",
+            {"logging works from inside a begin/end block",
                 fun() ->
                         ?assertEqual(0, count()),
                         begin
@@ -122,7 +122,7 @@ lager_test_() ->
                         ok
                 end
             },
-            {"test logging works from inside a list comprehension",
+            {"logging works from inside a list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
                         [lager:warning("test message") || N <- lists:seq(1, 10)],
@@ -130,7 +130,7 @@ lager_test_() ->
                         ok
                 end
             },
-            {"test logging works from a begin/end block inside a list comprehension",
+            {"logging works from a begin/end block inside a list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
                         [ begin lager:warning("test message") end || N <- lists:seq(1, 10)],
@@ -138,7 +138,7 @@ lager_test_() ->
                         ok
                 end
             },
-            {"test logging works from a nested list comprehension",
+            {"logging works from a nested list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
                         [ [lager:warning("test message") || N <- lists:seq(1, 10)] ||
@@ -157,11 +157,11 @@ lager_test_() ->
                         lager:debug("this message should be ignored"),
                         ?assertEqual(0, count()),
                         ?assertEqual(1, count_ignored()),
-                        lager:set_loglevel(lager_test_backend, debug),
+                        lager:set_loglevel(?MODULE, debug),
                         lager:debug("this message should be logged"),
                         ?assertEqual(1, count()),
                         ?assertEqual(1, count_ignored()),
-                        ?assertEqual(debug, lager:get_loglevel(lager_test_backend)),
+                        ?assertEqual(debug, lager:get_loglevel(?MODULE)),
                         ok
                 end
             }
@@ -170,7 +170,7 @@ lager_test_() ->
 
 setup() ->
     application:load(lager),
-    application:set_env(lager, handlers, [{lager_test_backend, [info]}]),
+    application:set_env(lager, handlers, [{?MODULE, [info]}]),
     application:start(lager).
 
 cleanup(_) ->
