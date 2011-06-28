@@ -19,7 +19,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0,start/0,sasl_log/3, log/7, log/8, get_loglevel/1, set_loglevel/2, set_loglevel/3]).
+-export([start_link/0,start/0,sasl_log/3, log/7, log/8, log/3, log/4, get_loglevel/1, set_loglevel/2, set_loglevel/3]).
 
 %% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -71,6 +71,20 @@ log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) -
     Msg = io_lib:format("[~p] ~p@~p:~p:~p ~s", [Level, Pid, Module,
             Function, Line, io_lib:format(Format, Args)]),
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
+
+log(Level, Pid, Message) ->
+    {{Y, M, D}, {H, Mi, S}} = riak_err_stdlib:maybe_utc(erlang:localtime()),
+    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+    Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, Message]),
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
+            Time, Msg}).
+
+log(Level, Pid, Format, Args) ->
+    {{Y, M, D}, {H, Mi, S}} = riak_err_stdlib:maybe_utc(erlang:localtime()),
+    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+    Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, io_lib:format(Format, Args)]),
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
+            Time, Msg}).
 
 set_loglevel(Handler, Level) when is_atom(Level) ->
     gen_server:call(?MODULE, {set_loglevel, Handler, Level}).
