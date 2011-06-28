@@ -19,13 +19,15 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0,start/0,sasl_log/3, log/7, log/8, log/3, log/4, get_loglevel/1, set_loglevel/2, set_loglevel/3]).
+-export([start_link/0, start/0,
+        log/7, log/8, log/3, log/4,
+        get_loglevel/1, set_loglevel/2, set_loglevel/3]).
 
 %% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {event_pid, handler_loglevels}).
+-record(state, {event_pid, handler_loglevels, error_logger_handlers}).
 
 %% API
 
@@ -51,14 +53,6 @@ start() ->
             Val
     end,
     gen_server:start({local, ?MODULE}, ?MODULE, [Handlers], []).
-
-sasl_log(ReportStr, Pid, Message) ->
-    %Level = reportstr_to_level(ReportStr),
-    {{Y, M, D}, {H, Mi, S}} = riak_err_stdlib:maybe_utc(erlang:localtime()),
-    Msg = re:replace(binary:replace(Message, [<<"\r">>, <<"\n">>], <<>>,
-            [global]), " +", " ", [global, {return, binary}]),
-    io:format("~b-~b-~b ~b:~b:~b ~p ~s ~s~n", [Y, M,
-            D, H, Mi, S, Pid, ReportStr, Msg]).
 
 log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Message) ->
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
@@ -102,13 +96,24 @@ get_loglevel(Handler) ->
 %% gen_server callbacks
 
 init([Handlers]) ->
+    %process_flag(trap_exit, true),
     %% start a gen_event linked to this process
     gen_event:start_link({local, lager_event}),
     %% spin up all the defined handlers
     [gen_event:add_sup_handler(lager_event, Module, Args) || {Module, Args} <- Handlers],
     MinLog = minimum_log_level(get_log_levels()),
     lager_mochiglobal:put(loglevel, MinLog),
-    {ok, #state{}}.
+    case application:get_env(lager, error_logger_redirect) of
+        {ok, true} ->
+            gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
+            %% TODO allow user to whitelist handlers to not be removed
+            Removed = [begin gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}), X end ||
+                X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]],
+            io:format("Removed handlers ~p~n", [Removed]),
+            {ok, #state{error_logger_handlers=Removed}};
+        _ ->
+            {ok, #state{}}
+    end.
 
 handle_call({set_loglevel, Handler, Level}, _From, State) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
@@ -135,13 +140,20 @@ handle_info(Info, State) ->
     io:format("got info ~p~n", [Info]),
     {noreply, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{error_logger_handlers = Handlers}) ->
+    io:format("terminate ~p~n", Handlers),
     gen_event:stop(lager_event),
+    case Handlers of
+        undefined ->
+            ok;
+        _ ->
+            io:format("Reinstalling handlers ~p~n", [Handlers]),
+            [gen_event:add_handler(error_logger, X, []) || X <- Handlers]
+    end,
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
 
 %% internal functions
 

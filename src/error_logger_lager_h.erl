@@ -30,24 +30,44 @@ handle_call(_Request, State) ->
 handle_event(Event, State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
-            lager:log(error, Pid, Fmt, Args);
-        {info_msg, _GL, {Pid, Fmt, Args}} ->
-            lager:log(info, Pid, Fmt, Args);
+            case Fmt of
+                "** Generic server "++_ ->
+                    %% gen_server terminate
+                    [Name, _Msg, _State, Reason] = Args,
+                    lager:log(error, Pid, "gen_server ~w crashed with reason: ~s",
+                        [Name, format_reason(Reason)]);
+                "** State machine "++_ ->
+                    %% gen_fsm terminate
+                    [Name, _Msg, StateName, _StateData, Reason] = Args,
+                    lager:log(error, Pid, "gen_fsm ~w in state ~w crashed with reason: ~s",
+                        [Name, StateName, format_reason(Reason)]);
+                "** gen_event handler"++_ ->
+                    %% gen_event handler terminate
+                    [ID, Name, _Msg, _State, Reason] = Args,
+                    lager:log(error, Pid, "gen_event ~w installed in ~w crashed with reason: ~s",
+                        [ID, Name, format_reason(Reason)]);
+                _ ->
+                    lager:log(error, Pid, Fmt, Args)
+            end;
         {error_report, _GL, {Pid, std_error, D}} ->
             lager:log(error, Pid, print_silly_list(D));
         {error_report, _GL, {Pid, supervisor_report, D}} ->
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    lager:log(error, Pid, "Supervisor ~p had child ~s exit with reason ~p in context ~p", [element(2, Name), Offender, Reason, Ctx]);
+                    lager:log(error, Pid, "Supervisor ~w had child ~s exit with reason ~w in context ~w", [element(2, Name), Offender, Reason, Ctx]);
                 _ ->
                     lager:log(error, Pid, "SUPERVISOR REPORT" ++ print_silly_list(D))
             end;
+        {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
+            lager:log(error, Pid, "CRASH REPORT " ++ format_crash_report(Self));
+        {info_msg, _GL, {Pid, Fmt, Args}} ->
+            lager:log(info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    lager:log(info, Pid, "Application ~p exited with reason: ~p", [App, Reason]);
+                    lager:log(info, Pid, "Application ~w exited with reason: ~w", [App, Reason]);
                 _ ->
                     lager:log(info, Pid, print_silly_list(D))
             end;
@@ -55,17 +75,17 @@ handle_event(Event, State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {started_at, Node}] ->
-                    lager:log(info, P, "Application ~p started on node ~p",
+                    lager:log(info, P, "Application ~w started on node ~w",
                         [App, Node]);
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
-                    lager:log(info, P, "Supervisor ~p started ~s at pid ~p", [element(2, Name), MFA, Pid]);
+                    lager:log(info, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
                 _ ->
                     lager:log(info, P, "PROGRESS REPORT" ++ print_silly_list(D))
             end;
         _ ->
-            io:format("Event ~p~n", [Event])
+            io:format("Event ~w~n", [Event])
     end,
     {ok, State}.
 
@@ -80,32 +100,58 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% internal functions
 
+format_crash_report(Report) ->
+    Name = proplists:get_value(registered_name, Report, proplists:get_value(pid, Report)),
+    {_Class, Reason, _Trace} = proplists:get_value(error_info, Report),
+    %Arity = case A of
+        %A when is_integer(A) -> A;
+        %A when is_list(A) -> length(A)
+    %end,
+    io_lib:format("Process ~w crashed with reason: ~s", [Name, format_reason(Reason)]).
+
+format_offender(Off) ->
+    case proplists:get_value(name, Off) of
+        undefined ->
+            %% supervisor_bridge
+            io_lib:format("at module ~w at ~w", [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
+        Name ->
+            %% regular supervisor
+            MFA = format_mfa(proplists:get_value(mfargs, Off)),
+            io_lib:format("with name ~w started with ~s at ~w", [Name, MFA, proplists:get_value(pid, Off)])
+    end.
+
+format_reason({undef, [{M, F, A}|_]}) ->
+    io_lib:format("call to undefined function ~w:~w/~w", [M, F, length(A)]);
+format_reason({bad_return_value, Val}) ->
+    io_lib:format("bad return value: ~w", [Val]);
+format_reason({{case_clause, Val}, [{M, F, A}|_]}) ->
+    io_lib:format("no case clause matching ~w in ~w:~w/~w", [Val, M, F, A]);
+format_reason({function_clause, [MFA|_]}) ->
+    "no function clause matching " ++ format_mfa(MFA);
+format_reason({badarith, [MFA|_]}) ->
+    "bad arithmetic expression in function " ++ format_mfa(MFA);
+format_reason({{badmatch, Val}, [MFA|_]}) ->
+    io_lib:format("no match of right hand value ~w in ", [Val]) ++ format_mfa(MFA);
+format_reason(Reason) ->
+    {Str, _} = trunc_io:print(Reason, 500),
+    Str.
+
+format_mfa({M, F, A}) when is_list(A) ->
+    io_lib:format("~w:~w("++string:join(lists:duplicate(length(A), "~w"), ", ")++")", [M, F | A]);
+format_mfa({M, F, A}) when is_integer(A) ->
+    io_lib:format("~w:~w/~w", [M, F, A]);
+format_mfa(Other) ->
+    io_lib:format("~w", [Other]).
+
 print_silly_list(L) ->
     case lager_stdlib:string_p(L) of
         true -> L;
         _ -> print_silly_list(L, [], [])
     end.
 
-format_offender(Off) ->
-    case proplists:get_value(name, Off) of
-        undefined ->
-            %% supervisor_bridge
-            io_lib:format("at module ~p at ~p", [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
-        Name ->
-            %% regular supervisor
-            MFA = format_mfa(proplists:get_value(mfargs, Off)),
-            io_lib:format("with name ~p started with ~s at ~p", [Name, MFA, proplists:get_value(pid, Off)])
-    end.
-
-format_mfa({M, F, A}) ->
-    %% TODO pretty-print args better
-    io_lib:format("~p:~p(~p)", [M, F, A]);
-format_mfa(Other) ->
-    io_lib:format("~p", [Other]).
-
 print_silly_list([], Fmt, Acc) ->
     io_lib:format(string:join(lists:reverse(Fmt), " "), lists:reverse(Acc));
 print_silly_list([{K,V}|T], Fmt, Acc) ->
-    print_silly_list(T, ["~p: ~p" | Fmt], [V, K | Acc]);
+    print_silly_list(T, ["~w: ~w" | Fmt], [V, K | Acc]);
 print_silly_list([H|T], Fmt, Acc) ->
-    print_silly_list(T, ["~p" | Fmt], [H | Acc]).
+    print_silly_list(T, ["~w" | Fmt], [H | Acc]).
