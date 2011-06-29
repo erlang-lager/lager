@@ -35,6 +35,8 @@ handle_call(count, #state{buffer=Buffer} = State) ->
     {ok, length(Buffer), State};
 handle_call(count_ignored, #state{ignored=Ignored} = State) ->
     {ok, length(Ignored), State};
+handle_call(flush, State) ->
+    {ok, ok, State#state{buffer=[], ignored=[]}};
 handle_call(pop, #state{buffer=Buffer} = State) ->
     case Buffer of
         [] ->
@@ -182,7 +184,7 @@ crash(Type) ->
     spawn(fun() -> gen_server:call(crash, Type) end),
     timer:sleep(100).
 
-error_logger_redirect_test_() ->
+error_logger_redirect_crash_test_() ->
     {foreach,
         fun() ->
                 application:load(lager),
@@ -315,6 +317,107 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             }
+        ]
+    }.
+
+error_logger_redirect_test_() ->
+    {foreach,
+        fun() ->
+                application:load(lager),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, handlers, [{?MODULE, [info]}]),
+                application:start(lager),
+                timer:sleep(100),
+                gen_event:call(lager_event, ?MODULE, flush)
+        end,
+
+        fun(_) ->
+                application:stop(lager),
+                application:unload(lager)
+        end,
+        [
+            {"error reports are printed",
+                fun() ->
+                        error_logger:error_report([{this, is}, a, {silly, format}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w this: is a silly: format", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"string error reports are printed",
+                fun() ->
+                        error_logger:error_report("this is less silly"),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w this is less silly", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"error messages are printed",
+                fun() ->
+                        error_logger:error_msg("doom, doom has come upon you all"),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w doom, doom has come upon you all", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"info reports are printed",
+                fun() ->
+                        error_logger:info_report([{this, is}, a, {silly, format}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w this: is a silly: format", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"string info reports are printed",
+                fun() ->
+                        error_logger:info_report("this is less silly"),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w this is less silly", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"error messages are printed",
+                fun() ->
+                        error_logger:info_msg("doom, doom has come upon you all"),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w doom, doom has come upon you all", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"application stop reports",
+                fun() ->
+                        error_logger:info_report([{application, foo}, {exited, quittin_time}, {type, lazy}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w Application foo exited with reason: quittin_time", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"supervisor reports",
+                fun() ->
+                        error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason fired in context france", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"supervisor_bridge reports",
+                fun() ->
+                        error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{mod, mini_steve}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child at module mini_steve at bleh exit with reason fired in context france", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            }
+            %% TODO progress reports
         ]
     }.
 

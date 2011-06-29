@@ -113,7 +113,7 @@ format_offender(Off) ->
         Name ->
             %% regular supervisor
             MFA = format_mfa(proplists:get_value(mfargs, Off)),
-            io_lib:format("with name ~w started with ~s at ~w", [Name, MFA, proplists:get_value(pid, Off)])
+            io_lib:format("~w started with ~s at ~w", [Name, MFA, proplists:get_value(pid, Off)])
     end.
 
 format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
