@@ -26,7 +26,7 @@
 
 -module(lager_stdlib).
 
--export([string_p/1]).
+-export([string_p/1, maybe_utc/1]).
 
 string_p([]) ->
     false;
@@ -49,3 +49,40 @@ string_p1([H|T]) when is_list(H) ->
     end;
 string_p1([]) -> true;
 string_p1(_) ->  false.
+
+%% From calendar
+-type year1970() :: 1970..10000.  % should probably be 1970..
+-type month()    :: 1..12.
+-type day()      :: 1..31.
+-type hour()     :: 0..23.
+-type minute()   :: 0..59.
+-type second()   :: 0..59.
+-type t_time()         :: {hour(),minute(),second()}.
+-type t_datetime1970() :: {{year1970(),month(),day()},t_time()}.
+
+-spec maybe_utc(t_datetime1970()) -> {utc, t_datetime1970()} | t_datetime1970().
+maybe_utc(Time) ->
+    UTC = case application:get_env(sasl, utc_log) of
+        {ok, Val} ->
+            Val;
+        undefined ->
+            %% Backwards compatible:
+            case application:get_env(stdlib, utc_log) of
+                {ok, Val} ->
+                    Val;
+                undefined ->
+                    false
+            end
+    end,
+    if
+        UTC =:= true ->
+            UTCTime = case calendar:local_time_to_universal_time_dst(Time) of
+                []     -> calendar:local_time();
+                [T0|_] -> T0
+            end,
+            {utc, UTCTime};
+        true -> 
+            Time
+    end.
+
+

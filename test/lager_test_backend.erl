@@ -54,7 +54,7 @@ handle_call(_Request, State) ->
 handle_event({log, Level, Time, Message}, #state{level=LogLevel,
         buffer=Buffer} = State) when Level >= LogLevel ->
     {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
-handle_event({log, Level, Time, Message}, #state{ignored=Ignored} = State) ->
+handle_event({log, _Level, _Time, _Message}, #state{ignored=Ignored} = State) ->
     {ok, State#state{ignored=Ignored ++ [ignored]}};
 handle_event(_Event, State) ->
     {ok, State}.
@@ -94,9 +94,9 @@ lager_test_() ->
                 fun() ->
                         lager:warning("test message"),
                         ?assertEqual(1, count()),
-                        {Level, Time, Message}  = pop(),
+                        {Level, _Time, Message}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
-                        [LevelStr, LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
+                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
                         ?assertEqual("[warning]", LevelStr),
                         ?assertEqual("test message", MsgStr),
                         ok
@@ -106,9 +106,9 @@ lager_test_() ->
                 fun() ->
                         lager:warning("test message ~p", [self()]),
                         ?assertEqual(1, count()),
-                        {Level, Time, Message}  = pop(),
+                        {Level, _Time, Message}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
-                        [LevelStr, LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
+                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
                         ?assertEqual("[warning]", LevelStr),
                         ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), MsgStr),
                         ok
@@ -127,7 +127,7 @@ lager_test_() ->
             {"logging works from inside a list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
-                        [lager:warning("test message") || N <- lists:seq(1, 10)],
+                        [lager:warning("test message") || _N <- lists:seq(1, 10)],
                         ?assertEqual(10, count()),
                         ok
                 end
@@ -135,7 +135,7 @@ lager_test_() ->
             {"logging works from a begin/end block inside a list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
-                        [ begin lager:warning("test message") end || N <- lists:seq(1, 10)],
+                        [ begin lager:warning("test message") end || _N <- lists:seq(1, 10)],
                         ?assertEqual(10, count()),
                         ok
                 end
@@ -143,8 +143,8 @@ lager_test_() ->
             {"logging works from a nested list comprehension",
                 fun() ->
                         ?assertEqual(0, count()),
-                        [ [lager:warning("test message") || N <- lists:seq(1, 10)] ||
-                            I <- lists:seq(1, 10)],
+                        [ [lager:warning("test message") || _N <- lists:seq(1, 10)] ||
+                            _I <- lists:seq(1, 10)],
                         ?assertEqual(100, count()),
                         ok
                 end
@@ -443,6 +443,26 @@ error_logger_redirect_test_() ->
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"messages should not be generated if they don't satisfy the threshold",
+                fun() ->
+                        lager:set_loglevel(?MODULE, error),
+                        error_logger:info_report([hello, world]),
+                        timer:sleep(100),
+                        ?assertEqual(0, count()),
+                        ?assertEqual(0, count_ignored()),
+                        lager:set_loglevel(?MODULE, info),
+                        error_logger:info_report([hello, world]),
+                        timer:sleep(100),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(0, count_ignored()),
+                        lager:set_loglevel(?MODULE, error),
+                        lager_mochiglobal:put(loglevel, 0),
+                        error_logger:info_report([hello, world]),
+                        timer:sleep(100),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(1, count_ignored())
                 end
             }
         ]

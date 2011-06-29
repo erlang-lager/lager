@@ -67,14 +67,14 @@ log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) -
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
 log(Level, Pid, Message) ->
-    {{Y, M, D}, {H, Mi, S}} = riak_err_stdlib:maybe_utc(erlang:localtime()),
+    {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
     Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, Message]),
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Time, Msg}).
 
 log(Level, Pid, Format, Args) ->
-    {{Y, M, D}, {H, Mi, S}} = riak_err_stdlib:maybe_utc(erlang:localtime()),
+    {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
     Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, io_lib:format(Format, Args)]),
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),

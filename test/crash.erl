@@ -5,7 +5,9 @@
 
 -behaviour(gen_server).
 
--compile([export_all]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+
+-export([start/0]).
 
 start() ->
 	gen_server:start({local, ?MODULE}, ?MODULE, [], []).
@@ -31,7 +33,7 @@ handle_call(if_clause, _, State) ->
 	end;
 handle_call(try_clause, _, State) ->
 	Res = try tuple_to_list(State) of
-		[A, B] -> ok
+		[_A, _B] -> ok
 	catch
 		_:_ -> ok
 	end,
@@ -60,11 +62,20 @@ handle_call(badarity, _, State) ->
 	F = fun(A, B, C) -> A + B + C end,
 	Res = F(State),
 	{reply, Res, State};
-handle_call(Call, From, State) ->
+handle_call(_Call, _From, State) ->
 	{reply, ok, State}.
+
+handle_cast(_Cast, State) ->
+	{noreply, State}.
+
+handle_info(_Info, State) ->
+	{noreply, State}.
 
 terminate(_, _) ->
 	ok.
+
+code_change(_, State, _) ->
+	{ok, State}.
 
 function(X) when is_list(X) ->
 	ok.
