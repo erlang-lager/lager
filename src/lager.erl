@@ -32,9 +32,6 @@
 %% API
 
 start_link() ->
-    %application:start(sasl),
-    %application:set_env(riak_err, print_fun, {lager, sasl_log}),
-    %application:start(riak_err),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, [info]},
@@ -56,27 +53,27 @@ start() ->
 
 log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Message) ->
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
-    Msg = io_lib:format("[~p] ~p@~p:~p:~p ~s", [Level, Pid, Module,
-            Function, Line, Message]),
+    Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
+                Function, Line]),  Message],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
 log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) ->
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
-    Msg = io_lib:format("[~p] ~p@~p:~p:~p ~s", [Level, Pid, Module,
-            Function, Line, io_lib:format(Format, Args)]),
+    Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
+                Function, Line]), io_lib:format(Format, Args)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
 
 log(Level, Pid, Message) ->
     {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
-    Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, Message]),
+    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), Message],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Time, Msg}).
 
 log(Level, Pid, Format, Args) ->
     {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
     Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
-    Msg = io_lib:format("[~p] ~p ~s", [Level, Pid, io_lib:format(Format, Args)]),
+    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), io_lib:format(Format, Args)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Time, Msg}).
 
@@ -135,7 +132,8 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 handle_info({gen_event_EXIT, error_logger_lager_h, {'EXIT', Reason}}, State) ->
-    lager:log(error, self(), ["Restarting lager error handler after it exited with ", error_logger_lager_h:format_reason(Reason)]),
+    lager:log(error, self(), ["Restarting lager error handler after it exited with ",
+            error_logger_lager_h:format_reason(Reason)]),
     gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
     {noreply, State};
 handle_info(Info, State) ->
