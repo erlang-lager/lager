@@ -251,9 +251,70 @@ error_logger_redirect_test_() ->
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
+            },
+            {"undefined function",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(undef),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"bad math",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badarith),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"bad match",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badmatch),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"bad arity",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badarity),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"bad arg1",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badarg1),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"bad arg2",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badarg2),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([[102,111,111],bar]) in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"noproc",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(noproc),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no such process or port in call to gen_event:call(foo, bar, baz)", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
             }
-
-
         ]
     }.
 
