@@ -21,6 +21,8 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
+-export([format_reason/1]).
+
 init(_) ->
     {ok, {}}.
 
@@ -57,10 +59,10 @@ handle_event(Event, State) ->
                     Offender = format_offender(Off),
                     lager:log(error, Pid, "Supervisor ~w had child ~s exit with reason ~w in context ~w", [element(2, Name), Offender, Reason, Ctx]);
                 _ ->
-                    lager:log(error, Pid, "SUPERVISOR REPORT" ++ print_silly_list(D))
+                    lager:log(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
-            lager:log(error, Pid, "CRASH REPORT " ++ format_crash_report(Self));
+            lager:log(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
             lager:log(info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} ->
@@ -82,7 +84,7 @@ handle_event(Event, State) ->
                     Pid = proplists:get_value(pid, Started),
                     lager:log(info, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
                 _ ->
-                    lager:log(info, P, "PROGRESS REPORT" ++ print_silly_list(D))
+                    lager:log(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;
         _ ->
             io:format("Event ~w~n", [Event])
@@ -100,10 +102,10 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% internal functions
 
-format_crash_report(Report) ->
+format_crash_report(Report, Neighbours) ->
     Name = proplists:get_value(registered_name, Report, proplists:get_value(pid, Report)),
     {_Class, Reason, _Trace} = proplists:get_value(error_info, Report),
-    io_lib:format("Process ~w crashed with reason: ~s", [Name, format_reason(Reason)]).
+    io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s", [Name, length(Neighbours), format_reason(Reason)]).
 
 format_offender(Off) ->
     case proplists:get_value(name, Off) of

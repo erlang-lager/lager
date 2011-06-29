@@ -96,7 +96,6 @@ get_loglevel(Handler) ->
 %% gen_server callbacks
 
 init([Handlers]) ->
-    %process_flag(trap_exit, true),
     %% start a gen_event linked to this process
     gen_event:start_link({local, lager_event}),
     %% spin up all the defined handlers
@@ -107,10 +106,9 @@ init([Handlers]) ->
         {ok, true} ->
             gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
             %% TODO allow user to whitelist handlers to not be removed
-            Removed = [begin gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}), X end ||
+            [gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}) ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]],
-            io:format("Removed handlers ~p~n", [Removed]),
-            {ok, #state{error_logger_handlers=Removed}};
+            {ok, #state{}};
         _ ->
             {ok, #state{}}
     end.
@@ -136,20 +134,16 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Request, State) ->
     {noreply, State}.
 
+handle_info({gen_event_EXIT, error_logger_lager_h, {'EXIT', Reason}}, State) ->
+    lager:log(error, self(), ["Restarting lager error handler after it exited with ", error_logger_lager_h:format_reason(Reason)]),
+    gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
+    {noreply, State};
 handle_info(Info, State) ->
     io:format("got info ~p~n", [Info]),
     {noreply, State}.
 
-terminate(_Reason, #state{error_logger_handlers = Handlers}) ->
-    io:format("terminate ~p~n", Handlers),
+terminate(_Reason, _State) ->
     gen_event:stop(lager_event),
-    case Handlers of
-        undefined ->
-            ok;
-        _ ->
-            io:format("Reinstalling handlers ~p~n", [Handlers]),
-            [gen_event:add_handler(error_logger, X, []) || X <- Handlers]
-    end,
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
