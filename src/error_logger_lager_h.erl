@@ -23,6 +23,21 @@
 
 -export([format_reason/1]).
 
+-define(LOG(Level, Pid, Msg),
+    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
+        true ->
+            lager:log(Level, Pid, Msg);
+        _ -> ok
+    end).
+
+-define(LOG(Level, Pid, Fmt, Args),
+    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
+        true ->
+            lager:log(Level, Pid, Fmt, Args);
+        _ -> ok
+    end).
+
+
 init(_) ->
     {ok, {}}.
 
@@ -36,55 +51,55 @@ handle_event(Event, State) ->
                 "** Generic server "++_ ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
-                    lager:log(error, Pid, "gen_server ~w terminated with reason: ~s",
+                    ?LOG(error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
                 "** State machine "++_ ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
-                    lager:log(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
+                    ?LOG(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
                 "** gen_event handler"++_ ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
-                    lager:log(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
+                    ?LOG(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
                 _ ->
-                    lager:log(error, Pid, Fmt, Args)
+                    ?LOG(error, Pid, Fmt, Args)
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
-            lager:log(error, Pid, print_silly_list(D));
+            ?LOG(error, Pid, print_silly_list(D));
         {error_report, _GL, {Pid, supervisor_report, D}} ->
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    lager:log(error, Pid, "Supervisor ~w had child ~s exit with reason ~w in context ~w", [element(2, Name), Offender, Reason, Ctx]);
+                    ?LOG(error, Pid, "Supervisor ~w had child ~s exit with reason ~w in context ~w", [element(2, Name), Offender, Reason, Ctx]);
                 _ ->
-                    lager:log(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
+                    ?LOG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
-            lager:log(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
+            ?LOG(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            lager:log(info, Pid, Fmt, Args);
+            ?LOG(info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    lager:log(info, Pid, "Application ~w exited with reason: ~w", [App, Reason]);
+                    ?LOG(info, Pid, "Application ~w exited with reason: ~w", [App, Reason]);
                 _ ->
-                    lager:log(info, Pid, print_silly_list(D))
+                    ?LOG(info, Pid, print_silly_list(D))
             end;
         {info_report, _GL, {P, progress, D}} ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {started_at, Node}] ->
-                    lager:log(info, P, "Application ~w started on node ~w",
+                    ?LOG(info, P, "Application ~w started on node ~w",
                         [App, Node]);
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
-                    lager:log(info, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
+                    ?LOG(info, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
                 _ ->
-                    lager:log(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
+                    ?LOG(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;
         _ ->
             io:format("Event ~w~n", [Event])
