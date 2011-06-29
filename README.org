@@ -46,4 +46,43 @@
   mentioned above.
 
 * Configuration
-  TODO
+  To configure lager's backends, you use an application variable (probably in
+  your app.config):
+
+#+BEGIN_EXAMPLE
+  {lager,
+    {handlers, [
+      {lager_console_backend, [info]},
+      {lager_file_backend, [{"error.log", error}, {"console.log", info}]}
+    ]}
+  }.
+#+END_EXAMPLE
+
+  The available configuration options for each backend are listed in their
+  module's documentation.
+
+* Error logger integration
+  Lager is also supplied with a error_logger handler module that translates
+  traditional erlang error messages into a friendlier format and sends them into
+  lager itself to be treated like a regular lager log call. To enable this, set
+  the lager application variable `error_logger_redirect' to `true'.
+
+* Runtime loglevel changes
+  You can change the log level of any lager backend at runtime by doing the
+  following:
+
+#+BEGIN_EXAMPLE
+  lager:set_loglevel(lager_console_backend, debug).
+#+END_EXAMPLE
+
+  Or, for the backend with multiple handles (files, mainly):
+
+#+BEGIN_EXAMPLE
+  lager:set_loglevel(lager_console_backend, "console.log" debug).
+#+END_EXAMPLE
+
+  Lager keeps track of the minium log level being used by any backend and
+  supresses generation of messages lower than that level. This means that debug
+  log messages, when no backend is consuming debug messages, are effectively
+  free. A simple benchmark of doing 1 million debug log messages while the the
+  minimum threshold was above that takes less than half a second.
