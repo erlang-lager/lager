@@ -316,7 +316,17 @@ error_logger_redirect_crash_test_() ->
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no such process or port in call to gen_event:call(foo, bar, baz)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
+            },
+            {"badfun",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badfun),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad function booger in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
             }
+
         ]
     }.
 
@@ -416,8 +426,25 @@ error_logger_redirect_test_() ->
                         Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child at module mini_steve at bleh exit with reason fired in context france", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
+            },
+            {"application progress report",
+                fun() ->
+                        error_logger:info_report(progress, [{application, foo}, {started_at, node()}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w Application foo started on node ~w", [self(), node()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"supervisor progress report",
+                fun() ->
+                        error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
             }
-            %% TODO progress reports
         ]
     }.
 

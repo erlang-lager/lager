@@ -148,6 +148,8 @@ format_reason({{badarity, {Fun, Args}}, [MFA|_]}) ->
     io_lib:format("fun called with wrong arity of ~w instead of ~w in ", [length(Args), Arity]) ++ format_mfa(MFA);
 format_reason({noproc, MFA}) ->
     "no such process or port in call to " ++ format_mfa(MFA);
+format_reason({{badfun, Term}, [MFA|_]}) ->
+    io_lib:format("bad function ~w in ", [Term]) ++ format_mfa(MFA);
 format_reason(Reason) ->
     {Str, _} = trunc_io:print(Reason, 500),
     Str.
