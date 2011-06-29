@@ -177,6 +177,86 @@ cleanup(_) ->
     application:stop(lager),
     application:unload(lager).
 
+
+crash(Type) ->
+    spawn(fun() -> gen_server:call(crash, Type) end),
+    timer:sleep(100).
+
+error_logger_redirect_test_() ->
+    {foreach,
+        fun() ->
+                application:load(lager),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, handlers, [{?MODULE, [error]}]),
+                application:start(lager),
+                crash:start()
+        end,
+
+        fun(_) ->
+                application:stop(lager),
+                application:unload(lager),
+                case whereis(crash) of
+                    undefined -> ok;
+                    Pid -> exit(Pid, kill)
+                end
+        end,
+        [
+            {"again, there is nothing up my sleeve",
+                fun() ->
+                        ?assertEqual(undefined, pop()),
+                        ?assertEqual(0, count())
+                end
+            },
+            {"bad return value",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(bad_return),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: bleh", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"case clause",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(case_clause),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"function clause",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(function_clause),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no function clause matching crash:function({})", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"if clause",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(if_clause),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"try clause",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(try_clause),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            }
+
+
+        ]
+    }.
+
 -endif.
 
 

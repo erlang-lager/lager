@@ -125,7 +125,7 @@ format_reason({{case_clause, Val}, [MFA|_]}) ->
 format_reason({function_clause, [MFA|_]}) ->
     "no function clause matching " ++ format_mfa(MFA);
 format_reason({if_clause, [MFA|_]}) ->
-    "no true branch found while evaluating if expresion in " ++ format_mfa(MFA);
+    "no true branch found while evaluating if expression in " ++ format_mfa(MFA);
 format_reason({{try_clause, Val}, [MFA|_]}) ->
     io_lib:format("no try clause matching ~w in ", [Val]) ++ format_mfa(MFA); 
 format_reason({badarith, [MFA|_]}) ->
