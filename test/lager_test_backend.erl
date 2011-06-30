@@ -493,6 +493,51 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"crash report for emfile",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {emfile, [{stack, trace, 1}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: maximum number of file descriptors exhausted, check ulimit -n", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"crash report for system process limit",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn, 1}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"crash report for system process limit2",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn_opt, 1}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"crash report for system port limit",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, open_port, 1}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ports exceeded", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"crash report for system port limit",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, list_to_atom, 1}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: tried to create an atom larger than 255, or maximum atom count exceeded", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
