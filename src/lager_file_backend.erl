@@ -33,7 +33,7 @@
 
 init(LogFiles) ->
     Files = [begin
-                case open(Name) of
+                case lager_util:open_logfile(Name, true) of
                     {ok, {FD, Inode}} ->
                         {Name, lager_util:level_to_num(Level), FD, Inode};
                     Error ->
@@ -41,7 +41,7 @@ init(LogFiles) ->
                             [Name, Error]),
                         undefined
                 end
-            end ||
+        end ||
         {Name, Level} <- LogFiles],
     {ok, #state{files=Files}}.
 
@@ -93,50 +93,9 @@ terminate(_Reason, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-open(Name) ->
-    case file:open(Name, [append, delayed_write, raw]) of
-        {ok, FD} ->
-            case file:read_file_info(Name) of
-                {ok, FInfo} ->
-                    Inode = FInfo#file_info.inode,
-                    {ok, {FD, Inode}};
-                X -> X
-            end;
-        Y -> Y
-    end.
-
 write({Name, L, FD, Inode}, Level, Msg) ->
-    Result = case file:read_file_info(Name) of
-        {ok, FInfo} ->
-            Inode2 = FInfo#file_info.inode,
-            case Inode == Inode2 of
-                true ->
-                    {FD, Inode};
-                false ->
-                    case open(Name) of
-                        {ok, {FD2, Inode3}} ->
-                            %% inode changed, file was probably moved and
-                            %% recreated
-                            {FD2, Inode3};
-                        Error ->
-                            lager:error("Failed to reopen file ~s with error ~p",
-                                [Name, Error]),
-                            undefined
-                    end
-            end;
-        _ ->
-            case open(Name) of
-                {ok, {FD2, Inode3}} ->
-                    %% file was removed
-                    {FD2, Inode3};
-                Error ->
-                    lager:error("Failed to reopen file ~s with error ~p",
-                        [Name, Error]),
-                    undefined
-            end
-    end,
-    case Result of
-        {NewFD, NewInode} ->
+    case lager_util:ensure_logfile(Name, FD, Inode, true) of
+        {ok, {NewFD, NewInode}} ->
             file:write(NewFD, Msg),
             case Level of
                 _ when Level >= 4 ->
@@ -145,10 +104,11 @@ write({Name, L, FD, Inode}, Level, Msg) ->
                 _ -> ok
             end,
             {Name, L, NewFD, NewInode};
-        _ ->
+        Error ->
+            lager:error("Failed to reopen logfile ~s with error ~w", [Name,
+                    Error]),
             undefined
     end.
-
 
 -ifdef(TEST).
 
@@ -166,7 +126,7 @@ get_loglevel_test() ->
     ?assertEqual(Level2, lager_util:level_to_num(warning)).
 
 rotation_test() ->
-    {ok, {FD, Inode}} = open("test.log"),
+    {ok, {FD, Inode}} = lager_util:open_logfile("test.log", true),
     ?assertEqual({"test.log", 0, FD, Inode},
         write({"test.log", 0, FD, Inode}, 0, "hello world")),
     file:delete("test.log"),

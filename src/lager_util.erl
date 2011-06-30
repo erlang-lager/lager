@@ -16,7 +16,10 @@
 
 -module(lager_util).
 
--export([levels/0, level_to_num/1, num_to_level/1]).
+-include_lib("kernel/include/file.hrl").
+
+-export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
+        ensure_logfile/4, format_time/0, format_time/1]).
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
@@ -38,3 +41,58 @@ num_to_level(4) -> error;
 num_to_level(5) -> critical;
 num_to_level(6) -> alert;
 num_to_level(7) -> emergency.
+
+open_logfile(Name, Buffer) ->
+    case filelib:ensure_dir(Name) of
+        ok ->
+            Options = [append, raw] ++
+            if Buffer == true -> [delayed_write];
+                true -> []
+            end,
+            case file:open(Name, Options) of
+                {ok, FD} ->
+                    case file:read_file_info(Name) of
+                        {ok, FInfo} ->
+                            Inode = FInfo#file_info.inode,
+                            {ok, {FD, Inode}};
+                        X -> X
+                    end;
+                Y -> Y
+            end;
+        Z -> Z
+    end.
+
+ensure_logfile(Name, FD, Inode, Buffer) ->
+    case file:read_file_info(Name) of
+        {ok, FInfo} ->
+            Inode2 = FInfo#file_info.inode,
+            case Inode == Inode2 of
+                true ->
+                    {ok, {FD, Inode}};
+                false ->
+                    case open_logfile(Name, Buffer) of
+                        {ok, {FD2, Inode3}} ->
+                            %% inode changed, file was probably moved and
+                            %% recreated
+                            {ok, {FD2, Inode3}};
+                        Error ->
+                            Error
+                    end
+            end;
+        _ ->
+            case open_logfile(Name, Buffer) of
+                {ok, {FD2, Inode3}} ->
+                    %% file was removed
+                    {ok, {FD2, Inode3}};
+                Error ->
+                    Error
+            end
+    end.
+
+format_time() ->
+    format_time(lager_stdlib:maybe_utc(erlang:localtime())).
+
+format_time({utc, {{Y, M, D}, {H, Mi, S}}}) ->
+    io_lib:format("~b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b UTC", [Y, M, D, H, Mi, S]);
+format_time({{Y, M, D}, {H, Mi, S}}) ->
+    io_lib:format("~b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b", [Y, M, D, H, Mi, S]).

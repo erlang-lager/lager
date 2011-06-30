@@ -37,6 +37,9 @@
         _ -> ok
     end).
 
+-define(CRASH_LOG(Event),
+    gen_server:cast(lager_crash_log, {log, Event})).
+
 init(_) ->
     {ok, {}}.
 
@@ -50,24 +53,30 @@ handle_event(Event, State) ->
                 "** Generic server "++_ ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
+                    ?CRASH_LOG(Event),
                     ?LOG(error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
                 "** State machine "++_ ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
+                    ?CRASH_LOG(Event),
                     ?LOG(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
                 "** gen_event handler"++_ ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
+                    ?CRASH_LOG(Event),
                     ?LOG(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
                 _ ->
+                    ?CRASH_LOG(Event),
                     ?LOG(error, Pid, Fmt, Args)
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
+            ?CRASH_LOG(Event),
             ?LOG(error, Pid, print_silly_list(D));
         {error_report, _GL, {Pid, supervisor_report, D}} ->
+            ?CRASH_LOG(Event),
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
@@ -76,6 +85,7 @@ handle_event(Event, State) ->
                     ?LOG(error, Pid, ["SUPERVISOR REPORT ", print_silly_list(D)])
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
+            ?CRASH_LOG(Event),
             ?LOG(error, Pid, ["CRASH REPORT ", format_crash_report(Self, Neighbours)]);
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
             ?LOG(warning, Pid, Fmt, Args);

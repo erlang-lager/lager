@@ -51,31 +51,31 @@ start() ->
     end,
     gen_server:start({local, ?MODULE}, ?MODULE, [Handlers], []).
 
-log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Message) ->
-    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+log(Level, Module, Function, Line, Pid, Time, Message) ->
+    Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
                 Function, Line]),  Message],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
+            Timestamp, Msg}).
 
-log(Level, Module, Function, Line, Pid, {{Y, M, D}, {H, Mi, S}}, Format, Args) ->
-    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
+    Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
                 Function, Line]), io_lib:format(Format, Args)],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level), Time, Msg}).
+    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
+            Timestamp, Msg}).
 
 log(Level, Pid, Message) ->
-    {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
-    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+    Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), Message],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Time, Msg}).
+            Timestamp, Msg}).
 
 log(Level, Pid, Format, Args) ->
-    {{Y, M, D}, {H, Mi, S}} = lager_stdlib:maybe_utc(erlang:localtime()),
-    Time = io_lib:format("~b-~b-~b ~b:~b:~b", [Y, M, D, H, Mi, S]),
+    Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), io_lib:format(Format, Args)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Time, Msg}).
+            Timestamp, Msg}).
 
 set_loglevel(Handler, Level) when is_atom(Level) ->
     gen_server:call(?MODULE, {set_loglevel, Handler, Level}).
