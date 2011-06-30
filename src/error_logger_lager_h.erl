@@ -81,12 +81,9 @@ handle_event(Event, State) ->
             ?LOG(warning, Pid, Fmt, Args);
         {warning_report, _GL, {Pid, std_warning, Report}} ->
             ?LOG(warning, Pid, print_silly_list(Report));
-        {warning_report, _GL, {_Pid, _Type, _Report}} ->
-            %% ignore, non standard warning type
-            ok;
         {info_msg, _GL, {Pid, Fmt, Args}} ->
             ?LOG(info, Pid, Fmt, Args);
-        {info_report, _GL, {Pid, std_info, D}} ->
+        {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
@@ -94,6 +91,8 @@ handle_event(Event, State) ->
                 _ ->
                     ?LOG(info, Pid, print_silly_list(D))
             end;
+        {info_report, _GL, {Pid, std_info, D}} ->
+            ?LOG(info, Pid, "~w", [D]);
         {info_report, _GL, {P, progress, D}} ->
             Details = lists:sort(D),
             case Details of
@@ -184,11 +183,13 @@ format_mfa({M, F, A}) when is_integer(A) ->
 format_mfa(Other) ->
     io_lib:format("~w", [Other]).
 
-print_silly_list(L) ->
+print_silly_list(L) when is_list(L) ->
     case lager_stdlib:string_p(L) of
         true -> L;
         _ -> print_silly_list(L, [], [])
-    end.
+    end;
+print_silly_list(L) ->
+    io_lib:format("~w", [L]).
 
 print_silly_list([], Fmt, Acc) ->
     io_lib:format(string:join(lists:reverse(Fmt), ", "), lists:reverse(Acc));

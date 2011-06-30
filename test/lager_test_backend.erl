@@ -382,6 +382,24 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"single term info reports are printed",
+                fun() ->
+                        error_logger:info_report({foolish, bees}),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w {foolish,bees}", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"single term error reports are printed",
+                fun() ->
+                        error_logger:error_report({foolish, bees}),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w {foolish,bees}", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"string info reports are printed",
                 fun() ->
                         error_logger:info_report("this is less silly"),
@@ -417,6 +435,16 @@ error_logger_redirect_test_() ->
                         timer:sleep(100),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[~w] ~w i: like, pie", [Map, self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"single term warning reports are printed at the correct level",
+                fun() ->
+                        error_logger:warning_report({foolish, bees}),
+                        Map = error_logger:warning_map(),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[~w] ~w {foolish,bees}", [Map, self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
