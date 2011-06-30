@@ -108,7 +108,7 @@ handle_event(Event, State) ->
                     ?LOG(info, P, ["PROGRESS REPORT ", print_silly_list(D)])
             end;
         _ ->
-            io:format("Event ~w~n", [Event])
+            ?LOG(warning, self(), "Unexpected error_logger event ~w", [Event])
     end,
     {ok, State}.
 
