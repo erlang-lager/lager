@@ -55,6 +55,13 @@ handle_call(badarg2, _, State) ->
 handle_call(system_limit, _, State) ->
 	Res = list_to_atom(lists:flatten(lists:duplicate(256, "a"))),
 	{reply, Res, State};
+handle_call(process_limit, _, State) ->
+    %% run with +P 300 to make this crash
+    [erlang:spawn(fun() -> timer:sleep(5000) end) || _ <- lists:seq(0, 500)],
+    {reply, ok, State};
+handle_call(port_limit, _, State) ->
+    [erlang:open_port({spawn, "ls"}, []) || _ <- lists:seq(0, 1024)],
+    {reply, ok, State};
 handle_call(noproc, _, State) ->
 	Res = gen_event:call(foo, bar, baz),
 	{reply, Res, State};

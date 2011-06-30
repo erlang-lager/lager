@@ -156,7 +156,23 @@ format_reason({badarith, [MFA|_]}) ->
     ["bad arithmetic expression in ", format_mfa(MFA)];
 format_reason({{badmatch, Val}, [MFA|_]}) ->
     [io_lib:format("no match of right hand value ~w in ", [Val]), format_mfa(MFA)];
-%format_reason({system_limit,
+format_reason({emfile, _Trace}) ->
+    "maximum number of file descriptors exhausted, check ulimit -n";
+format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
+    Limit = case {M, F} of
+        {erlang, open_port} ->
+            "maximum number of ports exceeded";
+        {erlang, spawn} ->
+            "maximum number of processes exceeded";
+        {erlang, spawn_opt} ->
+            "maximum number of processes exceeded";
+        {erlang, list_to_atom} ->
+            "tried to create an atom larger than 255, or maximum atom count exceeded";
+        _ ->
+            {Str, _} = trunc_io:print(Trace, 500),
+            Str
+    end,
+    ["system limit: ", Limit];
 format_reason({badarg, [MFA,MFA2|_]}) ->
     case MFA of
         {_M, _F, A} when is_list(A) ->
