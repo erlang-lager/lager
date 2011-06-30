@@ -351,7 +351,7 @@ error_logger_redirect_test_() ->
                         error_logger:error_report([{this, is}, a, {silly, format}]),
                         timer:sleep(100),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w this: is a silly: format", [self()])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w this: is, a, silly: format", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -378,7 +378,7 @@ error_logger_redirect_test_() ->
                         error_logger:info_report([{this, is}, a, {silly, format}]),
                         timer:sleep(100),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w this: is a silly: format", [self()])),
+                        Expected = lists:flatten(io_lib:format("[info] ~w this: is, a, silly: format", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -391,12 +391,32 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
-            {"error messages are printed",
+            {"info messages are printed",
                 fun() ->
                         error_logger:info_msg("doom, doom has come upon you all"),
                         timer:sleep(100),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w doom, doom has come upon you all", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"warning messages are printed at the correct level",
+                fun() ->
+                        error_logger:warning_msg("doom, doom has come upon you all"),
+                        Map = error_logger:warning_map(),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[~w] ~w doom, doom has come upon you all", [Map, self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"warning reports are printed at the correct level",
+                fun() ->
+                        error_logger:warning_report([{i, like}, pie]),
+                        Map = error_logger:warning_map(),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[~w] ~w i: like, pie", [Map, self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },

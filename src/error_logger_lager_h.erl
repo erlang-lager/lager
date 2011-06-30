@@ -37,7 +37,6 @@
         _ -> ok
     end).
 
-
 init(_) ->
     {ok, {}}.
 
@@ -78,6 +77,13 @@ handle_event(Event, State) ->
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
             ?LOG(error, Pid, ["CRASH REPORT ", format_crash_report(Self, Neighbours)]);
+        {warning_msg, _GL, {Pid, Fmt, Args}} ->
+            ?LOG(warning, Pid, Fmt, Args);
+        {warning_report, _GL, {Pid, std_warning, Report}} ->
+            ?LOG(warning, Pid, print_silly_list(Report));
+        {warning_report, _GL, {_Pid, _Type, _Report}} ->
+            %% ignore, non standard warning type
+            ok;
         {info_msg, _GL, {Pid, Fmt, Args}} ->
             ?LOG(info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} ->
@@ -185,7 +191,7 @@ print_silly_list(L) ->
     end.
 
 print_silly_list([], Fmt, Acc) ->
-    io_lib:format(string:join(lists:reverse(Fmt), " "), lists:reverse(Acc));
+    io_lib:format(string:join(lists:reverse(Fmt), ", "), lists:reverse(Acc));
 print_silly_list([{K,V}|T], Fmt, Acc) ->
     print_silly_list(T, ["~w: ~w" | Fmt], [V, K | Acc]);
 print_silly_list([H|T], Fmt, Acc) ->
