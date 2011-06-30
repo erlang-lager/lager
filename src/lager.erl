@@ -35,7 +35,7 @@ start_link() ->
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, [info]},
-                {lager_file_backend, [{"error.log", error}, {"console.log", info}]}];
+                {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
         {ok, Val} ->
             Val
     end,
@@ -45,7 +45,7 @@ start() ->
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, [info]},
-                {lager_file_backend, [{"error.log", error}, {"console.log", info}]}];
+                {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
         {ok, Val} ->
             Val
     end,
@@ -100,13 +100,13 @@ init([Handlers]) ->
     MinLog = minimum_log_level(get_log_levels()),
     lager_mochiglobal:put(loglevel, MinLog),
     case application:get_env(lager, error_logger_redirect) of
-        {ok, true} ->
+        {ok, false} ->
+            {ok, #state{}};
+        _ ->
             gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
             %% TODO allow user to whitelist handlers to not be removed
             [gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}) ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]],
-            {ok, #state{}};
-        _ ->
             {ok, #state{}}
     end.
 

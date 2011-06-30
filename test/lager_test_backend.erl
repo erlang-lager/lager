@@ -173,6 +173,7 @@ lager_test_() ->
 setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, [info]}]),
+    application:set_env(lager, error_logger_redirect, false),
     application:start(lager).
 
 cleanup(_) ->
