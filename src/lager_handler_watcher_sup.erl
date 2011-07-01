@@ -14,7 +14,7 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
--module(lager_sup).
+-module(lager_handler_watcher_sup).
 
 -behaviour(supervisor).
 
@@ -28,12 +28,8 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    {ok, {{one_for_one, 1000, 3600},
+    {ok, {{simple_one_for_one, 1000, 3600},
             [
-                {lager, {gen_event, start_link, [{local, lager_event}]},
-                        permanent, 5000, worker, [dynamic]},
-                {lager_crash_log, {lager_crash_log, start_link, ["log/crash.log"]},
-                    permanent, 5000, worker, [lager_crash_log]},
-                {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
-                    permanent, 5000, supervisor, [lager_handler_watcher_sup]}
+                {lager_handler_watcher, {lager_handler_watcher, start_link, []},
+                        transient, 5000, worker, [lager_handler_watcher]}
                 ]}}.

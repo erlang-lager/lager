@@ -16,40 +16,26 @@
 
 -module(lager).
 
--behaviour(gen_server).
-
 %% API
--export([start_link/0, start/0,
+-export([start/0,
         log/7, log/8, log/3, log/4,
-        get_loglevel/1, set_loglevel/2, set_loglevel/3]).
-
-%% callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-        code_change/3]).
-
--record(state, {event_pid, handler_loglevels, error_logger_handlers}).
+        get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
+        minimum_loglevel/1]).
 
 %% API
 
-start_link() ->
-    Handlers = case application:get_env(lager, handlers) of
-        undefined ->
-            [{lager_console_backend, [info]},
-                {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
-        {ok, Val} ->
-            Val
-    end,
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Handlers], []).
+start() -> start(lager).
 
-start() ->
-    Handlers = case application:get_env(lager, handlers) of
-        undefined ->
-            [{lager_console_backend, [info]},
-                {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
-        {ok, Val} ->
-            Val
-    end,
-    gen_server:start({local, ?MODULE}, ?MODULE, [Handlers], []).
+start(App) ->
+    start_ok(App, application:start(App, permanent)).
+
+start_ok(_App, ok) -> ok;
+start_ok(_App, {error, {already_started, _App}}) -> ok;
+start_ok(App, {error, {not_started, Dep}}) -> 
+    ok = start(Dep),
+    start(App);
+start_ok(App, {error, Reason}) -> 
+    erlang:error({app_start_failed, App, Reason}).
 
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
@@ -78,82 +64,31 @@ log(Level, Pid, Format, Args) ->
             Timestamp, Msg}).
 
 set_loglevel(Handler, Level) when is_atom(Level) ->
-    gen_server:call(?MODULE, {set_loglevel, Handler, Level}).
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
+    %% recalculate min log level
+    MinLog = minimum_loglevel(get_loglevels()),
+    lager_mochiglobal:put(loglevel, MinLog),
+    Reply.
 
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    gen_server:call(?MODULE, {set_loglevel, Handler, Ident, Level}).
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}),
+    %% recalculate min log level
+    MinLog = minimum_loglevel(get_loglevels()),
+    lager_mochiglobal:put(loglevel, MinLog),
+    Reply.
 
 get_loglevel(Handler) ->
-    case gen_server:call(?MODULE, {get_loglevel, Handler}) of
+    case gen_event:call(lager_event, Handler, get_loglevel) of
         X when is_integer(X) ->
             lager_util:num_to_level(X);
         Y -> Y
     end.
 
-%% gen_server callbacks
-
-init([Handlers]) ->
-    %% start a gen_event linked to this process
-    gen_event:start_link({local, lager_event}),
-    %% spin up all the defined handlers
-    [gen_event:add_sup_handler(lager_event, Module, Args) || {Module, Args} <- Handlers],
-    MinLog = minimum_log_level(get_log_levels()),
-    lager_mochiglobal:put(loglevel, MinLog),
-    case application:get_env(lager, error_logger_redirect) of
-        {ok, false} ->
-            {ok, #state{}};
-        _ ->
-            gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
-            %% TODO allow user to whitelist handlers to not be removed
-            [gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}) ||
-                X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]],
-            {ok, #state{}}
-    end.
-
-handle_call({set_loglevel, Handler, Level}, _From, State) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
-    %% recalculate min log level
-    MinLog = minimum_log_level(get_log_levels()),
-    lager_mochiglobal:put(loglevel, MinLog),
-    {reply, Reply, State};
-handle_call({set_loglevel, Handler, Ident, Level}, _From, State) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}),
-    %% recalculate min log level
-    MinLog = minimum_log_level(get_log_levels()),
-    lager_mochiglobal:put(loglevel, MinLog),
-    {reply, Reply, State};
-handle_call({get_loglevel, Handler}, _From, State) ->
-    Reply = gen_event:call(lager_event, Handler, get_loglevel),
-    {reply, Reply, State};
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
-
-handle_cast(_Request, State) ->
-    {noreply, State}.
-
-handle_info({gen_event_EXIT, error_logger_lager_h, {'EXIT', Reason}}, State) ->
-    lager:log(error, self(), ["Restarting lager error handler after it exited with ",
-            error_logger_lager_h:format_reason(Reason)]),
-    gen_event:add_sup_handler(error_logger, error_logger_lager_h, []),
-    {noreply, State};
-handle_info(Info, State) ->
-    io:format("got info ~p~n", [Info]),
-    {noreply, State}.
-
-terminate(_Reason, _State) ->
-    gen_event:stop(lager_event),
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%% internal functions
-
-get_log_levels() ->
+get_loglevels() ->
     [gen_event:call(lager_event, Handler, get_loglevel) ||
         Handler <- gen_event:which_handlers(lager_event)].
 
-minimum_log_level([]) ->
+minimum_loglevel([]) ->
     9; %% higher than any log level, logging off
-minimum_log_level(Levels) ->
+minimum_loglevel(Levels) ->
     erlang:hd(lists:sort(Levels)).
