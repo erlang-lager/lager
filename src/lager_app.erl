@@ -26,7 +26,7 @@ start() ->
     application:start(lager).
 
 start(_StartType, _StartArgs) ->
-    Res = lager_sup:start_link(),
+    {ok, Pid} = lager_sup:start_link(),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, [info]},
@@ -40,18 +40,19 @@ start(_StartType, _StartArgs) ->
     MinLog = lager:minimum_loglevel(lager:get_loglevels()),
     lager_mochiglobal:put(loglevel, MinLog),
 
-    case application:get_env(lager, error_logger_redirect) of
+    SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->
-            ok;
+            [];
         _ ->
             supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]),
             %% TODO allow user to whitelist handlers to not be removed
-            [gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}) ||
+            [begin gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}), X end ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]]
     end,
 
-    Res.
+    {ok, Pid, SavedHandlers}.
 
 
-stop(_State) ->
+stop(Handlers) ->
+    [gen_event:add_handler(error_logger, Handler, []) || Handler <- Handlers],
     ok.
