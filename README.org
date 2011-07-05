@@ -69,7 +69,8 @@
 
   The error_logger handler will also log more complete error messages (protected
   with use of trunc_io) to a "crash log" which can be referred to for further
-  information.
+  information. The location of the crash log can be specified by the crash_log
+  application variable. If undefined it is not written at all.
 
 * Runtime loglevel changes
   You can change the log level of any lager backend at runtime by doing the
@@ -82,7 +83,7 @@
   Or, for the backend with multiple handles (files, mainly):
 
 #+BEGIN_EXAMPLE
-  lager:set_loglevel(lager_console_backend, "console.log" debug).
+  lager:set_loglevel(lager_file_backend, "console.log" debug).
 #+END_EXAMPLE
 
   Lager keeps track of the minium log level being used by any backend and

@@ -18,7 +18,7 @@
                 {"log/console.log", info}]}]},
             %% Whether to write a crash log, and where. Undefined means no crash logger.
             {crash_log, "logs/crash.log"},
-            %% Whether to redirect error_logger messages into lager
+            %% Whether to redirect error_logger messages into lager - defaults to true
             {error_logger_redirect, true}
         ]}
  ]}.
