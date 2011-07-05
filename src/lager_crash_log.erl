@@ -27,8 +27,17 @@
 -record(state, {
         name,
         fd,
-        inode
+        inode,
+        flap=false
     }).
+
+-define(LOG(Level, Format, Args),
+    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
+        true ->
+            gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
+                    lager_util:format_time(), [io_lib:format("[~p] ~p ", [Level, self()]), io_lib:format(Format, Args)]});
+        _ -> ok
+    end).
 
 start_link(Filename) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename], []).
@@ -47,7 +56,7 @@ init([Filename]) ->
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
-handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode} = State) ->
+handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = State) ->
     FmtMaxBytes = 1024,
     TermMaxSize = 500,
     %% borrowed from riak_err
@@ -70,11 +79,23 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode} = State) ->
                             lager_stdlib:maybe_utc(erlang:localtime())),
                         " =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),
-                    file:write(NewFD, io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])),
-                    {noreply, State#state{fd=NewFD, inode=NewInode}};
-                Error ->
-                    lager:log(error, self(), "Failed to reopen crash log file ~w with error ~w", [Name, Error]),
-                    {noreply, State}
+                    case file:write(NewFD, io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])) of
+                        {error, Reason} when Flap == false ->
+                            ?LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason)]),
+                            {noreply, State#state{fd=NewFD, inode=NewInode, flap=true}};
+                        ok ->
+                            {noreply, State#state{fd=NewFD, inode=NewInode, flap=false}};
+                        _ ->
+                            {noreply, State#state{fd=NewFD, inode=NewInode}}
+                    end;
+                {error, Reason} ->
+                    case Flap of
+                        true ->
+                            {noreply, State};
+                        _ ->
+                            ?LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_info(Reason)]),
+                            {noreply, State#state{flap=true}}
+                    end
             end
     end;
 handle_cast(_Request, State) ->
