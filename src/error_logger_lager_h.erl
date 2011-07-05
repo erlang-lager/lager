@@ -210,11 +210,23 @@ format_reason(Reason) ->
     Str.
 
 format_mfa({M, F, A}) when is_list(A) ->
-    io_lib:format("~w:~w("++string:join(lists:duplicate(length(A), "~w"), ", ")++")", [M, F | A]);
+    io_lib:format("~w:~w("++format_args(A, [])++")", [M, F | A]);
 format_mfa({M, F, A}) when is_integer(A) ->
     io_lib:format("~w:~w/~w", [M, F, A]);
 format_mfa(Other) ->
     io_lib:format("~w", [Other]).
+
+format_args([], Acc) ->
+    string:join(lists:reverse(Acc), ", ");
+format_args([H|T], Acc) when is_list(H) ->
+    case lager_stdlib:string_p(H) of
+        true ->
+            format_args(T, ["\"~s\""|Acc]);
+        _ ->
+            format_args(T, ["~w"|Acc])
+    end;
+format_args([_|T], Acc) ->
+    format_args(T, ["~w"|Acc]).
 
 print_silly_list(L) when is_list(L) ->
     case lager_stdlib:string_p(L) of

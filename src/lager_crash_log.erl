@@ -68,6 +68,7 @@ handle_call(_Call, _From, State) ->
 
 %% @private
 handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = State) ->
+    %% TODO these should probably be configurable and have saner defaults
     FmtMaxBytes = 1024,
     TermMaxSize = 500,
     %% borrowed from riak_err
