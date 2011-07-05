@@ -28,12 +28,21 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
+    Children = [
+        {lager, {gen_event, start_link, [{local, lager_event}]},
+            permanent, 5000, worker, [dynamic]},
+        {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
+            permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
+
+    %% check if the crash log is enabled
+    Crash = case application:get_env(lager, crash_log) of
+        {ok, File} ->
+            [{lager_crash_log, {lager_crash_log, start_link, [File]},
+                    permanent, 5000, worker, [lager_crash_log]}];
+        _ ->
+            []
+    end,
+
     {ok, {{one_for_one, 1000, 3600},
-            [
-                {lager, {gen_event, start_link, [{local, lager_event}]},
-                        permanent, 5000, worker, [dynamic]},
-                {lager_crash_log, {lager_crash_log, start_link, ["log/crash.log"]},
-                    permanent, 5000, worker, [lager_crash_log]},
-                {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
-                    permanent, 5000, supervisor, [lager_handler_watcher_sup]}
-                ]}}.
+            Children ++ Crash
+            }}.
