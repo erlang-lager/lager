@@ -28,7 +28,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-init([Level]) ->
+init(Level) ->
     {ok, #state{level=lager_util:level_to_num(Level), buffer=[], ignored=[]}}.
 
 handle_call(count, #state{buffer=Buffer} = State) ->
@@ -172,7 +172,7 @@ lager_test_() ->
 
 setup() ->
     application:load(lager),
-    application:set_env(lager, handlers, [{?MODULE, [info]}]),
+    application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
     application:start(lager),
     gen_event:call(lager_event, ?MODULE, flush).
@@ -191,7 +191,7 @@ error_logger_redirect_crash_test_() ->
         fun() ->
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
-                application:set_env(lager, handlers, [{?MODULE, [error]}]),
+                application:set_env(lager, handlers, [{?MODULE, error}]),
                 application:start(lager),
                 crash:start()
         end,
@@ -337,7 +337,7 @@ error_logger_redirect_test_() ->
         fun() ->
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
-                application:set_env(lager, handlers, [{?MODULE, [info]}]),
+                application:set_env(lager, handlers, [{?MODULE, info}]),
                 application:start(lager),
                 timer:sleep(100),
                 gen_event:call(lager_event, ?MODULE, flush)

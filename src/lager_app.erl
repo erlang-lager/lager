@@ -29,7 +29,7 @@ start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
-            [{lager_console_backend, [info]},
+            [{lager_console_backend, info},
                 {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
         {ok, Val} ->
             Val

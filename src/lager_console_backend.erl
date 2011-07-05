@@ -23,7 +23,7 @@
 
 -record(state, {level}).
 
-init([Level]) ->
+init(Level) ->
     {ok, #state{level=lager_util:level_to_num(Level)}}.
 
 handle_call(get_loglevel, #state{level=Level} = State) ->
