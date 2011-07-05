@@ -14,6 +14,12 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc Lager crash log writer. This module implements a gen_server which writes
+%% error_logger error messages out to a file in their original format. The
+%% location to which it logs is configured by the environment var `crash_log'.
+%% Omitting this variable disables crash logging. Crash logs are printed safely
+%% using trunc_io via code mostly lifted from riak_err.
+
 -module(lager_crash_log).
 
 -behaviour(gen_server).
@@ -39,12 +45,15 @@
         _ -> ok
     end).
 
+%% @private
 start_link(Filename) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename], []).
 
+%% @private
 start(Filename) ->
     gen_server:start({local, ?MODULE}, ?MODULE, [Filename], []).
 
+%% @private
 init([Filename]) ->
     case lager_util:open_logfile(Filename, false) of
         {ok, {FD, Inode}} ->
@@ -53,9 +62,11 @@ init([Filename]) ->
             Error
     end.
 
+%% @private
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
+%% @private
 handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = State) ->
     FmtMaxBytes = 1024,
     TermMaxSize = 500,
@@ -101,12 +112,15 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = Sta
 handle_cast(_Request, State) ->
     {noreply, State}.
 
+%% @private
 handle_info(_Info, State) ->
     {noreply, State}.
 
+%% @private
 terminate(_Reason, _State) ->
     ok.
 
+%% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

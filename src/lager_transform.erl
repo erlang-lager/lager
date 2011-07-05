@@ -14,18 +14,20 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc The parse transform used for lager messages.
+%% This parse transform rewrites functions calls to lager:Severity/1,2 into
+%% a more complicated function that captures module, function, line, pid and
+%% time as well. The entire function call is then wrapped in a case that
+%% checks the mochiglobal 'loglevel' value, so the code isn't executed if
+%% nothing wishes to consume the message.
+
 -module(lager_transform).
 -export([parse_transform/2]).
 
 -define(LEVELS, [debug, info, notice, warning, error, critical, alert,
         emergency]).
 
-%% This parse transform rewrites functions calls to lager:Severity/1,2 into
-%% a more complicated function that captures module, function, line, pid and
-%% time as well. The entire function call is then wrapped in a case that
-%$ checks the mochiglobal 'loglevel' value, so the code isn't executed if
-%% nothing wishes to consume the message.
-
+%% @private
 parse_transform(AST, _Options) ->
     %io:format("~n~p~n", [AST]),
     walk_ast([], AST).

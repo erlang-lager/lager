@@ -14,6 +14,12 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc File backend for lager, with multiple file support.
+%% Multiple files are supported, each with the path and the loglevel being
+%% configurable. The configuration paramter for this backend is a list of
+%% 2-tuples of the form `{FileName, Level}'. This backend supports external log
+%% rotation and will re-open handles to files if the inode changes.
+
 -module(lager_file_backend).
 
 -behaviour(gen_event).
@@ -47,7 +53,7 @@
         _ -> ok
     end).
 
-
+%% @private
 init(LogFiles) ->
     Files = [begin
                 case lager_util:open_logfile(Name, true) of
@@ -62,6 +68,7 @@ init(LogFiles) ->
         {Name, Level} <- LogFiles],
     {ok, #state{files=Files}}.
 
+%% @private
 handle_call({set_loglevel, _}, State) ->
     {ok, {error, missing_identifier}, State};
 handle_call({set_loglevel, Ident, Level}, #state{files=Files} = State) ->
@@ -86,6 +93,7 @@ handle_call(get_loglevel, #state{files=Files} = State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
+%% @private
 handle_event({log, Level, Time, Message}, #state{files=Files} = State) ->
     NewFiles = lists:map(
         fun(#file{level=L} = File) when Level >= L ->
@@ -97,9 +105,11 @@ handle_event({log, Level, Time, Message}, #state{files=Files} = State) ->
 handle_event(_Event, State) ->
     {ok, State}.
 
+%% @private
 handle_info(_Info, State) ->
     {ok, State}.
 
+%% @private
 terminate(_Reason, State) ->
     %% flush and close any file handles
     lists:foreach(
@@ -107,6 +117,7 @@ terminate(_Reason, State) ->
             (_) -> ok
         end, State#state.files).
 
+%% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 

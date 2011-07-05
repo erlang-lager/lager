@@ -14,6 +14,8 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc The lager logging framework.
+
 -module(lager).
 
 %% API
@@ -24,6 +26,8 @@
 
 %% API
 
+%% @doc Start the application. Mainly useful for using `-s lager' as a command
+%% line switch to the VM to make lager start on boot.
 start() -> start(lager).
 
 start(App) ->
@@ -37,6 +41,7 @@ start_ok(App, {error, {not_started, Dep}}) ->
 start_ok(App, {error, Reason}) -> 
     erlang:error({app_start_failed, App, Reason}).
 
+%% @private
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
@@ -44,6 +49,7 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
+%% @private
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
@@ -51,18 +57,21 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
+%% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), Message],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
+%% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), io_lib:format(Format, Args)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
+%% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
     %% recalculate min log level
@@ -70,6 +79,8 @@ set_loglevel(Handler, Level) when is_atom(Level) ->
     lager_mochiglobal:put(loglevel, MinLog),
     Reply.
 
+%% @doc Set the loglevel for a particular backend that has multiple identifiers
+%% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}),
     %% recalculate min log level
@@ -77,6 +88,8 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     lager_mochiglobal:put(loglevel, MinLog),
     Reply.
 
+%% @doc Get the loglevel for a particular backend. In the case that the backend
+%% has multiple identifiers, the lowest is returned
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel) of
         X when is_integer(X) ->
@@ -84,10 +97,12 @@ get_loglevel(Handler) ->
         Y -> Y
     end.
 
+%% @private
 get_loglevels() ->
     [gen_event:call(lager_event, Handler, get_loglevel) ||
         Handler <- gen_event:which_handlers(lager_event)].
 
+%% @private
 minimum_loglevel([]) ->
     9; %% higher than any log level, logging off
 minimum_loglevel(Levels) ->

@@ -14,6 +14,10 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc Lager's top level supervisor.
+
+%% @private
+
 -module(lager_sup).
 
 -behaviour(supervisor).

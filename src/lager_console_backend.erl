@@ -14,6 +14,9 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc Console backend for lager. Configured with a single option, the loglevel
+%% desired.
+
 -module(lager_console_backend).
 
 -behaviour(gen_event).
@@ -23,9 +26,11 @@
 
 -record(state, {level}).
 
+%% @private
 init(Level) ->
     {ok, #state{level=lager_util:level_to_num(Level)}}.
 
+%% @private
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loglevel, Level}, State) ->
@@ -33,17 +38,21 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
+%% @private
 handle_event({log, Level, Time, Message}, #state{level=LogLevel} = State) when Level >= LogLevel ->
     io:put_chars([Time, " ", Message, "\n"]),
     {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
 
+%% @private
 handle_info(_Info, State) ->
     {ok, State}.
 
+%% @private
 terminate(_Reason, _State) ->
     ok.
 
+%% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

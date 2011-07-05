@@ -14,6 +14,13 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc A error_logger backend for redirecting events into lager.
+%% Error messages and crash logs are also optionally written to a crash log.
+
+%% @see lager_crash_log
+
+%% @private
+
 -module(error_logger_lager_h).
 
 -behaviour(gen_event).

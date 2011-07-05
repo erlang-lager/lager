@@ -14,6 +14,10 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+%% @doc A supervisor for monitoring lager_handler_watcher processes.
+
+%% @private
+
 -module(lager_handler_watcher_sup).
 
 -behaviour(supervisor).
