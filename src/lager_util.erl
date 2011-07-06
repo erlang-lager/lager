@@ -70,6 +70,9 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
                 true ->
                     {ok, {FD, Inode}};
                 false ->
+                    %% delayed write can cause file:close not to do a close
+                    file:close(FD),
+                    file:close(FD),
                     case open_logfile(Name, Buffer) of
                         {ok, {FD2, Inode3}} ->
                             %% inode changed, file was probably moved and
@@ -80,6 +83,9 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
                     end
             end;
         _ ->
+            %% delayed write can cause file:close not to do a close
+            file:close(FD),
+            file:close(FD),
             case open_logfile(Name, Buffer) of
                 {ok, {FD2, Inode3}} ->
                     %% file was removed
