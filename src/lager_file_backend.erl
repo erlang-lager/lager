@@ -30,8 +30,6 @@
 
 -include_lib("kernel/include/file.hrl").
 
--compile([{parse_transform, lager_transform}]).
-
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
@@ -60,7 +58,7 @@ init(LogFiles) ->
                     {ok, {FD, Inode}} ->
                         #file{name=Name, level=lager_util:level_to_num(Level), fd=FD, inode=Inode};
                     Error ->
-                        lager:error("Failed to open log file ~s with error ~p",
+                        ?LOG(error, "Failed to open log file ~s with error ~p",
                             [Name, Error]),
                         #file{name=Name, level=lager_util:level_to_num(Level), flap=true}
                 end
@@ -79,7 +77,7 @@ handle_call({set_loglevel, Ident, Level}, #state{files=Files} = State) ->
         _ ->
             NewFiles = lists:map(
                 fun(#file{name=Name} = File) when Name == Ident ->
-                        lager:notice("Changed loglevel of ~s to ~p", [Ident, Level]),
+                        ?LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
                         File#file{level=lager_util:level_to_num(Level)};
                     (X) -> X
                 end, Files),
