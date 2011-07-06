@@ -69,12 +69,11 @@ handle_call(_Call, _From, State) ->
 %% @private
 handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = State) ->
     %% TODO these should probably be configurable and have saner defaults
-    FmtMaxBytes = 1024,
-    TermMaxSize = 500,
+    FmtMaxBytes = 6192,
     %% borrowed from riak_err
     {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
         {error, _GL, {Pid1, Fmt, Args}} ->
-            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, TermMaxSize, FmtMaxBytes), true};
+            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
         {error_report, _GL, {Pid1, std_error, Rep}} ->
             {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
         {error_report, _GL, Other} ->
@@ -127,7 +126,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% ===== Begin code lifted from riak_err =====
 
--spec limited_fmt(string(), list(), integer(), integer()) -> iolist().
+-spec limited_fmt(string(), list(), integer()) -> iolist().
 %% @doc Format Fmt and Args similar to what io_lib:format/2 does but with 
 %%      limits on how large the formatted string may be.
 %%
@@ -135,19 +134,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% formatting is done by trunc_io:print/2, where FmtMaxBytes is used
 %% to limit the formatted string's size.
 
-limited_fmt(Fmt, Args, TermMaxSize, FmtMaxBytes) ->
-    TermSize = erts_debug:flat_size(Args),
-    if TermSize > TermMaxSize ->
-            ["Oversize args for format \"", Fmt, "\": \n",
-                [
-                    begin
-                            {Str, _} = trunc_io:print(lists:nth(N, Args), FmtMaxBytes),
-                            ["  arg", integer_to_list(N), ": ", Str, "\n"]
-                    end || N <- lists:seq(1, length(Args))
-                ]];
-        true ->
-            io_lib:format(Fmt, Args)
-    end.
+limited_fmt(Fmt, Args, FmtMaxBytes) ->
+    trunc_io:format(Fmt, Args, FmtMaxBytes).
 
 limited_str(Term, FmtMaxBytes) ->
     {Str, _} = trunc_io:print(Term, FmtMaxBytes),
