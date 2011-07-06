@@ -57,9 +57,9 @@ init(LogFiles) ->
                 case lager_util:open_logfile(Name, true) of
                     {ok, {FD, Inode}} ->
                         #file{name=Name, level=lager_util:level_to_num(Level), fd=FD, inode=Inode};
-                    Error ->
-                        ?LOG(error, "Failed to open log file ~s with error ~p",
-                            [Name, Error]),
+                    {error, Reason} ->
+                        ?LOG(error, "Failed to open log file ~s with error ~s",
+                            [Name, file:format_error(Reason)]),
                         #file{name=Name, level=lager_util:level_to_num(Level), flap=true}
                 end
         end ||
@@ -144,7 +144,7 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap} = File, Level, Msg) ->
                 true ->
                     File;
                 _ ->
-                    ?LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_info(Reason)]),
+                    ?LOG(error, "Failed to reopen logfile ~s with error ~s", [Name, file:format_error(Reason)]),
                     File#file{flap=true}
             end
     end.
