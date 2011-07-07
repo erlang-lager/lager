@@ -49,8 +49,8 @@ start(_StartType, _StartArgs) ->
             [];
         _ ->
             supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]),
-            %% TODO allow user to whitelist handlers to not be removed
-            [begin gen_event:delete_handler(error_logger, X, {stop_please, ?MODULE}), X end ||
+            %% Should we allow user to whitelist handlers to not be removed?
+            [begin error_logger:delete_report_handler(X), X end ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]]
     end,
 
@@ -58,5 +58,5 @@ start(_StartType, _StartArgs) ->
 
 
 stop(Handlers) ->
-    [gen_event:add_handler(error_logger, Handler, []) || Handler <- Handlers],
+    [error_handler:add_report_handler(Handler) || Handler <- Handlers],
     ok.

@@ -78,7 +78,7 @@ code_change(_OldVsn, State, _Extra) ->
 install_handler(Event, Module, Config) ->
     case gen_event:add_sup_handler(Event, Module, Config) of
         ok ->
-            lager:log(info, self(), "Lager installed handler ~p into ~p", [Module, Event]),
+            lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
             ok;
         _ ->
             %% try to reinstall it later
