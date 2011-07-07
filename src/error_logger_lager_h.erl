@@ -23,6 +23,8 @@
 
 -module(error_logger_lager_h).
 
+-include("lager.hrl").
+
 -behaviour(gen_event).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
@@ -31,14 +33,14 @@
 -export([format_reason/1]).
 
 -define(LOG(Level, Pid, Msg),
-    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
+    case ?SHOULD_LOG(Level) of
         true ->
             lager:log(Level, Pid, Msg);
         _ -> ok
     end).
 
 -define(LOG(Level, Pid, Fmt, Args),
-    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
+    case ?SHOULD_LOG(Level) of
         true ->
             lager:log(Level, Pid, Fmt, Args);
         _ -> ok

@@ -22,6 +22,8 @@
 
 -module(lager_crash_log).
 
+-include("lager.hrl").
+
 -behaviour(gen_server).
 
 %% callbacks
@@ -36,14 +38,6 @@
         inode,
         flap=false
     }).
-
--define(LOG(Level, Format, Args),
-    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
-        true ->
-            gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
-                    lager_util:format_time(), [io_lib:format("[~p] ~p ", [Level, self()]), io_lib:format(Format, Args)]});
-        _ -> ok
-    end).
 
 %% @private
 start_link(Filename) ->
@@ -93,7 +87,7 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = Sta
                     NodeSuffix = other_node_suffix(Pid),
                     case file:write(NewFD, io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])) of
                         {error, Reason} when Flap == false ->
-                            ?LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason)]),
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason)]),
                             {noreply, State#state{fd=NewFD, inode=NewInode, flap=true}};
                         ok ->
                             {noreply, State#state{fd=NewFD, inode=NewInode, flap=false}};
@@ -105,7 +99,7 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = Sta
                         true ->
                             {noreply, State};
                         _ ->
-                            ?LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_info(Reason)]),
+                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_info(Reason)]),
                             {noreply, State#state{flap=true}}
                     end
             end

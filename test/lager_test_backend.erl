@@ -16,6 +16,8 @@
 
 -module(lager_test_backend).
 
+-include("lager.hrl").
+
 -behaviour(gen_event).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
@@ -52,7 +54,7 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 handle_event({log, Level, Time, Message}, #state{level=LogLevel,
-        buffer=Buffer} = State) when Level >= LogLevel ->
+        buffer=Buffer} = State) when Level =< LogLevel ->
     {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
 handle_event({log, _Level, _Time, _Message}, #state{ignored=Ignored} = State) ->
     {ok, State#state{ignored=Ignored ++ [ignored]}};
@@ -155,7 +157,7 @@ lager_test_() ->
                         lager:debug("this message will be ignored"),
                         ?assertEqual(0, count()),
                         ?assertEqual(0, count_ignored()),
-                        lager_mochiglobal:put(loglevel, 0),
+                        lager_mochiglobal:put(loglevel, ?DEBUG),
                         lager:debug("this message should be ignored"),
                         ?assertEqual(0, count()),
                         ?assertEqual(1, count_ignored()),
@@ -553,7 +555,7 @@ error_logger_redirect_test_() ->
                         ?assertEqual(1, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, error),
-                        lager_mochiglobal:put(loglevel, 0),
+                        lager_mochiglobal:put(loglevel, ?DEBUG),
                         error_logger:info_report([hello, world]),
                         timer:sleep(100),
                         ?assertEqual(1, count()),

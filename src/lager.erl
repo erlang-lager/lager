@@ -18,6 +18,8 @@
 
 -module(lager).
 
+-include("lager.hrl").
+
 %% API
 -export([start/0,
         log/7, log/8, log/3, log/4,
@@ -93,7 +95,7 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel) of
         X when is_integer(X) ->
-            lager_util:num_to_level(X);
+            ?NUM2LEVEL(X);
         Y -> Y
     end.
 
@@ -104,6 +106,6 @@ get_loglevels() ->
 
 %% @private
 minimum_loglevel([]) ->
-    9; %% higher than any log level, logging off
+    -1; %% lower than any log level, logging off
 minimum_loglevel(Levels) ->
-    erlang:hd(lists:sort(Levels)).
+    erlang:hd(lists:reverse(lists:sort(Levels))).

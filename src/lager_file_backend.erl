@@ -22,6 +22,8 @@
 
 -module(lager_file_backend).
 
+-include("lager.hrl").
+
 -behaviour(gen_event).
 
 -ifdef(TEST).
@@ -43,14 +45,6 @@
         flap=false :: boolean()
     }).
 
--define(LOG(Level, Format, Args),
-    case lager_util:level_to_num(Level) >= lager_mochiglobal:get(loglevel, 0) of
-        true ->
-            gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
-                    lager_util:format_time(), [io_lib:format("[~p] ~p ", [Level, self()]), io_lib:format(Format, Args)]});
-        _ -> ok
-    end).
-
 %% @private
 init(LogFiles) ->
     Files = [begin
@@ -58,7 +52,7 @@ init(LogFiles) ->
                     {ok, {FD, Inode}} ->
                         #file{name=Name, level=lager_util:level_to_num(Level), fd=FD, inode=Inode};
                     {error, Reason} ->
-                        ?LOG(error, "Failed to open log file ~s with error ~s",
+                        ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                             [Name, file:format_error(Reason)]),
                         #file{name=Name, level=lager_util:level_to_num(Level), flap=true}
                 end
@@ -77,15 +71,15 @@ handle_call({set_loglevel, Ident, Level}, #state{files=Files} = State) ->
         _ ->
             NewFiles = lists:map(
                 fun(#file{name=Name} = File) when Name == Ident ->
-                        ?LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
+                        ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
                         File#file{level=lager_util:level_to_num(Level)};
                     (X) -> X
                 end, Files),
             {ok, ok, State#state{files=NewFiles}}
     end;
 handle_call(get_loglevel, #state{files=Files} = State) ->
-    Result = lists:foldl(fun(#file{level=Level}, L) -> erlang:min(Level, L);
-            (_, L) -> L end, 9,
+    Result = lists:foldl(fun(#file{level=Level}, L) -> erlang:max(Level, L);
+            (_, L) -> L end, -1,
         Files),
     {ok, Result, State};
 handle_call(_Request, State) ->
@@ -94,7 +88,7 @@ handle_call(_Request, State) ->
 %% @private
 handle_event({log, Level, Time, Message}, #state{files=Files} = State) ->
     NewFiles = lists:map(
-        fun(#file{level=L} = File) when Level >= L ->
+        fun(#file{level=L} = File) when Level =< L ->
                 write(File, Level, [Time, " ", Message, "\n"]);
             (File) ->
                 File
@@ -124,11 +118,11 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap} = File, Level, Msg) ->
         {ok, {NewFD, NewInode}} ->
             file:write(NewFD, Msg),
             case Level of
-                _ when Level >= 4 ->
+                _ when Level =< ?ERROR ->
                     %% force a sync on any message at error severity or above
                     Flap2 = case file:datasync(NewFD) of
                         {error, Reason2} when Flap == false ->
-                            ?LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason2)]),
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason2)]),
                             true;
                         ok ->
                             false;
@@ -144,7 +138,7 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap} = File, Level, Msg) ->
                 true ->
                     File;
                 _ ->
-                    ?LOG(error, "Failed to reopen logfile ~s with error ~s", [Name, file:format_error(Reason)]),
+                    ?INT_LOG(error, "Failed to reopen logfile ~s with error ~s", [Name, file:format_error(Reason)]),
                     File#file{flap=true}
             end
     end.
@@ -166,18 +160,18 @@ get_loglevel_test() ->
 
 rotation_test() ->
     {ok, {FD, Inode}} = lager_util:open_logfile("test.log", true),
-    ?assertMatch(#file{name="test.log", level=0, fd=FD, inode=Inode},
-        write(#file{name="test.log", level=0, fd=FD, inode=Inode}, 0, "hello world")),
+    ?assertMatch(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode},
+        write(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode}, 0, "hello world")),
     file:delete("test.log"),
-    Result = write(#file{name="test.log", level=0, fd=FD, inode=Inode}, 0, "hello world"),
+    Result = write(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode}, 0, "hello world"),
     %% assert file has changed
-    ?assert(#file{name="test.log", level=0, fd=FD, inode=Inode} =/= Result),
-    ?assertMatch(#file{name="test.log", level=0}, Result),
+    ?assert(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode} =/= Result),
+    ?assertMatch(#file{name="test.log", level=?DEBUG}, Result),
     file:rename("test.log", "test.log.1"),
     Result2 = write(Result, 0, "hello world"),
     %% assert file has changed
     ?assert(Result =/= Result2),
-    ?assertMatch(#file{name="test.log", level=0}, Result2),
+    ?assertMatch(#file{name="test.log", level=?DEBUG}, Result2),
     ok.
 
 -endif.

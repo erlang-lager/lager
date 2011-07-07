@@ -39,7 +39,7 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Level, Time, Message}, #state{level=LogLevel} = State) when Level >= LogLevel ->
+handle_event({log, Level, Time, Message}, #state{level=LogLevel} = State) when Level =< LogLevel ->
     io:put_chars([Time, " ", Message, "\n"]),
     {ok, State};
 handle_event(_Event, State) ->

@@ -22,10 +22,10 @@
 %% nothing wishes to consume the message.
 
 -module(lager_transform).
--export([parse_transform/2]).
 
--define(LEVELS, [debug, info, notice, warning, error, critical, alert,
-        emergency]).
+-include("lager.hrl").
+
+-export([parse_transform/2]).
 
 %% @private
 parse_transform(AST, _Options) ->
@@ -63,11 +63,11 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
             %% a case to check the mochiglobal 'loglevel' key against the
             %% message we're trying to log
             {'case',Line,
-                    {op,Line,'=<',
+                    {op,Line,'>=',
                         {call,Line,
                             {remote,Line,{atom,Line,lager_mochiglobal},{atom,Line,get}},
                             [{atom,Line,loglevel},{integer,Line,0}]},
-                        {integer, Line, lager_util:level_to_num(Severity)}},
+                        {integer, Line, ?LEVEL2NUM(Severity)}},
                     [{clause,Line,
                             [{atom,Line,true}], %% yes, we log!
                             [],
