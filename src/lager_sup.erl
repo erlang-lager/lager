@@ -41,7 +41,11 @@ init([]) ->
     %% check if the crash log is enabled
     Crash = case application:get_env(lager, crash_log) of
         {ok, File} ->
-            [{lager_crash_log, {lager_crash_log, start_link, [File]},
+            MaxBytes = case application:get_env(lager, crash_log_size) of
+                {ok, Val} -> Val;
+                _ -> 4096
+            end,
+            [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes]},
                     permanent, 5000, worker, [lager_crash_log]}];
         _ ->
             []

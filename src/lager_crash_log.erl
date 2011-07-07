@@ -30,28 +30,29 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([start_link/1, start/1]).
+-export([start_link/2, start/2]).
 
 -record(state, {
         name,
         fd,
         inode,
+        fmtmaxbytes,
         flap=false
     }).
 
 %% @private
-start_link(Filename) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename], []).
+start_link(Filename, MaxBytes) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename, MaxBytes], []).
 
 %% @private
-start(Filename) ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [Filename], []).
+start(Filename, MaxBytes) ->
+    gen_server:start({local, ?MODULE}, ?MODULE, [Filename, MaxBytes], []).
 
 %% @private
-init([Filename]) ->
+init([Filename, MaxBytes]) ->
     case lager_util:open_logfile(Filename, false) of
         {ok, {FD, Inode}} ->
-            {ok, #state{name=Filename, fd=FD, inode=Inode}};
+            {ok, #state{name=Filename, fd=FD, inode=Inode, fmtmaxbytes=MaxBytes}};
         Error ->
             Error
     end.
@@ -61,9 +62,7 @@ handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
 %% @private
-handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap} = State) ->
-    %% TODO these should probably be configurable and have saner defaults
-    FmtMaxBytes = 1024,
+handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtmaxbytes=FmtMaxBytes} = State) ->
     TermMaxSize = 500,
     %% borrowed from riak_err
     {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
