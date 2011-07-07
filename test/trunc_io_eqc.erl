@@ -115,7 +115,7 @@ gen_fun() ->
 prop_format() ->
     ?FORALL({FmtArgs, MaxLen}, {gen_fmt_args(), gen_max_len()},
             begin
-                FudgeLen = 31, %% trunc_io does not correctly calc safe size of pid/port/numbers
+                FudgeLen = 31, %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
                     Str = lists:flatten(trunc_io:format(FmtStr, Args, MaxLen)),

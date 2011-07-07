@@ -172,6 +172,9 @@ print(Atom, _Max) when is_atom(Atom) ->
 print(<<>>, _Max) ->
     {"<<>>", 4};
 
+print(Binary, 0) when is_binary(Binary) ->
+    {"<<..>>", 6};
+
 print(Binary, Max) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, size(Binary)])),
     {L, Len} = alist_start(B, Max-4),
@@ -181,9 +184,16 @@ print(Float, _Max) when is_float(Float) ->
     L = float_to_list(Float),
     {L, length(L)};
 
-print(Fun, _Max) when is_function(Fun) ->
+print(Fun, Max) when is_function(Fun) ->
     L = erlang:fun_to_list(Fun),
-    {L, length(L)};
+    case length(L) > Max of
+        true ->
+            S = erlang:max(5, Max),
+            Res = string:substr(L, 1, S) ++ "..>",
+            {Res, length(Res)};
+        _ ->
+            {L, length(L)}
+    end;
 
 print(Integer, _Max) when is_integer(Integer) ->
     L = integer_to_list(Integer),
