@@ -51,6 +51,6 @@ init([]) ->
             []
     end,
 
-    {ok, {{one_for_one, 1000, 3600},
+    {ok, {{one_for_one, 10, 60},
             Children ++ Crash
             }}.

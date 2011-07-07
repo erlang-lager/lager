@@ -32,7 +32,7 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    {ok, {{simple_one_for_one, 1000, 3600},
+    {ok, {{simple_one_for_one, 10, 60},
             [
                 {lager_handler_watcher, {lager_handler_watcher, start_link, []},
                         transient, 5000, worker, [lager_handler_watcher]}
