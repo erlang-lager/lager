@@ -63,7 +63,7 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
     case H of
         _ when H == "p"; H == "w"; H == "s" ->
             %okay, these are prime candidates for rewriting
-            case print(AH, Max) of
+            case print(AH, Max + 2) of
                 {_Res, Max} when AT /= [] ->
                     % this isn't the last argument, but it consumed all available space
                     % delay calculating the print size until the end
@@ -88,7 +88,7 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
     case re:run(H, "^(?:-??(\\d+|\\*)\\.|)(?:-??(\\d+|\\*)\\.|)(-??\\d+|\\*|)(t|)([cfegswpWPBX#bx+ni])$", [{capture, all_but_first, list}]) of
         {match, [_F, _P, _Pad, _Mod, C]} when C == "p"; C=="w"; C=="s" ->
             %okay, these are prime candidates for rewriting
-            case print(AH, Max) of
+            case print(AH, Max + length(H) + 1) of
                 {_Res, Max} when AT /= [] ->
                     % this isn't the last argument, but it consumed all available space
                     % delay calculating the print size until the end
