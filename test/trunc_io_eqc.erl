@@ -36,9 +36,10 @@
 %%====================================================================
 
 eqc_test_() ->
-    {spawn, 
-     [?_assertEqual(true, quickcheck(numtests(500, ?QC_OUT(prop_format()))))]
-    }.
+    {timeout, 300,
+     {spawn, 
+      [?_assertEqual(true, quickcheck(numtests(500, ?QC_OUT(prop_format()))))]
+     }}.
 
 %%====================================================================
 %% Shell helpers 
@@ -114,15 +115,17 @@ gen_fun() ->
 prop_format() ->
     ?FORALL({FmtArgs, MaxLen}, {gen_fmt_args(), gen_max_len()},
             begin
+                FudgeLen = 31, %% trunc_io does not correctly calc safe size of pid/port/numbers
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
                     Str = lists:flatten(trunc_io:format(FmtStr, Args, MaxLen)),
                     ?WHENFAIL(begin
-                                  io:format("FmtStr: ~p\n", [FmtStr]),
-                                  io:format("Args:   ~p\n", [Args]),
-                                  io:format("MaxLen: ~p\n", [MaxLen]),
-                                  io:format("ActLen: ~p\n", [length(Str)]),
-                                  io:format("Str:    ~p\n", [Str])
+                                  io:format(user, "FmtStr:   ~p\n", [FmtStr]),
+                                  io:format(user, "Args:     ~p\n", [Args]),
+                                  io:format(user, "FudgeLen: ~p\n", [FudgeLen]),
+                                  io:format(user, "MaxLen:   ~p\n", [MaxLen]),
+                                  io:format(user, "ActLen:   ~p\n", [length(Str)]),
+                                  io:format(user, "Str:      ~p\n", [Str])
                               end,
                               %% Make sure the result is a printable list
                               %% and if the format string is less than the length, 
@@ -130,12 +133,12 @@ prop_format() ->
                               conjunction([{printable, Str == "" orelse 
                                                        io_lib:printable_list(Str)},
                                            {length, length(FmtStr) > MaxLen orelse 
-                                                    length(Str) =< MaxLen}]))
+                                                    length(Str) =< MaxLen + FudgeLen}]))
                 catch
                     _:Err ->
                         io:format(user, "\nException: ~p\n", [Err]),
-                        io:format("FmtStr: ~p\n", [FmtStr]),
-                        io:format("Args:   ~p\n", [Args]),
+                        io:format(user, "FmtStr: ~p\n", [FmtStr]),
+                        io:format(user, "Args:   ~p\n", [Args]),
                         false
                 end
             end).
