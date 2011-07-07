@@ -60,9 +60,29 @@ check() ->
 
 gen_fmt_args() ->
     list(oneof([gen_print_str(),
+                "~~",
                 {"~p", gen_any(5)},
                 {"~w", gen_any(5)},
-                {"~s", gen_print_str()}
+                {"~s", gen_print_str()},
+                {"~P", gen_any(5), 4},
+                {"~W", gen_any(5), 4},
+                {"~i", gen_any(5)},
+                {"~B", nat()},
+                {"~b", nat()},
+                {"~X", nat(), "0x"},
+                {"~x", nat(), "0x"},
+                {"~.10#", nat()},
+                {"~.10+", nat()},
+                {"~.36B", nat()},
+                {"~62P", gen_any(5), 4},
+                {"~c", gen_char()},
+                {"~tc", gen_char()}
+                %{"~f", real()}, %% floats like to make the fudge limit fail, so don't enable them
+                %{"~10.f", real()},
+                %{"~g", real()},
+                %{"~10.g", real()},
+                %{"~e", real()},
+                %{"~10.e", real()}
                ])).
              
 
@@ -74,6 +94,7 @@ gen_any(MaxDepth) ->
     oneof([largeint(),
            gen_atom(),
            nat(),
+           %real(),
            binary(),
            gen_pid(),
            gen_port(),
@@ -106,6 +127,9 @@ gen_ref() ->
 
 gen_fun() ->
     ?LAZY(fun() -> ok end).
+
+gen_char() ->
+    oneof(lists:seq($A, $z)).
                
 %%====================================================================
 %% Property
@@ -115,7 +139,7 @@ gen_fun() ->
 prop_format() ->
     ?FORALL({FmtArgs, MaxLen}, {gen_fmt_args(), gen_max_len()},
             begin
-                FudgeLen = 31, %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
+                FudgeLen = 50, %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
                     Str = lists:flatten(trunc_io:format(FmtStr, Args, MaxLen)),
@@ -151,6 +175,8 @@ prop_format() ->
 build_fmt_args(FmtArgs) ->
     F = fun({Fmt, Arg}, {FmtStr0, Args0}) ->
                 {FmtStr0 ++ Fmt, Args0 ++ [Arg]};
+           ({Fmt, Arg1, Arg2}, {FmtStr0, Args0}) ->
+                {FmtStr0 ++ Fmt, Args0 ++ [Arg1, Arg2]};
            (Str, {FmtStr0, Args0}) ->
                 {FmtStr0 ++ Str, Args0}
         end,
