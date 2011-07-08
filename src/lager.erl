@@ -75,7 +75,7 @@ log(Level, Pid, Format, Args) ->
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}),
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
     lager_mochiglobal:put(loglevel, MinLog),
@@ -84,7 +84,7 @@ set_loglevel(Handler, Level) when is_atom(Level) ->
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}),
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
     lager_mochiglobal:put(loglevel, MinLog),
@@ -93,7 +93,7 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 %% @doc Get the loglevel for a particular backend. In the case that the backend
 %% has multiple identifiers, the lowest is returned
 get_loglevel(Handler) ->
-    case gen_event:call(lager_event, Handler, get_loglevel) of
+    case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
         X when is_integer(X) ->
             ?NUM2LEVEL(X);
         Y -> Y
@@ -101,7 +101,7 @@ get_loglevel(Handler) ->
 
 %% @private
 get_loglevels() ->
-    [gen_event:call(lager_event, Handler, get_loglevel) ||
+    [gen_event:call(lager_event, Handler, get_loglevel, infinity) ||
         Handler <- gen_event:which_handlers(lager_event)].
 
 %% @private
