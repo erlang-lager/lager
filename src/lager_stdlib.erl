@@ -153,7 +153,7 @@ proc_lib_format([OwnReport,LinkReport], FmtMaxBytes) ->
 format_report(Rep, FmtMaxBytes) when is_list(Rep) ->
     format_rep(Rep, FmtMaxBytes);
 format_report(Rep, FmtMaxBytes) ->
-    {Str, _} = trunc_io:print(Rep, FmtMaxBytes),
+    {Str, _} = lager_trunc_io:print(Rep, FmtMaxBytes),
     io_lib:format("~p~n", [Str]).
 
 format_rep([{initial_call,InitialCall}|Rep], FmtMaxBytes) ->
@@ -185,12 +185,12 @@ format_mfa({M,F,Args}=StartF, FmtMaxBytes) ->
 
 pp_fun(FmtMaxBytes) ->
     fun(Term, _I) -> 
-            {Str, _} = trunc_io:print(Term, FmtMaxBytes),
+            {Str, _} = lager_trunc_io:print(Term, FmtMaxBytes),
             io_lib:format("~s", [Str]) 
     end.
 
 format_tag(Tag, Data, FmtMaxBytes) ->
-    {Str, _} = trunc_io:print(Data, FmtMaxBytes),
+    {Str, _} = lager_trunc_io:print(Data, FmtMaxBytes),
     io_lib:format("    ~p: ~s~n", [Tag, Str]).
 
 %% From OTP stdlib's lib.erl ... These functions aren't exported.

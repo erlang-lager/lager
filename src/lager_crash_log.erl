@@ -128,10 +128,10 @@ code_change(_OldVsn, State, _Extra) ->
 %% to limit the formatted string's size.
 
 limited_fmt(Fmt, Args, FmtMaxBytes) ->
-    trunc_io:format(Fmt, Args, FmtMaxBytes).
+    lager_trunc_io:format(Fmt, Args, FmtMaxBytes).
 
 limited_str(Term, FmtMaxBytes) ->
-    {Str, _} = trunc_io:print(Term, FmtMaxBytes),
+    {Str, _} = lager_trunc_io:print(Term, FmtMaxBytes),
     Str.
 
 other_node_suffix(Pid) when node(Pid) =/= node() ->
@@ -172,12 +172,12 @@ sasl_limited_str(supervisor_report, Report, FmtMaxBytes) ->
     Offender = lager_stdlib:sup_get(offender, Report),
     FmtString = "     Supervisor: ~p~n     Context:    ~p~n     Reason:     "
     "~s~n     Offender:   ~s~n~n",
-    {ReasonStr, _} = trunc_io:print(Reason, FmtMaxBytes),
-    {OffenderStr, _} = trunc_io:print(Offender, FmtMaxBytes),
+    {ReasonStr, _} = lager_trunc_io:print(Reason, FmtMaxBytes),
+    {OffenderStr, _} = lager_trunc_io:print(Offender, FmtMaxBytes),
     io_lib:format(FmtString, [Name, Context, ReasonStr, OffenderStr]);
 sasl_limited_str(progress, Report, FmtMaxBytes) ->
     [begin
-                {Str, _} = trunc_io:print(Data, FmtMaxBytes),
+                {Str, _} = lager_trunc_io:print(Data, FmtMaxBytes),
                 io_lib:format("    ~16w: ~s~n", [Tag, Str])
         end || {Tag, Data} <- Report];
 sasl_limited_str(crash_report, Report, FmtMaxBytes) ->

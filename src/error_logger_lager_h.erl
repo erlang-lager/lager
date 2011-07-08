@@ -188,7 +188,7 @@ format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
         {erlang, list_to_atom} ->
             "tried to create an atom larger than 255, or maximum atom count exceeded";
         _ ->
-            {Str, _} = trunc_io:print(Trace, 500),
+            {Str, _} = lager_trunc_io:print(Trace, 500),
             Str
     end,
     ["system limit: ", Limit];
@@ -208,7 +208,7 @@ format_reason({noproc, MFA}) ->
 format_reason({{badfun, Term}, [MFA|_]}) ->
     [io_lib:format("bad function ~w in ", [Term]), format_mfa(MFA)];
 format_reason(Reason) ->
-    {Str, _} = trunc_io:print(Reason, 500),
+    {Str, _} = lager_trunc_io:print(Reason, 500),
     Str.
 
 format_mfa({M, F, A}) when is_list(A) ->

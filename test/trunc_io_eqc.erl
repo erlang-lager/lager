@@ -142,7 +142,7 @@ prop_format() ->
                 FudgeLen = 50, %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
-                    Str = lists:flatten(trunc_io:format(FmtStr, Args, MaxLen)),
+                    Str = lists:flatten(lager_trunc_io:format(FmtStr, Args, MaxLen)),
                     ?WHENFAIL(begin
                                   io:format(user, "FmtStr:   ~p\n", [FmtStr]),
                                   io:format(user, "Args:     ~p\n", [Args]),

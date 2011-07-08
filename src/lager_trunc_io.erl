@@ -25,8 +25,12 @@
 %%
 %% Source license: Erlang Public License.
 %% Original author: Matthias Lang, <tt>matthias@corelatus.se</tt>
+%%
+%% Various changes to this module, most notably the format/3 implementation
+%% were added by Andrew Thompson <andrew@basho.com>. The module has been renamed
+%% to avoid conflicts with the vanilla module.
 
--module(trunc_io).
+-module(lager_trunc_io).
 -author('matthias@corelatus.se').
 %% And thanks to Chris Newcombe for a bug fix 
 -export([format/3, print/2, fprint/2, safe/2]).               % interface functions
