@@ -11,7 +11,7 @@
       Module/Function/Line/Pid information
     - When no handler is consuming a log level (eg. debug) no event is even sent
       to the log handler
-    - Supports multiple backends, including console, file and syslog.
+    - Supports multiple backends, including console and file. More are planned.
 
 * Usage
   To use lager in your application, you need to define it as a rebar dep or have
@@ -89,5 +89,5 @@
   Lager keeps track of the minium log level being used by any backend and
   supresses generation of messages lower than that level. This means that debug
   log messages, when no backend is consuming debug messages, are effectively
-  free. A simple benchmark of doing 1 million debug log messages while the the
+  free. A simple benchmark of doing 1 million debug log messages while the
   minimum threshold was above that takes less than half a second.
