@@ -47,7 +47,7 @@ start_ok(App, {error, Reason}) ->
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
-                Function, Line]),  Message],
+                Function, Line]),  string:strip(lists:flatten(Message), right, $\n)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
@@ -55,21 +55,21 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
-                Function, Line]), io_lib:format(Format, Args)],
+                Function, Line]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
 %% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
-    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), Message],
+    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(Message), right, $\n)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
 %% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
-    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), io_lib:format(Format, Args)],
+    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
             Timestamp, Msg}).
 
