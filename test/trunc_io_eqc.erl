@@ -182,5 +182,5 @@ build_fmt_args(FmtArgs) ->
         end,
     lists:foldl(F, {"", []}, FmtArgs).
 
--endif. % (TEST).
 -endif. % (EQC).
+-endif. % (TEST).
