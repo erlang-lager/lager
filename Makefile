@@ -1,8 +1,3 @@
-REPO		?= riak
-RIAK_TAG	 = $(shell git describe --tags)
-REVISION	?= $(shell echo $(RIAK_TAG) | sed -e 's/^$(REPO)-//')
-PKG_VERSION	?= $(shell echo $(REVISION) | tr - .)
-
 .PHONY: rel stagedevrel deps test
 
 all: deps compile
