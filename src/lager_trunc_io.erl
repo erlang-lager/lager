@@ -27,7 +27,7 @@
 %% Original author: Matthias Lang, <tt>matthias@corelatus.se</tt>
 %%
 %% Various changes to this module, most notably the format/3 implementation
-%% were added by Andrew Thompson <andrew@basho.com>. The module has been renamed
+%% were added by Andrew Thompson `<andrew@basho.com>'. The module has been renamed
 %% to avoid conflicts with the vanilla module.
 
 -module(lager_trunc_io).
