@@ -4,7 +4,7 @@
   that plays nicely with traditional UNIX logging tools like logrotate and
   syslog.
 
-  Features
+*  Features
     - Finer grained log levels (debug, info, notice, warning, error, critical,
       alert, emergency)
     - Logger calls are transformed using a parse transform to allow capturing
