@@ -490,10 +490,11 @@ error_logger_redirect_test_() ->
             },
             {"supervisor progress report",
                 fun() ->
+                        lager:set_loglevel(?MODULE, debug),
                         error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
                         timer:sleep(100),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
+                        Expected = lists:flatten(io_lib:format("[debug] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
