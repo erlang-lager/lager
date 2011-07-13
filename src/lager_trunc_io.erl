@@ -99,12 +99,9 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
             format(T, AT, Max, [[$~ | H] | Acc], [AH | ArgAcc])
     end;
 format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
-    % complicated format specifier, gonna have to parse it..
-    %case re:run(H, "^(?:-??(\\d+|\\*)\\.|\\.|)(?:-??(\\d+|\\*)\\.|\\.|)(-??.|)(t|)([cfegswpWPBX#bx+ni])$", [{capture, all_but_first, list}]) of
-    %% its actually simpler to just look at the last character in the string
+    %% its actually simplest to just look at the last character in the string
     case lists:nth(length(H), H) of
         C when C == $p; C == $w; C == $s ->
-        %{match, [_F, _P, _Pad, _Mod, C]} when C == "p"; C=="w"; C=="s" ->
             %okay, these are prime candidates for rewriting
             case print(AH, Max + length(H) + 1) of
                 {_Res, Max} ->
@@ -122,7 +119,6 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
                     format(T, AT, Max + length(H) + 1 - RealLen, ["~s" | Acc], [Value | ArgAcc])
             end;
         C when C == $P; C == $W ->
-        %{match, [_F, _P, _Pad, _Mod, C]} when C == "P"; C == "W" ->
             %% ~P and ~W consume 2 arguments, the second one being a depth limiter.
             %% trunc_io isn't (yet) depth aware, so we can't honor this format string
             %% safely at the moment, so just treat it like a regular ~p
@@ -137,15 +133,11 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
                     format(T, AT2, Max + 2 - Length, ["~s" | Acc], [String | ArgAcc])
             end;
         C when C == $X; C == $x ->
-        %{match, [_F, _P, _Pad, _Mod, C]} when C == "X"; C == "x" ->
             %% ~X consumes 2 arguments. It only prints integers so we can leave it alone
             [AH2 | AT2] = AT,
             format(T, AT2, Max, [[$~|H]|Acc], [AH2, AH |ArgAcc]);
         _ ->
             format(T, AT, Max, [[$~|H] | Acc], [AH|ArgAcc])
-        %nomatch ->
-            %io:format("unable to match format pattern ~~~p~n", [H]),
-            %format(T, AT, Max, [[$~|H] | Acc], [AH|ArgAcc])
     end;
 format([H | T], Args, Max, Acc, ArgAcc) ->
     format(T, Args, Max, [H | Acc], ArgAcc).

@@ -29,7 +29,6 @@
 
 %% @private
 parse_transform(AST, _Options) ->
-    %io:format("~n~p~n", [AST]),
     walk_ast([], AST).
 
 walk_ast(Acc, []) ->
@@ -58,8 +57,6 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
             {atom, Line3, Severity}}, Arguments} = Stmt) ->
     case lists:member(Severity, ?LEVELS) of
         true ->
-            %io:format("call to lager ~p on line ~p in function ~p in module ~p~n",
-                %[Severity, Line, get(function), get(module)]),
             %% a case to check the mochiglobal 'loglevel' key against the
             %% message we're trying to log
             {'case',Line,
@@ -89,7 +86,6 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                         %% No, don't log
                         {clause,Line3,[{var,Line3,'_'}],[],[{atom,Line3,ok}]}]};
             false ->
-                %io:format("skipping non-log lager call ~p~n", [Severity]),
                 Stmt
         end;
 transform_statement({call, Line, {remote, Line1, {atom, Line2, boston_lager},
@@ -106,7 +102,6 @@ transform_statement(Stmt) when is_tuple(Stmt) ->
 transform_statement(Stmt) when is_list(Stmt) ->
     [transform_statement(S) || S <- Stmt];
 transform_statement(Stmt) ->
-    %io:format("Statement ~p~n", [Stmt]),
     Stmt.
 
 
