@@ -97,7 +97,7 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtma
                         true ->
                             {noreply, State};
                         _ ->
-                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_info(Reason)]),
+                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_error(Reason)]),
                             {noreply, State#state{flap=true}}
                     end
             end
