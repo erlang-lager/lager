@@ -58,5 +58,5 @@ start(_StartType, _StartArgs) ->
 
 
 stop(Handlers) ->
-    [error_handler:add_report_handler(Handler) || Handler <- Handlers],
+    [error_logger:add_report_handler(Handler) || Handler <- Handlers],
     ok.
