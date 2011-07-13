@@ -121,7 +121,7 @@ handle_event(Event, State) ->
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
-                    ?LOG(info, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
+                    ?LOG(debug, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
                 _ ->
                     ?LOG(info, P, ["PROGRESS REPORT ", print_silly_list(D)])
             end;
