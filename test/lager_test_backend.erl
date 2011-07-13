@@ -173,6 +173,7 @@ lager_test_() ->
     }.
 
 setup() ->
+    error_logger:tty(false),
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
@@ -181,7 +182,8 @@ setup() ->
 
 cleanup(_) ->
     application:stop(lager),
-    application:unload(lager).
+    application:unload(lager),
+    error_logger:tty(true).
 
 
 crash(Type) ->
@@ -191,6 +193,7 @@ crash(Type) ->
 error_logger_redirect_crash_test_() ->
     {foreach,
         fun() ->
+                error_logger:tty(false),
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, error}]),
@@ -204,7 +207,8 @@ error_logger_redirect_crash_test_() ->
                 case whereis(crash) of
                     undefined -> ok;
                     Pid -> exit(Pid, kill)
-                end
+                end,
+                error_logger:tty(true)
         end,
         [
             {"again, there is nothing up my sleeve",
@@ -337,6 +341,7 @@ error_logger_redirect_crash_test_() ->
 error_logger_redirect_test_() ->
     {foreach,
         fun() ->
+                error_logger:tty(false),
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, info}]),
@@ -347,7 +352,8 @@ error_logger_redirect_test_() ->
 
         fun(_) ->
                 application:stop(lager),
-                application:unload(lager)
+                application:unload(lager),
+                error_logger:tty(true)
         end,
         [
             {"error reports are printed",
