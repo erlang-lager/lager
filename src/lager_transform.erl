@@ -33,6 +33,10 @@ parse_transform(AST, _Options) ->
 
 walk_ast(Acc, []) ->
     lists:reverse(Acc);
+walk_ast(Acc, [{attribute, _, module, {Module, _PmodArgs}}=H|T]) ->
+    %% A wild parameterized module appears!
+    put(module, Module),
+    walk_ast([H|Acc], T);
 walk_ast(Acc, [{attribute, _, module, Module}=H|T]) ->
     put(module, Module),
     walk_ast([H|Acc], T);
