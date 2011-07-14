@@ -13,9 +13,13 @@
   {mod, {lager_app, []}},
   {env, [
             %% What handlers to install with what arguments
-            {handlers, [{lager_console_backend, info},
-                {lager_file_backend, [{"log/error.log", error},
-                {"log/console.log", info}]}]},
+            {handlers, [
+                {lager_console_backend, info},
+                {lager_file_backend, [
+                    {"log/error.log", error},
+                    {"log/console.log", info}
+                ]}
+            ]},
             %% Whether to write a crash log, and where. Undefined means no crash logger.
             {crash_log, "log/crash.log"},
             %% Maximum size in bytes of events in the crash log - defaults to 4096
