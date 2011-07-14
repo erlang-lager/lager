@@ -22,7 +22,7 @@
   {parse_transform, lager_transform}
 #+END_EXAMPLE
 
-  Alternately, you can add it to the module you which to compile with logging
+  Alternately, you can add it to the module you wish to compile with logging
   enabled:
 
 #+BEGIN_EXAMPLE
