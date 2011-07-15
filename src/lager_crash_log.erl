@@ -147,14 +147,14 @@ perhaps_a_sasl_report(error_report, {Pid, Type, Report}, FmtMaxBytes) ->
         false ->
             {ignore, ignore, ignore, false}
     end;
-perhaps_a_sasl_report(info_report, {Pid, Type, Report}, FmtMaxBytes) ->
-    case lager_stdlib:is_my_info_report(Type) of
-        true ->
-            {sasl_type_to_report_head(Type), Pid,
-                sasl_limited_str(Type, Report, FmtMaxBytes), false};
-        false ->
-            {ignore, ignore, ignore, false}
-    end;
+%perhaps_a_sasl_report(info_report, {Pid, Type, Report}, FmtMaxBytes) ->
+    %case lager_stdlib:is_my_info_report(Type) of
+        %true ->
+            %{sasl_type_to_report_head(Type), Pid,
+                %sasl_limited_str(Type, Report, FmtMaxBytes), false};
+        %false ->
+            %{ignore, ignore, ignore, false}
+    %end;
 perhaps_a_sasl_report(_, _, _) ->
     {ignore, ignore, ignore, false}.
 

@@ -68,7 +68,7 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                         {call,Line,
                             {remote,Line,{atom,Line,lager_mochiglobal},{atom,Line,get}},
                             [{atom,Line,loglevel},{integer,Line,?LOG_NONE}]},
-                        {integer, Line, ?LEVEL2NUM(Severity)}},
+                        {integer, Line, lager_util:level_to_num(Severity)}},
                     [{clause,Line,
                             [{atom,Line,true}], %% yes, we log!
                             [],

@@ -52,7 +52,7 @@
     end).
 
 -define(SHOULD_LOG(Level),
-    ?LEVEL2NUM(Level) =< lager_mochiglobal:get(loglevel, ?LOG_NONE)).
+    lager_util:level_to_num(Level) =< lager_mochiglobal:get(loglevel, ?LOG_NONE)).
 
 %% internal non-blocking logging call
 -define(INT_LOG(Level, Format, Args),

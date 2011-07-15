@@ -40,12 +40,13 @@
 -record(file, {
         name :: string(),
         level :: integer(),
-        fd :: port(),
+        fd :: file:io_device(),
         inode :: integer(),
         flap=false :: boolean()
     }).
 
 %% @private
+-spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
 init(LogFiles) ->
     Files = [begin
                 case lager_util:open_logfile(Name, true) of

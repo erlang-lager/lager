@@ -26,6 +26,11 @@
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1]).
 
+-type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
+-type log_level_number() :: 0..7.
+
+-export_type([log_level/0, log_level_number/0]).
+
 %% API
 
 %% @doc Start the application. Mainly useful for using `-s lager' as a command
@@ -44,6 +49,8 @@ start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 %% @private
+-spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list()) ->
+    ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
@@ -51,6 +58,8 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @private
+-spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), string(), list()) ->
+    ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
@@ -58,12 +67,14 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
+-spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(Message), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
+-spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
@@ -91,7 +102,7 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
         X when is_integer(X) ->
-            ?NUM2LEVEL(X);
+            lager_util:num_to_level(X);
         Y -> Y
     end.
 
