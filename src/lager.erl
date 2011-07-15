@@ -48,30 +48,26 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
                 Function, Line]),  string:strip(lists:flatten(Message), right, $\n)],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Timestamp, Msg}).
+    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @private
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
                 Function, Line]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Timestamp, Msg}).
+    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(Message), right, $\n)],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Timestamp, Msg}).
+    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
-    gen_event:sync_notify(lager_event, {log, lager_util:level_to_num(Level),
-            Timestamp, Msg}).
+    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
@@ -109,3 +105,13 @@ minimum_loglevel([]) ->
     -1; %% lower than any log level, logging off
 minimum_loglevel(Levels) ->
     erlang:hd(lists:reverse(lists:sort(Levels))).
+
+safe_notify(Level, Timestamp, Msg) ->
+    case whereis(lager_event) of
+        undefined ->
+            %% lager isn't running
+            {error, lager_not_running};
+        Pid ->
+            gen_event:sync_notify(Pid, {log, Level, Timestamp, Msg})
+    end.
+

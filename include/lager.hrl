@@ -25,6 +25,7 @@
 -define(CRITICAL, 2).
 -define(ALERT, 1).
 -define(EMERGENCY, 0).
+-define(LOG_NONE, -1).
 
 -define(LEVEL2NUM(Level),
     case Level of
@@ -51,7 +52,7 @@
     end).
 
 -define(SHOULD_LOG(Level),
-    ?LEVEL2NUM(Level) =< lager_mochiglobal:get(loglevel, ?DEBUG)).
+    ?LEVEL2NUM(Level) =< lager_mochiglobal:get(loglevel, ?LOG_NONE)).
 
 %% internal non-blocking logging call
 -define(INT_LOG(Level, Format, Args),

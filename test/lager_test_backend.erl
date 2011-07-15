@@ -81,6 +81,9 @@ count() ->
 count_ignored() ->
     gen_event:call(lager_event, ?MODULE, count_ignored).
 
+not_running_test() ->
+    ?assertEqual({error, lager_not_running}, lager:log(info, wtf, "not running")).
+
 lager_test_() ->
     {foreach,
         fun setup/0,
