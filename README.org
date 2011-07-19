@@ -53,7 +53,10 @@
   {lager,
     {handlers, [
       {lager_console_backend, info},
-      {lager_file_backend, [{"error.log", error}, {"console.log", info}]}
+      {lager_file_backend, [
+        {"error.log", error, 10485760, "", 5},
+        {"console.log", info, 10485760, "", 5}
+      ]}
     ]}
   }.
 #+END_EXAMPLE
@@ -71,6 +74,9 @@
   with use of trunc_io) to a "crash log" which can be referred to for further
   information. The location of the crash log can be specified by the crash_log
   application variable. If undefined it is not written at all.
+
+  Messages in the crash log are subject to a maximum message size which can be
+  specified via the crash_log_msg_size application variable.
 
 * Runtime loglevel changes
   You can change the log level of any lager backend at runtime by doing the

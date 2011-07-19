@@ -17,8 +17,13 @@
 %% @doc File backend for lager, with multiple file support.
 %% Multiple files are supported, each with the path and the loglevel being
 %% configurable. The configuration paramter for this backend is a list of
-%% 2-tuples of the form `{FileName, Level}'. This backend supports external log
-%% rotation and will re-open handles to files if the inode changes.
+%% 5-tuples of the form
+%% `{FileName, Level, RotationSize, RotationDate, RotationCount}'.
+%% This backend supports external and internal log
+%% rotation and will re-open handles to files if the inode changes. It will
+%% also rotate the files itself if the size of the file exceeds the
+%% `RotationSize' and keep `RotationCount' rotated files. `RotationDate' is
+%% currently ignored.
 
 -module(lager_file_backend).
 

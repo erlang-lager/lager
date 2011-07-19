@@ -16,9 +16,15 @@
 
 %% @doc Lager crash log writer. This module implements a gen_server which writes
 %% error_logger error messages out to a file in their original format. The
-%% location to which it logs is configured by the environment var `crash_log'.
+%% location to which it logs is configured by the application var `crash_log'.
 %% Omitting this variable disables crash logging. Crash logs are printed safely
 %% using trunc_io via code mostly lifted from riak_err.
+%%
+%% The `crash_log_msg_size' application var is used to specify the maximum
+%% size of any message to be logged. `crash_log_size' is used to specify the
+%% maximum size of the crash log before it will be rotated (0 will disable)
+%% and to control the number of rotated files to be retained, use
+%% `crash_log_count'.
 
 -module(lager_crash_log).
 
@@ -30,29 +36,34 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([start_link/2, start/2]).
+-export([start_link/5, start/5]).
 
 -record(state, {
         name,
         fd,
         inode,
         fmtmaxbytes,
+        size,
+        count,
         flap=false
     }).
 
 %% @private
-start_link(Filename, MaxBytes) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename, MaxBytes], []).
+start_link(Filename, MaxBytes, Size, _Date, Count) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename, MaxBytes,
+            Size, Count], []).
 
 %% @private
-start(Filename, MaxBytes) ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [Filename, MaxBytes], []).
+start(Filename, MaxBytes, Size, _Date, Count) ->
+    gen_server:start({local, ?MODULE}, ?MODULE, [Filename, MaxBytes, Size,
+            Count], []).
 
 %% @private
-init([Filename, MaxBytes]) ->
+init([Filename, MaxBytes, Size, Count]) ->
     case lager_util:open_logfile(Filename, false) of
         {ok, {FD, Inode, _}} ->
-            {ok, #state{name=Filename, fd=FD, inode=Inode, fmtmaxbytes=MaxBytes}};
+            {ok, #state{name=Filename, fd=FD, inode=Inode,
+                    fmtmaxbytes=MaxBytes, size=Size, count=Count}};
         Error ->
             Error
     end.
@@ -62,7 +73,8 @@ handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
 %% @private
-handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtmaxbytes=FmtMaxBytes} = State) ->
+handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
+        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
     %% borrowed from riak_err
     {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
         {error, _GL, {Pid1, Fmt, Args}} ->
@@ -78,6 +90,9 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtma
             {noreply, State};
         true ->
             case lager_util:ensure_logfile(Name, FD, Inode, false) of
+                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+                    lager_util:rotate_logfile(Name, Count),
+                    handle_cast({log, Event}, State);
                 {ok, {NewFD, NewInode, _Size}} ->
                     {Date, TS} = lager_util:format_time(lager_stdlib:maybe_utc(erlang:localtime())),
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],

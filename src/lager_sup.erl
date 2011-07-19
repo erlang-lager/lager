@@ -41,11 +41,21 @@ init([]) ->
     %% check if the crash log is enabled
     Crash = case application:get_env(lager, crash_log) of
         {ok, File} ->
-            MaxBytes = case application:get_env(lager, crash_log_size) of
-                {ok, Val} -> Val;
+            MaxBytes = case application:get_env(lager, crash_log_msg_size) of
+                {ok, Val} when is_integer(Val) -> Val;
                 _ -> 65536
             end,
-            [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes]},
+            RotationSize = case application:get_env(lager, crash_log_size) of
+                {ok, Val1} when is_integer(Val1) -> Val1;
+                _ -> 0
+            end,
+            RotationCount = case application:get_env(lager, crash_log_count) of
+                {ok, Val2} when is_integer(Val2) -> Val2;
+                _ -> 0
+            end,
+
+            [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes,
+                        RotationSize, "", RotationCount]},
                     permanent, 5000, worker, [lager_crash_log]}];
         _ ->
             []
