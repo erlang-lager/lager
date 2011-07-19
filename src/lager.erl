@@ -24,7 +24,7 @@
 -export([start/0,
         log/7, log/8, log/3, log/4,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        minimum_loglevel/1]).
+        minimum_loglevel/1, posix_error/1]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -105,6 +105,16 @@ get_loglevel(Handler) ->
             lager_util:num_to_level(X);
         Y -> Y
     end.
+
+%% @doc Try to convert an atom to a posix error, but fall back on printing the
+%% term if its not a valid posix error code.
+posix_error(Error) when is_atom(Error) ->
+    case erl_posix_msg:message(Error) of
+        "unknown POSIX error" -> atom_to_list(Error);
+        Message -> Message
+    end;
+posix_error(Error) ->
+    lists:flatten(io_lib:format("~p", [Error])).
 
 %% @private
 get_loglevels() ->
