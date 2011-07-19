@@ -51,7 +51,7 @@ start(Filename, MaxBytes) ->
 %% @private
 init([Filename, MaxBytes]) ->
     case lager_util:open_logfile(Filename, false) of
-        {ok, {FD, Inode}} ->
+        {ok, {FD, Inode, _}} ->
             {ok, #state{name=Filename, fd=FD, inode=Inode, fmtmaxbytes=MaxBytes}};
         Error ->
             Error
@@ -78,7 +78,7 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtma
             {noreply, State};
         true ->
             case lager_util:ensure_logfile(Name, FD, Inode, false) of
-                {ok, {NewFD, NewInode}} ->
+                {ok, {NewFD, NewInode, _Size}} ->
                     {Date, TS} = lager_util:format_time(lager_stdlib:maybe_utc(erlang:localtime())),
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),

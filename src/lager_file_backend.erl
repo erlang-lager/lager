@@ -42,7 +42,10 @@
         level :: integer(),
         fd :: file:io_device(),
         inode :: integer(),
-        flap=false :: boolean()
+        flap=false :: boolean(),
+        size = 0 :: integer(),
+        date,
+        count = 10
     }).
 
 %% @private
@@ -50,15 +53,17 @@
 init(LogFiles) ->
     Files = [begin
                 case lager_util:open_logfile(Name, true) of
-                    {ok, {FD, Inode}} ->
-                        #file{name=Name, level=lager_util:level_to_num(Level), fd=FD, inode=Inode};
+                    {ok, {FD, Inode, _}} ->
+                        #file{name=Name, level=lager_util:level_to_num(Level), fd=FD,
+                            inode=Inode, size=Size, date=Date, count=Count};
                     {error, Reason} ->
                         ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                             [Name, file:format_error(Reason)]),
-                        #file{name=Name, level=lager_util:level_to_num(Level), flap=true}
+                        #file{name=Name, level=lager_util:level_to_num(Level),
+                            flap=true, size=Size, date=Date, count=Count}
                 end
         end ||
-        {Name, Level} <- LogFiles],
+        {Name, Level, Size, Date, Count} <- validate_logfiles(LogFiles)],
     {ok, #state{files=Files}}.
 
 %% @private
@@ -114,9 +119,13 @@ terminate(_Reason, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-write(#file{name=Name, fd=FD, inode=Inode, flap=Flap} = File, Level, Msg) ->
+write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
+        count=Count} = File, Level, Msg) ->
     case lager_util:ensure_logfile(Name, FD, Inode, true) of
-        {ok, {NewFD, NewInode}} ->
+        {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+            lager_util:rotate_logfile(Name, Count),
+            write(File, Level, Msg);
+        {ok, {NewFD, NewInode, _}} ->
             file:write(NewFD, Msg),
             case Level of
                 _ when Level =< ?ERROR ->
@@ -144,6 +153,36 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap} = File, Level, Msg) ->
             end
     end.
 
+validate_logfiles([]) ->
+    [];
+validate_logfiles([{Name, Level, Size, Date, Count}|T]) ->
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            case (is_integer(Size) andalso Size >= 0) of
+                true ->
+                    case (is_integer(Count) andalso Count >= 0) of
+                        true ->
+                            [{Name, Level, Size, Date,
+                                    Count}|validate_logfiles(T)];
+                        _ ->
+                            ?INT_LOG(error, "Invalid rotation count of ~p for ~s.",
+                                [Name, Count]),
+                            validate_logfiles(T)
+                    end;
+                _ ->
+                    ?INT_LOG(error, "Invalid rotation size of ~p for ~s.",
+                        [Name, Size]),
+                    validate_logfiles(T)
+            end;
+        _ ->
+            ?INT_LOG(error, "Invalid log level of ~p for ~s.",
+                [Name, Level]),
+            validate_logfiles(T)
+    end;
+validate_logfiles([H|T]) ->
+    ?INT_LOG(error, "Invalid logfile config ~p.", [H]),
+    validate_logfiles(T).
+
 -ifdef(TEST).
 
 get_loglevel_test() ->
@@ -160,7 +199,7 @@ get_loglevel_test() ->
     ?assertEqual(Level2, lager_util:level_to_num(warning)).
 
 rotation_test() ->
-    {ok, {FD, Inode}} = lager_util:open_logfile("test.log", true),
+    {ok, {FD, Inode, _}} = lager_util:open_logfile("test.log", true),
     ?assertMatch(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode},
         write(#file{name="test.log", level=?DEBUG, fd=FD, inode=Inode}, 0, "hello world")),
     file:delete("test.log"),

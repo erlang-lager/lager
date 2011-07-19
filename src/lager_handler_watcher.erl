@@ -80,9 +80,10 @@ install_handler(Event, Module, Config) ->
         ok ->
             lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
             ok;
-        _ ->
+        Error ->
             %% try to reinstall it later
-            lager:log(error, self(), "Lager failed to install handler ~p into ~p, retrying later", [Module, Event]),
+            lager:log(error, self(), "Lager failed to install handler ~p into"
+               " ~p, retrying later : ~p", [Module, Event, Error]),
             erlang:send_after(5000, self(), reinstall_handler)
     end.
 

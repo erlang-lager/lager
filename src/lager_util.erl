@@ -19,7 +19,7 @@
 -include_lib("kernel/include/file.hrl").
 
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
-        ensure_logfile/4, format_time/0, format_time/1, localtime_ms/0, maybe_utc/1]).
+        ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1, localtime_ms/0, maybe_utc/1]).
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
@@ -54,7 +54,7 @@ open_logfile(Name, Buffer) ->
                     case file:read_file_info(Name) of
                         {ok, FInfo} ->
                             Inode = FInfo#file_info.inode,
-                            {ok, {FD, Inode}};
+                            {ok, {FD, Inode, FInfo#file_info.size}};
                         X -> X
                     end;
                 Y -> Y
@@ -68,16 +68,16 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
             Inode2 = FInfo#file_info.inode,
             case Inode == Inode2 of
                 true ->
-                    {ok, {FD, Inode}};
+                    {ok, {FD, Inode, FInfo#file_info.size}};
                 false ->
                     %% delayed write can cause file:close not to do a close
                     file:close(FD),
                     file:close(FD),
                     case open_logfile(Name, Buffer) of
-                        {ok, {FD2, Inode3}} ->
+                        {ok, {FD2, Inode3, Size}} ->
                             %% inode changed, file was probably moved and
                             %% recreated
-                            {ok, {FD2, Inode3}};
+                            {ok, {FD2, Inode3, Size}};
                         Error ->
                             Error
                     end
@@ -87,9 +87,9 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
             file:close(FD),
             file:close(FD),
             case open_logfile(Name, Buffer) of
-                {ok, {FD2, Inode3}} ->
+                {ok, {FD2, Inode3, Size}} ->
                     %% file was removed
-                    {ok, {FD2, Inode3}};
+                    {ok, {FD2, Inode3, Size}};
                 Error ->
                     Error
             end
@@ -108,6 +108,16 @@ maybe_utc({Date, {H, M, S, Ms}}) ->
         {Date1, {H1, M1, S1}} ->
             {Date1, {H1, M1, S1, Ms}}
     end.
+
+rotate_logfile(File, 0) ->
+    file:delete(File);
+rotate_logfile(File, 1) ->
+    file:rename(File, File++".0"),
+    rotate_logfile(File, 0);
+rotate_logfile(File, Count) ->
+    file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++
+        integer_to_list(Count - 1)),
+    rotate_logfile(File, Count - 1).
 
 format_time() ->
     format_time(maybe_utc(localtime_ms())).
