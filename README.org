@@ -52,7 +52,7 @@
 #+BEGIN_EXAMPLE
   {lager,
     {handlers, [
-      {lager_console_backend, [info]},
+      {lager_console_backend, info},
       {lager_file_backend, [{"error.log", error}, {"console.log", info}]}
     ]}
   }.
