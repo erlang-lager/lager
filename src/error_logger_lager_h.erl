@@ -188,6 +188,8 @@ format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
             "maximum number of processes exceeded";
         {erlang, list_to_atom} ->
             "tried to create an atom larger than 255, or maximum atom count exceeded";
+        {ets, new} ->
+            "maximum number of ETS tables exceeded";
         _ ->
             {Str, _} = lager_trunc_io:print(Trace, 500),
             Str

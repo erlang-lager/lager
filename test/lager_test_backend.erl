@@ -552,6 +552,16 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"crash report for system ets table limit",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [self(), self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
