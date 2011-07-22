@@ -90,7 +90,7 @@ handle_event(Event, State) ->
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    ?LOG(error, Pid, "Supervisor ~w had child ~s exit with reason ~w in context ~w", [element(2, Name), Offender, Reason, Ctx]);
+                    ?LOG(error, Pid, "Supervisor ~w had child ~s exit with reason ~s in context ~w", [element(2, Name), Offender, format_reason(Reason), Ctx]);
                 _ ->
                     ?LOG(error, Pid, ["SUPERVISOR REPORT ", print_silly_list(D)])
             end;
