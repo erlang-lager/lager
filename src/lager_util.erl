@@ -19,7 +19,13 @@
 -include_lib("kernel/include/file.hrl").
 
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
-        ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1, localtime_ms/0, maybe_utc/1]).
+        ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
+        localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
+        calculate_next_rotation/1]).
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
@@ -130,3 +136,188 @@ format_time({utc, {{Y, M, D}, {H, Mi, S}}}) ->
     {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b UTC", [H, Mi, S])};
 format_time({{Y, M, D}, {H, Mi, S}}) ->
     {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b", [H, Mi, S])}.
+
+parse_rotation_day_spec([], Res) ->
+    {ok, Res ++ [{hour, 0}]};
+parse_rotation_day_spec([$D, D1, D2], Res) ->
+    case list_to_integer([D1, D2]) of
+        X when X >= 0, X =< 23 ->
+            {ok, Res ++ [{hour, X}]};
+        _ ->
+            {error, invalid_date_spec}
+    end;
+parse_rotation_day_spec([$D, D], Res)  when D >= $0, D =< $9 ->
+    {ok, Res ++ [{hour, D - 48}]};
+parse_rotation_day_spec(_, _) ->
+    {error, invalid_date_spec}.
+
+parse_rotation_date_spec([$$, $W, W|T]) when W >= $0, W =< $6 ->
+    Week = W - 48,
+    parse_rotation_day_spec(T, [{day, Week}]);
+parse_rotation_date_spec([$$, $M, L|T]) when L == $L; L == $l ->
+    %% last day in month.
+    parse_rotation_day_spec(T, [{date, last}]);
+parse_rotation_date_spec([$$, $M, M1, M2|[$D|_]=T]) ->
+    case list_to_integer([M1, M2]) of
+        X when X >= 1, X =< 31 ->
+            parse_rotation_day_spec(T, [{date, X}]);
+        _ ->
+            {error, invalid_date_spec}
+    end;
+parse_rotation_date_spec([$$, $M, M|[$D|_]=T]) ->
+    parse_rotation_day_spec(T, [{date, M - 48}]);
+parse_rotation_date_spec([$$, $M, M1, M2]) ->
+    case list_to_integer([M1, M2]) of
+        X when X >= 1, X =< 31 ->
+            {ok, [{date, X}, {hour, 0}]};
+        _ ->
+            {error, invalid_date_spec}
+    end;
+parse_rotation_date_spec([$$, $M, M]) ->
+    {ok, [{date, M - 48}, {hour, 0}]};
+parse_rotation_date_spec([$$|X]) when X /= [] ->
+    parse_rotation_day_spec(X, []);
+parse_rotation_date_spec(_) ->
+    {error, invalid_date_spec}.
+
+calculate_next_rotation(Spec) ->
+    Now = calendar:local_time(),
+    Later = calculate_next_rotation(Spec, Now),
+    calendar:datetime_to_gregorian_seconds(Later) - calendar:datetime_to_gregorian_seconds(Now).
+
+calculate_next_rotation([], Now) ->
+    Now;
+calculate_next_rotation([{hour, X}|T], {{_, _, _}, {Hour, _, _}} = Now) when Hour < X ->
+    %% rotation is today, sometime
+    NewNow = setelement(2, Now, {X, 0, 0}),
+    calculate_next_rotation(T, NewNow);
+calculate_next_rotation([{hour, X}|T], {{_, _, _}, _} = Now) ->
+    %% rotation is not today
+    Seconds = calendar:datetime_to_gregorian_seconds(Now) + 86400,
+    DateTime = calendar:gregorian_seconds_to_datetime(Seconds),
+    NewNow = setelement(2, DateTime, {X, 0, 0}),
+    calculate_next_rotation(T, NewNow);
+calculate_next_rotation([{day, Day}|T], {Date, _Time} = Now) ->
+    DoW = calendar:day_of_the_week(Date),
+    AdjustedDay = case Day of
+        0 -> 7;
+        X -> X
+    end,
+    case AdjustedDay of
+        DoW -> %% rotation is today
+            OldDate = element(1, Now),
+            case calculate_next_rotation(T, Now) of
+                {OldDate, _} = NewNow -> NewNow;
+                {NewDate, _} ->
+                    %% rotation *isn't* today! rerun the calculation
+                    NewNow = {NewDate, {0, 0, 0}},
+                    calculate_next_rotation([{day, Day}|T], NewNow)
+            end;
+        Y when Y > DoW -> %% rotation is later this week
+            PlusDays = Y - DoW,
+            Seconds = calendar:datetime_to_gregorian_seconds(Now) + (86400 * PlusDays),
+            {NewDate, _} = calendar:gregorian_seconds_to_datetime(Seconds),
+            NewNow = {NewDate, {0, 0, 0}},
+            calculate_next_rotation(T, NewNow);
+        Y when Y < DoW -> %% rotation is next week
+            PlusDays = ((7 - DoW) + Y),
+            Seconds = calendar:datetime_to_gregorian_seconds(Now) + (86400 * PlusDays),
+            {NewDate, _} = calendar:gregorian_seconds_to_datetime(Seconds),
+            NewNow = {NewDate, {0, 0, 0}},
+            calculate_next_rotation(T, NewNow)
+    end;
+calculate_next_rotation([{date, last}|T], {{Year, Month, Day}, _} = Now) ->
+    Last = calendar:last_day_of_the_month(Year, Month),
+    case Last == Day of
+        true -> %% doing rotation today
+            OldDate = element(1, Now),
+            case calculate_next_rotation(T, Now) of
+                {OldDate, _} = NewNow -> NewNow;
+                {NewDate, _} ->
+                    %% rotation *isn't* today! rerun the calculation
+                    NewNow = {NewDate, {0, 0, 0}},
+                    calculate_next_rotation([{date, last}|T], NewNow)
+            end;
+        false ->
+            NewNow = setelement(1, Now, {Year, Month, Last}),
+            calculate_next_rotation(T, NewNow)
+    end;
+calculate_next_rotation([{date, Date}|T], {{_, _, Date}, _} = Now) ->
+    %% rotation is today
+    OldDate = element(1, Now),
+    case calculate_next_rotation(T, Now) of
+        {OldDate, _} = NewNow -> NewNow;
+        {NewDate, _} ->
+            %% rotation *isn't* today! rerun the calculation
+            NewNow = setelement(1, Now, NewDate),
+            calculate_next_rotation([{date, Date}|T], NewNow)
+    end;
+calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
+    PlusDays = case Date of
+        X when X < Day -> %% rotation is next month
+            Last = calendar:last_day_of_the_month(Year, Month),
+            (Last - Day);
+        X when X > Day -> %% rotation is later this month
+            X - Day
+    end,
+    Seconds = calendar:datetime_to_gregorian_seconds(Now) + (86400 * PlusDays),
+    NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
+    calculate_next_rotation(T, NewNow).
+
+-ifdef(TEST).
+
+parse_test() ->
+    ?assertEqual({ok, [{hour, 0}]}, parse_rotation_date_spec("$D0")),
+    ?assertEqual({ok, [{hour, 23}]}, parse_rotation_date_spec("$D23")),
+    ?assertEqual({ok, [{day, 0}, {hour, 23}]}, parse_rotation_date_spec("$W0D23")),
+    ?assertEqual({ok, [{day, 5}, {hour, 16}]}, parse_rotation_date_spec("$W5D16")),
+    ?assertEqual({ok, [{date, 1}, {hour, 0}]}, parse_rotation_date_spec("$M1D0")),
+    ?assertEqual({ok, [{date, 5}, {hour, 6}]}, parse_rotation_date_spec("$M5D6")),
+    ?assertEqual({ok, [{date, 5}, {hour, 0}]}, parse_rotation_date_spec("$M5")),
+    ?assertEqual({ok, [{date, 31}, {hour, 0}]}, parse_rotation_date_spec("$M31")),
+    ?assertEqual({ok, [{date, 31}, {hour, 1}]}, parse_rotation_date_spec("$M31D1")),
+    ?assertEqual({ok, [{date, last}, {hour, 0}]}, parse_rotation_date_spec("$ML")),
+    ?assertEqual({ok, [{date, last}, {hour, 0}]}, parse_rotation_date_spec("$Ml")),
+    ?assertEqual({ok, [{day, 5}, {hour, 0}]}, parse_rotation_date_spec("$W5")),
+    ok.
+
+parse_fail_test() ->
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$D")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$D24")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$W7")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$W7D1")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$M32")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$M32D1")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$D15M5")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$M5W5")),
+    ok.
+
+rotation_calculation_test() ->
+    ?assertMatch({{2000, 1, 2}, {0, 0, 0}}, calculate_next_rotation([{hour, 0}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {12, 0, 0}}, calculate_next_rotation([{hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 15}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 2}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 31}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 15}, {16, 0, 0}}, calculate_next_rotation([{date, 15}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 31}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 31}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 29}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {17, 34, 43}})),
+    ?assertMatch({{2001, 2, 28}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2001, 1, 31}, {17, 34, 43}})),
+
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 8}, {16, 0, 0}}, calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 7}, {16, 0, 0}}, calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 1}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {16, 0, 0}}, calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 9}, {16, 0, 0}}, calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 2}, {17, 34, 43}})),
+    ?assertMatch({{2000, 2, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 4}, {hour, 16}], {{2000, 1, 29}, {17, 34, 43}})),
+
+    ?assertMatch({{2000, 1, 7}, {16, 0, 0}}, calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 3}, {17, 34, 43}})),
+    ok.
+
+-endif.
