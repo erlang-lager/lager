@@ -27,6 +27,9 @@
             %% Maximum size of the crash log in bytes, before its rotated, set
             %% to 0 to disable rotation - default is 0
             {crash_log_size, 10485760},
+            %% What time to rotate the crash log - default is no time
+            %% rotation. See the README for a description of this format.
+            {crash_log_date, "$D0"},
             %% Number of rotated crash logs to keep, 0 means keep only the
             %% current one - default is 0
             {crash_log_count, 5},

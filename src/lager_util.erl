@@ -318,6 +318,8 @@ rotation_calculation_test() ->
     ?assertMatch({{2000, 2, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 4}, {hour, 16}], {{2000, 1, 29}, {17, 34, 43}})),
 
     ?assertMatch({{2000, 1, 7}, {16, 0, 0}}, calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 3}, {17, 34, 43}})),
+    
+    ?assertMatch({{2000, 1, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 1}, {hour, 16}], {{1999, 12, 28}, {17, 34, 43}})),
     ok.
 
 -endif.

@@ -54,8 +54,8 @@
     {handlers, [
       {lager_console_backend, info},
       {lager_file_backend, [
-        {"error.log", error, 10485760, "", 5},
-        {"console.log", info, 10485760, "", 5}
+        {"error.log", error, 10485760, "$D0", 5},
+        {"console.log", info, 10485760, "$D0", 5}
       ]}
     ]}
   }.
@@ -97,3 +97,56 @@
   log messages, when no backend is consuming debug messages, are effectively
   free. A simple benchmark of doing 1 million debug log messages while the
   minimum threshold was above that takes less than half a second.
+
+* Internal log rotation
+  Lager can rotate its own logs or have it done via an external process. To
+  use internal rotation, use the last 3 values in the file backend's
+  configuration tuple. For example
+
+#+BEGIN_EXAMPLE
+  {"error.log", error, 10485760, "$D0", 5}
+#+END_EXAMPLE
+
+  This tells lager to log error and above messages to "error.log" and to
+  rotate the file at midnight or when it reaches 10mb, whichever comes first
+  and to keep 5 rotated logs, in addition to the current one. Setting the
+  count to 0 does not disable rotation, it instead rotates the file and keeps
+  no previous versions around. To disable rotation set the size to 0 and the
+  date to "".
+
+  The "$D0" syntax is taken from the syntax newsyslog uses in newsyslog.conf.
+  The relevant extract follows:
+
+#+BEGIN_EXAMPLE
+  Day, week and month time format: The lead-in character
+  for day, week and month specification is a `$'-sign.
+  The particular format of day, week and month
+  specification is: [Dhh], [Ww[Dhh]] and [Mdd[Dhh]],
+  respectively.  Optional time fields default to
+  midnight.  The ranges for day and hour specifications
+  are:
+
+    hh      hours, range 0 ... 23
+    w       day of week, range 0 ... 6, 0 = Sunday
+    dd      day of month, range 1 ... 31, or the
+            letter L or l to specify the last day of
+            the month.
+
+  Some examples:
+    $D0     rotate every night at midnight
+    $D23    rotate every day at 23:00 hr
+    $W0D23  rotate every week on Sunday at 23:00 hr
+    $W5D16  rotate every week on Friday at 16:00 hr
+    $M1D0   rotate on the first day of every month at
+            midnight (i.e., the start of the day)
+    $M5D6   rotate on every 5th day of the month at
+            6:00 hr
+#+END_EXAMPLE
+
+  To configure the crash log rotation, the following application variables are
+  used:
+  - crash_log_size
+  - crash_log_date
+  - crash_log_count
+
+  See the .app.src file for further details.

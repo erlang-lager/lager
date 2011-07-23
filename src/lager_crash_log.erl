@@ -22,9 +22,10 @@
 %%
 %% The `crash_log_msg_size' application var is used to specify the maximum
 %% size of any message to be logged. `crash_log_size' is used to specify the
-%% maximum size of the crash log before it will be rotated (0 will disable)
-%% and to control the number of rotated files to be retained, use
-%% `crash_log_count'.
+%% maximum size of the crash log before it will be rotated (0 will disable).
+%% Time based rotation is configurable via `crash_log_date', the syntax is
+%% documented in the README. To control the number of rotated files to be
+%% retained, use `crash_log_count'.
 
 -module(lager_crash_log).
 
@@ -44,26 +45,28 @@
         inode,
         fmtmaxbytes,
         size,
+        date,
         count,
         flap=false
     }).
 
 %% @private
-start_link(Filename, MaxBytes, Size, _Date, Count) ->
+start_link(Filename, MaxBytes, Size, Date, Count) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename, MaxBytes,
-            Size, Count], []).
+            Size, Date, Count], []).
 
 %% @private
-start(Filename, MaxBytes, Size, _Date, Count) ->
+start(Filename, MaxBytes, Size, Date, Count) ->
     gen_server:start({local, ?MODULE}, ?MODULE, [Filename, MaxBytes, Size,
-            Count], []).
+            Date, Count], []).
 
 %% @private
-init([Filename, MaxBytes, Size, Count]) ->
+init([Filename, MaxBytes, Size, Date, Count]) ->
     case lager_util:open_logfile(Filename, false) of
         {ok, {FD, Inode, _}} ->
+            schedule_rotation(Date),
             {ok, #state{name=Filename, fd=FD, inode=Inode,
-                    fmtmaxbytes=MaxBytes, size=Size, count=Count}};
+                    fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date}};
         Error ->
             Error
     end.
@@ -120,6 +123,10 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 %% @private
+handle_info(rotate, #state{name=Name, count=Count, date=Date} = State) ->
+    lager_util:rotate_logfile(Name, Count),
+    schedule_rotation(Date),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -130,6 +137,11 @@ terminate(_Reason, _State) ->
 %% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+schedule_rotation(undefined) ->
+    make_ref();
+schedule_rotation(Date) ->
+    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), rotate).
 
 %% ===== Begin code lifted from riak_err =====
 

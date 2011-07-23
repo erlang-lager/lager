@@ -23,7 +23,8 @@
 %% rotation and will re-open handles to files if the inode changes. It will
 %% also rotate the files itself if the size of the file exceeds the
 %% `RotationSize' and keep `RotationCount' rotated files. `RotationDate' is
-%% currently ignored.
+%% an alternate rotation trigger, based on time. See the README for
+%% documentation.
 
 -module(lager_file_backend).
 
@@ -57,6 +58,7 @@
 -spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
 init(LogFiles) ->
     Files = [begin
+                schedule_rotation(Name, Date),
                 case lager_util:open_logfile(Name, true) of
                     {ok, {FD, Inode, _}} ->
                         #file{name=Name, level=lager_util:level_to_num(Level), fd=FD,
@@ -109,6 +111,17 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
+handle_info({rotate, File}, #state{files=Files} = State) ->
+    case lists:keyfind(File, #file.name, Files) of
+        false ->
+            %% no such file exists
+            ?INT_LOG(warning, "Asked to rotate non-existant file ~p", [File]),
+            {ok, State};
+        #file{name=Name, date=Date, count=Count} ->
+            lager_util:rotate_logfile(Name, Count),
+            schedule_rotation(Name, Date),
+            {ok, State}
+    end;
 handle_info(_Info, State) ->
     {ok, State}.
 
@@ -167,26 +180,42 @@ validate_logfiles([{Name, Level, Size, Date, Count}|T]) ->
                 true ->
                     case (is_integer(Count) andalso Count >= 0) of
                         true ->
-                            [{Name, Level, Size, Date,
-                                    Count}|validate_logfiles(T)];
+                            case lager_util:parse_rotation_date_spec(Date) of
+                                {ok, Spec} ->
+                                    [{Name, Level, Size, Spec,
+                                            Count}|validate_logfiles(T)];
+                                {error, _} when Date == "" ->
+                                    %% blank ones are fine.
+                                    [{Name, Level, Size, undefined,
+                                            Count}|validate_logfiles(T)];
+                                {error, _} ->
+                                    ?INT_LOG(error, "Invalid rotation date of ~p for ~s.",
+                                        [Date, Name]),
+                                    validate_logfiles(T)
+                            end;
                         _ ->
                             ?INT_LOG(error, "Invalid rotation count of ~p for ~s.",
-                                [Name, Count]),
+                                [Count, Name]),
                             validate_logfiles(T)
                     end;
                 _ ->
                     ?INT_LOG(error, "Invalid rotation size of ~p for ~s.",
-                        [Name, Size]),
+                        [Size, Name]),
                     validate_logfiles(T)
             end;
         _ ->
             ?INT_LOG(error, "Invalid log level of ~p for ~s.",
-                [Name, Level]),
+                [Level, Name]),
             validate_logfiles(T)
     end;
 validate_logfiles([H|T]) ->
     ?INT_LOG(error, "Invalid logfile config ~p.", [H]),
     validate_logfiles(T).
+
+schedule_rotation(_, undefined) ->
+    make_ref();
+schedule_rotation(Name, Date) ->
+    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}).
 
 -ifdef(TEST).
 
