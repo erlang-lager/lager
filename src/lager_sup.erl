@@ -43,7 +43,7 @@ init([]) ->
         {ok, File} ->
             MaxBytes = case application:get_env(lager, crash_log_size) of
                 {ok, Val} -> Val;
-                _ -> 4096
+                _ -> 65536
             end,
             [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes]},
                     permanent, 5000, worker, [lager_crash_log]}];
