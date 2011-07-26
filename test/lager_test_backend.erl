@@ -386,6 +386,14 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"error messages are truncated at 4096 characters",
+                fun() ->
+                        error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        ?assert(length(lists:flatten(Msg)) < 5100)
+                end
+            },
             {"info reports are printed",
                 fun() ->
                         error_logger:info_report([{this, is}, a, {silly, format}]),
@@ -393,6 +401,14 @@ error_logger_redirect_test_() ->
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w this: is, a, silly: format", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"info reports are truncated at 4096 characters",
+                fun() ->
+                        error_logger:info_report([[{this, is}, a, {silly, format}] || _ <- lists:seq(0, 600)]),
+                        timer:sleep(1000),
+                        {_, _, Msg} = pop(),
+                        ?assert(length(lists:flatten(Msg)) < 5000)
                 end
             },
             {"single term info reports are printed",
@@ -422,6 +438,15 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"string info reports are truncated at 4096 characters",
+                fun() ->
+                        error_logger:info_report(string:copies("this is less silly", 1000)),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        ?assert(length(lists:flatten(Msg)) < 5100)
+                end
+            },
+
             {"info messages are printed",
                 fun() ->
                         error_logger:info_msg("doom, doom has come upon you all"),
@@ -431,6 +456,15 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"info messages are truncated at 4096 characters",
+                fun() ->
+                        error_logger:info_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        ?assert(length(lists:flatten(Msg)) < 5100)
+                end
+            },
+
             {"warning messages are printed at the correct level",
                 fun() ->
                         error_logger:warning_msg("doom, doom has come upon you all"),
@@ -571,7 +605,15 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
-
+            {"crash report for unknown system limit should be truncated at 500 characters",
+                fun() ->
+                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{wtf,boom,[string:copies("aaaa", 4096)]}]}, []}}], []]),
+                        timer:sleep(100),
+                        {_, _, Msg} = pop(),
+                        ?assert(length(lists:flatten(Msg)) > 500),
+                        ?assert(length(lists:flatten(Msg)) < 700)
+                end
+            },
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
