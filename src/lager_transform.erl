@@ -80,11 +80,11 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                                         {integer, Line3, Line},
                                         {call, Line3, {atom, Line3 ,self}, []},
                                         {call, Line3, {remote, Line3,
-                                                {atom, Line3 ,lager_stdlib},
+                                                {atom, Line3 ,lager_util},
                                                 {atom,Line3,maybe_utc}},
                                             [{call,Line3,{remote,Line3,
-                                                        {atom,Line3,erlang},
-                                                        {atom,Line3,localtime}},[]}]}
+                                                        {atom,Line3,lager_util},
+                                                        {atom,Line3,localtime_ms}},[]}]}
                                         | Arguments
                                     ]}]},
                         %% No, don't log

@@ -24,11 +24,13 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level}).
+-record(state, {level, verbose}).
 
 %% @private
-init(Level) ->
-    {ok, #state{level=lager_util:level_to_num(Level)}}.
+init(Level) when is_atom(Level) ->
+    {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
+init([Level, Verbose]) ->
+    {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}}.
 
 %% @private
 handle_call(get_loglevel, #state{level=Level} = State) ->
@@ -39,8 +41,13 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Level, Time, Message}, #state{level=LogLevel} = State) when Level =< LogLevel ->
-    io:put_chars([Time, " ", Message, "\n"]),
+handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]}, #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
+    case Verbose of
+        true ->
+            io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\n"]);
+        _ ->
+            io:put_chars([Time, " ", LevelStr, Message, "\n"])
+    end,
     {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
