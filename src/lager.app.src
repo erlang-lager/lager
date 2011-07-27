@@ -16,8 +16,8 @@
             {handlers, [
                 {lager_console_backend, info},
                 {lager_file_backend, [
-                    {"log/error.log", error, 10485760, "", 5},
-                    {"log/console.log", info, 10485760, "", 5}
+                    {"log/error.log", error, 10485760, "$D0", 5},
+                    {"log/console.log", info, 10485760, "$D0", 5}
                 ]}
             ]},
             %% Whether to write a crash log, and where. Undefined means no crash logger.
