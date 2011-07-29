@@ -53,7 +53,7 @@ start_ok(App, {error, Reason}) ->
     ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
-    Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
+    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p@~p:~p:~p ", [Pid, Module,
                 Function, Line]),  string:strip(lists:flatten(Message), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
@@ -62,7 +62,7 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
-    Msg = [io_lib:format("[~p] ~p@~p:~p:~p ", [Level, Pid, Module,
+    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p@~p:~p:~p ", [Pid, Module,
                 Function, Line]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
@@ -70,14 +70,14 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
 -spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
-    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(Message), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "], [pid_to_list(Pid), " "], string:strip(lists:flatten(Message), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
-    Msg = [io_lib:format("[~p] ~p ", [Level, Pid]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "], [pid_to_list(Pid), " "], string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Set the loglevel for a particular backend.

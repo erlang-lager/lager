@@ -79,9 +79,8 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap, fmtma
         true ->
             case lager_util:ensure_logfile(Name, FD, Inode, false) of
                 {ok, {NewFD, NewInode}} ->
-                    Time = [lager_util:format_time(
-                            lager_stdlib:maybe_utc(erlang:localtime())),
-                        " =", ReportStr, "====\n"],
+                    {Date, TS} = lager_util:format_time(lager_stdlib:maybe_utc(erlang:localtime())),
+                    Time = [Date, " ", TS," =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),
                     case file:write(NewFD, io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])) of
                         {error, Reason} when Flap == false ->
