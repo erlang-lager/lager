@@ -19,7 +19,7 @@
 -include_lib("kernel/include/file.hrl").
 
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
-        ensure_logfile/4, format_time/0, format_time/1]).
+        ensure_logfile/4, format_time/0, format_time/1, localtime_ms/0, maybe_utc/1]).
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
@@ -95,10 +95,28 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
             end
     end.
 
-format_time() ->
-    format_time(lager_stdlib:maybe_utc(erlang:localtime())).
+%% returns localtime with milliseconds included
+localtime_ms() ->
+    {_, _, Micro} = Now = os:timestamp(),
+    {Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
+    {Date, {Hours, Minutes, Seconds, Micro div 1000 rem 1000}}.
 
+maybe_utc({Date, {H, M, S, Ms}}) ->
+    case lager_stdlib:maybe_utc({Date, {H, M, S}}) of
+        {utc, {Date1, {H1, M1, S1}}} ->
+            {utc, {Date1, {H1, M1, S1, Ms}}};
+        {Date1, {H1, M1, S1}} ->
+            {Date1, {H1, M1, S1, Ms}}
+    end.
+
+format_time() ->
+    format_time(maybe_utc(localtime_ms())).
+
+format_time({utc, {{Y, M, D}, {H, Mi, S, Ms}}}) ->
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b UTC", [H, Mi, S, Ms])};
+format_time({{Y, M, D}, {H, Mi, S, Ms}}) ->
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b", [H, Mi, S, Ms])};
 format_time({utc, {{Y, M, D}, {H, Mi, S}}}) ->
-    io_lib:format("~b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b UTC", [Y, M, D, H, Mi, S]);
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b UTC", [H, Mi, S])};
 format_time({{Y, M, D}, {H, Mi, S}}) ->
-    io_lib:format("~b-~2..0b-~2..0b ~2..0b:~2..0b:~2..0b", [Y, M, D, H, Mi, S]).
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b", [H, Mi, S])}.

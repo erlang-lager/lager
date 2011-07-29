@@ -87,10 +87,10 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Level, Time, Message}, #state{files=Files} = State) ->
+handle_event({log, Level, {Date, Time}, Message}, #state{files=Files} = State) ->
     NewFiles = lists:map(
         fun(#file{level=L} = File) when Level =< L ->
-                write(File, Level, [Time, " ", Message, "\n"]);
+                write(File, Level, [Date, " ", Time, " ", Message, "\n"]);
             (File) ->
                 File
         end, Files),
