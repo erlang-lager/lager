@@ -41,7 +41,8 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]}, #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
+handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
+  #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
     case Verbose of
         true ->
             io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\n"]);
