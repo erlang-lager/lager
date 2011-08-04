@@ -34,9 +34,8 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--endif.
-
 -include_lib("kernel/include/file.hrl").
+-endif.
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
@@ -323,32 +322,32 @@ filesystem_test_() ->
                 fun() ->
                         gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
                         ?assertEqual(0, lager_test_backend:count()),
-                        lager:log(error, self(), "Test message"),
+                        lager:log(error, self(), "Test message1"),
                         ?assertEqual(1, lager_test_backend:count()),
                         file:delete("test.log"),
                         file:write_file("test.log", ""),
-                        lager:log(error, self(), "Test message"),
+                        lager:log(error, self(), "Test message2"),
                         {ok, Bin} = file:read_file("test.log"),
                         Pid = pid_to_list(self()),
-                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}])),
+                        ?assertMatch([_, _, "[error]", Pid, "Test message2\n"], re:split(Bin, " ", [{return, list}, {parts, 5}])),
                         file:rename("test.log", "test.log.0"),
-                        lager:log(error, self(), "Test message"),
+                        lager:log(error, self(), "Test message3"),
                         {ok, Bin2} = file:read_file("test.log"),
-                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}]))
+                        ?assertMatch([_, _, "[error]", Pid, "Test message3\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}]))
                 end
             },
             {"runtime level changes",
                 fun() ->
                         gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
                         ?assertEqual(0, lager_test_backend:count()),
-                        lager:log(info, self(), "Test message"),
-                        lager:log(error, self(), "Test message"),
+                        lager:log(info, self(), "Test message1"),
+                        lager:log(error, self(), "Test message2"),
                         {ok, Bin} = file:read_file("test.log"),
                         Lines = length(re:split(Bin, "\n", [{return, list}, trim])),
                         ?assertEqual(Lines, 2),
                         ?assertEqual(ok, lager:set_loglevel(lager_file_backend, "test.log", warning)),
-                        lager:log(info, self(), "Test message"), %% this won't get logged
-                        lager:log(error, self(), "Test message"),
+                        lager:log(info, self(), "Test message3"), %% this won't get logged
+                        lager:log(error, self(), "Test message4"),
                         {ok, Bin2} = file:read_file("test.log"),
                         Lines2 = length(re:split(Bin2, "\n", [{return, list}, trim])),
                         ?assertEqual(Lines2, 3)

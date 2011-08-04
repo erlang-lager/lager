@@ -28,7 +28,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--export([pop/0, count/0, count_ignored/0]).
+-export([pop/0, count/0, count_ignored/0, flush/0]).
 -endif.
 
 init(Level) ->
@@ -81,6 +81,9 @@ count() ->
 
 count_ignored() ->
     gen_event:call(lager_event, ?MODULE, count_ignored).
+
+flush() ->
+    gen_event:call(lager_event, ?MODULE, flush).
 
 not_running_test() ->
     ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).
