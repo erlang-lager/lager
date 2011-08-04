@@ -248,5 +248,123 @@ rotation_test() ->
     ?assertMatch(#file{name="test.log", level=?DEBUG}, Result2),
     ok.
 
+filesystem_test_() ->
+    {foreach,
+        fun() ->
+                file:write_file("test.log", ""),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, info}]),
+                application:set_env(lager, error_logger_redirect, false),
+                application:start(lager)
+        end,
+        fun(_) ->
+                file:delete("test.log"),
+                application:stop(lager),
+                application:unload(lager),
+                error_logger:tty(true)
+        end,
+        [
+            {"under normal circumstances, file should be opened",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin} = file:read_file("test.log"),
+                        Pid = pid_to_list(self()),
+                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
+                end
+            },
+            {"file can't be opened on startup triggers an error message",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info("test.log"),
+                        file:write_file_info("test.log", FInfo#file_info{mode = 0}),
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open log file test.log with error permission denied", lists:flatten(Message))
+                end
+            },
+            {"file that becomes unavailable at runtime should trigger an error message",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        lager:log(error, self(), "Test message"),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        file:delete("test.log"),
+                        file:write_file("test.log", ""),
+                        {ok, FInfo} = file:read_file_info("test.log"),
+                        file:write_file_info("test.log", FInfo#file_info{mode = 0}),
+                        lager:log(error, self(), "Test message"),
+                        timer:sleep(100),
+                        ?assertEqual(3, lager_test_backend:count()),
+                        lager_test_backend:pop(),
+                        lager_test_backend:pop(),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to reopen log file test.log with error permission denied", lists:flatten(Message))
+                end
+            },
+            {"unavailable files that are fixed at runtime should start having log messages written",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info("test.log"),
+                        OldPerms = FInfo#file_info.mode,
+                        file:write_file_info("test.log", FInfo#file_info{mode = 0}),
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open log file test.log with error permission denied", lists:flatten(Message)),
+                        file:write_file_info("test.log", FInfo#file_info{mode = OldPerms}),
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin} = file:read_file("test.log"),
+                        Pid = pid_to_list(self()),
+                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
+                end
+            },
+            {"external logfile rotation/deletion should be handled",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        lager:log(error, self(), "Test message"),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        file:delete("test.log"),
+                        file:write_file("test.log", ""),
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin} = file:read_file("test.log"),
+                        Pid = pid_to_list(self()),
+                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}])),
+                        file:rename("test.log", "test.log.0"),
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin2} = file:read_file("test.log"),
+                        ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}]))
+                end
+            },
+            {"runtime level changes",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        lager:log(info, self(), "Test message"),
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin} = file:read_file("test.log"),
+                        Lines = length(re:split(Bin, "\n", [{return, list}, trim])),
+                        ?assertEqual(Lines, 2),
+                        ?assertEqual(ok, lager:set_loglevel(lager_file_backend, "test.log", warning)),
+                        lager:log(info, self(), "Test message"), %% this won't get logged
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin2} = file:read_file("test.log"),
+                        Lines2 = length(re:split(Bin2, "\n", [{return, list}, trim])),
+                        ?assertEqual(Lines2, 3)
+                end
+            },
+            {"invalid runtime level changes",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}]),
+                        ?assertEqual({error, bad_identifier}, lager:set_loglevel(lager_file_backend, "test2.log", warning)),
+                        ?assertEqual({error, missing_identifier}, lager:set_loglevel(lager_file_backend, warning))
+                end
+            }
+
+        ]
+    }.
+
+
 -endif.
 

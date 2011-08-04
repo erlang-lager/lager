@@ -59,7 +59,7 @@
     case ?SHOULD_LOG(Level) of
         true ->
             gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
-                    lager_util:format_time(), [io_lib:format("[~p] ~p ", [Level, self()]), io_lib:format(Format, Args)]});
+                    lager_util:format_time(), [io_lib:format("[~p] ", [Level]), io_lib:format("~p ", [self()]), io_lib:format(Format, Args)]});
         _ -> ok
     end).
 

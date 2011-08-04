@@ -28,6 +28,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-export([pop/0, count/0, count_ignored/0]).
 -endif.
 
 init(Level) ->
