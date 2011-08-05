@@ -34,8 +34,12 @@
 -author('matthias@corelatus.se').
 %% And thanks to Chris Newcombe for a bug fix 
 -export([format/3, print/2, fprint/2, safe/2]).               % interface functions
--export([perf/0, perf/3, perf1/0, test/0, test/2]). % testing functions
 -version("$Id: trunc_io.erl,v 1.11 2009-02-23 12:01:06 matthias Exp $").
+
+-ifdef(TEST).
+-export([perf/0, perf/3, perf1/0, test/0, test/2]). % testing functions
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 format(String, Args, Max) ->
     Parts = re:split(String,
@@ -66,11 +70,16 @@ format([[$~|H]| T], [AH1, _AH2 | AT], Max, Acc, ArgAcc) when H == "W"; H == "P" 
     %% trunc_io isn't (yet) depth aware, so we can't honor this format string
     %% safely at the moment, so just treat it like a regular ~p
     %% TODO support for depth limiting
-    case print(AH1, Max + 2) of
+    Input = case H == "P" andalso lager_stdlib:string_p(AH1) of
+        true ->
+            lists:flatten(AH1);
+        _ -> AH1
+    end,
+    case print(Input, Max + 2) of
         {_Res, Max} ->
             % this isn't the last argument, but it consumed all available space
             % delay calculating the print size until the end
-            format(T, AT, Max + 2, ["~s" | Acc], [{future, AH1} | ArgAcc]);
+            format(T, AT, Max + 2, ["~s" | Acc], [{future, Input} | ArgAcc]);
         {String, Length} ->
             format(T, AT, Max + 2 - Length, ["~s" | Acc], [String | ArgAcc])
     end;
@@ -78,12 +87,17 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
     % single character format specifier, relatively simple
     case H of
         _ when H == "p"; H == "w"; H == "s" ->
+            Input = case (H == "s" orelse H == "p") andalso lager_stdlib:string_p(AH) of
+                true ->
+                    lists:flatten(AH);
+                _ -> AH
+            end,
             %okay, these are prime candidates for rewriting
-            case print(AH, Max + 2) of
+            case print(Input, Max + 2) of
                 {_Res, Max} ->
                     % this isn't the last argument, but it consumed all available space
                     % delay calculating the print size until the end
-                    format(T, AT, Max + 2, ["~s" | Acc], [{future, AH} | ArgAcc]);
+                    format(T, AT, Max + 2, ["~s" | Acc], [{future, Input} | ArgAcc]);
                 {String, Length} ->
                     {Value, RealLen} = case H of
                         "s" ->
@@ -92,7 +106,7 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
                         _ ->
                             {String, Length}
                     end,
-                    format(T, AT, Max + 2 - RealLen, ["~s" | Acc], [Value | ArgAcc])
+                    format(T, AT, Max + 2 - RealLen, ["~s" | Acc], [lists:flatten(Value) | ArgAcc])
             end;
         _ ->
             % whatever, just pass them on through
@@ -103,14 +117,19 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
     case lists:nth(length(H), H) of
         C when C == $p; C == $w; C == $s ->
             %okay, these are prime candidates for rewriting
-            case print(AH, Max + length(H) + 1) of
+            Input = case (C == $s orelse C == $p) andalso lager_stdlib:string_p(AH) of
+                true ->
+                    lists:flatten(AH);
+                _ -> AH
+            end,
+            case print(Input, Max + length(H) + 1) of
                 {_Res, Max} ->
                     % this isn't the last argument, but it consumed all available space
                     % delay calculating the print size until the end
-                    format(T, AT, Max + length(H) + 1, ["~s" | Acc], [{future, AH} | ArgAcc]);
+                    format(T, AT, Max + length(H) + 1, ["~s" | Acc], [{future, Input} | ArgAcc]);
                 {String, Length} ->
-                    {Value, RealLen} = case H of
-                        "s" ->
+                    {Value, RealLen} = case C of
+                        $s ->
                             % strip off the doublequotes
                             {string:substr(String, 2, length(String) -2), Length -2};
                         _ ->
@@ -124,11 +143,16 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
             %% safely at the moment, so just treat it like a regular ~p
             %% TODO support for depth limiting
             [_ | AT2] = AT,
-            case print(AH, Max + 2) of
+            Input = case C == $P andalso lager_stdlib:string_p(AH) of
+                true ->
+                    lists:flatten(AH);
+                _ -> AH
+            end,
+            case print(Input, Max + 2) of
                 {_Res, Max} ->
                     % this isn't the last argument, but it consumed all available space
                     % delay calculating the print size until the end
-                    format(T, AT2, Max + 2, ["~s" | Acc], [{future, AH} | ArgAcc]);
+                    format(T, AT2, Max + 2, ["~s" | Acc], [{future, Input} | ArgAcc]);
                 {String, Length} ->
                     format(T, AT2, Max + 2 - Length, ["~s" | Acc], [String | ArgAcc])
             end;
@@ -296,6 +320,7 @@ alist(L, Max) ->
     {[$", $[, R, $]], Len + 3}.
 
 
+-ifdef(TEST).
 %%--------------------
 %% The start of a test suite. So far, it only checks for not crashing.
 -spec test() -> ok.
@@ -352,3 +377,19 @@ perf1() ->
     {N, _} = timer:tc(trunc_io, print, [A, 1500]),
     {M, _} = timer:tc(io_lib, write, [A]),
     {N, M}.
+
+format_test() ->
+    %% simple format strings
+    ?assertEqual("foobar", lists:flatten(format("~s", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("\"foobar\"", lists:flatten(format("~p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("\"foobar\"", lists:flatten(format("~P", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~w", [["foo", $b, $a, $r], 10], 50))),
+    
+    %% complex ones
+    ?assertEqual("foobar", lists:flatten(format("~10s", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("\"foobar\"", lists:flatten(format("~10p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("\"foobar\"", lists:flatten(format("~10P", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
+    ok.
+
+-endif.
