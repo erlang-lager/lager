@@ -21,6 +21,7 @@
 -module(lager_app).
 
 -behaviour(application).
+-include("lager.hrl").
 
 -export([start/0,
          start/2,
@@ -30,6 +31,8 @@ start() ->
     application:start(lager).
 
 start(_StartType, _StartArgs) ->
+    %% until lager is completely started, allow all messages to go through
+    lager_mochiglobal:put(loglevel, ?DEBUG),
     {ok, Pid} = lager_sup:start_link(),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
@@ -42,6 +45,7 @@ start(_StartType, _StartArgs) ->
     [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
         {Module, Config} <- Handlers],
 
+    %% mask the messages we have no use for
     MinLog = lager:minimum_loglevel(lager:get_loglevels()),
     lager_mochiglobal:put(loglevel, MinLog),
 
