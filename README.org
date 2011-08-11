@@ -50,12 +50,12 @@
   your app.config):
 
 #+BEGIN_EXAMPLE
-  {lager,
+  {lager, [
     {handlers, [
       {lager_console_backend, info},
       {lager_file_backend, [{"error.log", error}, {"console.log", info}]}
     ]}
-  }.
+  ]}.
 #+END_EXAMPLE
 
   The available configuration options for each backend are listed in their
