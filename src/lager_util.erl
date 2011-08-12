@@ -322,4 +322,26 @@ rotation_calculation_test() ->
     ?assertMatch({{2000, 1, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 1}, {hour, 16}], {{1999, 12, 28}, {17, 34, 43}})),
     ok.
 
+rotate_file_test() ->
+    file:delete("rotation.log"),
+    [file:delete(["rotation.log.", integer_to_list(N)]) || N <- lists:seq(0, 9)],
+    [begin
+                file:write_file("rotation.log", integer_to_list(N)),
+                Count = case N > 10 of
+                    true -> 10;
+                    _ -> N
+                end,
+                [begin
+                            FileName = ["rotation.log.", integer_to_list(M)],
+                            ?assert(filelib:is_regular(FileName)),
+                            %% check the expected value is in the file
+                            Number = list_to_binary(integer_to_list(N - M - 1)),
+                            ?assertEqual({ok, Number}, file:read_file(FileName))
+                end
+                || M <- lists:seq(0, Count-1)],
+                rotate_logfile("rotation.log", 10)
+    end || N <- lists:seq(0, 20)].
+
+
+
 -endif.
