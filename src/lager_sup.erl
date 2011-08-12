@@ -42,15 +42,15 @@ init([]) ->
     Crash = case application:get_env(lager, crash_log) of
         {ok, File} ->
             MaxBytes = case application:get_env(lager, crash_log_msg_size) of
-                {ok, Val} when is_integer(Val) -> Val;
+                {ok, Val} when is_integer(Val) andalso Val > 0 -> Val;
                 _ -> 65536
             end,
             RotationSize = case application:get_env(lager, crash_log_size) of
-                {ok, Val1} when is_integer(Val1) -> Val1;
+                {ok, Val1} when is_integer(Val1) andalso Val1 >= 0 -> Val1;
                 _ -> 0
             end,
             RotationCount = case application:get_env(lager, crash_log_count) of
-                {ok, Val2} when is_integer(Val2) -> Val2;
+                {ok, Val2} when is_integer(Val2) andalso Val2 >=0 -> Val2;
                 _ -> 0
             end,
             RotationDate = case application:get_env(lager, crash_log_date) of

@@ -174,39 +174,36 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
 validate_logfiles([]) ->
     [];
 validate_logfiles([{Name, Level, Size, Date, Count}|T]) ->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            case (is_integer(Size) andalso Size >= 0) of
-                true ->
-                    case (is_integer(Count) andalso Count >= 0) of
-                        true ->
-                            case lager_util:parse_rotation_date_spec(Date) of
-                                {ok, Spec} ->
-                                    [{Name, Level, Size, Spec,
-                                            Count}|validate_logfiles(T)];
-                                {error, _} when Date == "" ->
-                                    %% blank ones are fine.
-                                    [{Name, Level, Size, undefined,
-                                            Count}|validate_logfiles(T)];
-                                {error, _} ->
-                                    ?INT_LOG(error, "Invalid rotation date of ~p for ~s.",
-                                        [Date, Name]),
-                                    validate_logfiles(T)
-                            end;
-                        _ ->
-                            ?INT_LOG(error, "Invalid rotation count of ~p for ~s.",
-                                [Count, Name]),
-                            validate_logfiles(T)
-                    end;
-                _ ->
-                    ?INT_LOG(error, "Invalid rotation size of ~p for ~s.",
-                        [Size, Name]),
-                    validate_logfiles(T)
-            end;
-        _ ->
+    ValidLevel = (lists:member(Level, ?LEVELS)),
+    ValidSize = (is_integer(Size) andalso Size >= 0),
+    ValidCount = (is_integer(Count) andalso Count >= 0),
+    case {ValidLevel, ValidSize, ValidCount} of
+        {false, _, _} ->
             ?INT_LOG(error, "Invalid log level of ~p for ~s.",
                 [Level, Name]),
-            validate_logfiles(T)
+            validate_logfiles(T);
+        {_, false, _} ->
+            ?INT_LOG(error, "Invalid rotation size of ~p for ~s.",
+                [Size, Name]),
+            validate_logfiles(T);
+        {_, _, false} ->
+            ?INT_LOG(error, "Invalid rotation count of ~p for ~s.",
+                [Count, Name]),
+            validate_logfiles(T);
+        {true, true, true} ->
+            case lager_util:parse_rotation_date_spec(Date) of
+                {ok, Spec} ->
+                    [{Name, Level, Size, Spec,
+                            Count}|validate_logfiles(T)];
+                {error, _} when Date == "" ->
+                    %% blank ones are fine.
+                    [{Name, Level, Size, undefined,
+                            Count}|validate_logfiles(T)];
+                {error, _} ->
+                    ?INT_LOG(error, "Invalid rotation date of ~p for ~s.",
+                        [Date, Name]),
+                    validate_logfiles(T)
+            end
     end;
 validate_logfiles([H|T]) ->
     ?INT_LOG(error, "Invalid logfile config ~p.", [H]),
