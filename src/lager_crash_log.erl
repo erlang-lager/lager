@@ -97,12 +97,15 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                     lager_util:rotate_logfile(Name, Count),
                     handle_cast({log, Event}, State);
                 {ok, {NewFD, NewInode, _Size}} ->
-                    {Date, TS} = lager_util:format_time(lager_stdlib:maybe_utc(erlang:localtime())),
+                    {Date, TS} = lager_util:format_time(
+                        lager_stdlib:maybe_utc(erlang:localtime())),
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),
-                    case file:write(NewFD, io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix])) of
+                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
+                    case file:write(NewFD, Msg) of
                         {error, Reason} when Flap == false ->
-                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason)]),
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                                [Name, file:format_error(Reason)]),
                             {noreply, State#state{fd=NewFD, inode=NewInode, flap=true}};
                         ok ->
                             {noreply, State#state{fd=NewFD, inode=NewInode, flap=false}};
@@ -114,7 +117,8 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                         true ->
                             {noreply, State};
                         _ ->
-                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w", [Name, file:format_error(Reason)]),
+                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w",
+                                [Name, file:format_error(Reason)]),
                             {noreply, State#state{flap=true}}
                     end
             end

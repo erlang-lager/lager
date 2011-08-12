@@ -61,8 +61,8 @@ init(LogFiles) ->
                 schedule_rotation(Name, Date),
                 case lager_util:open_logfile(Name, true) of
                     {ok, {FD, Inode, _}} ->
-                        #file{name=Name, level=lager_util:level_to_num(Level), fd=FD,
-                            inode=Inode, size=Size, date=Date, count=Count};
+                        #file{name=Name, level=lager_util:level_to_num(Level),
+                            fd=FD, inode=Inode, size=Size, date=Date, count=Count};
                     {error, Reason} ->
                         ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                             [Name, file:format_error(Reason)]),
@@ -84,7 +84,8 @@ handle_call({set_loglevel, Ident, Level}, #state{files=Files} = State) ->
         _ ->
             NewFiles = lists:map(
                 fun(#file{name=Name} = File) when Name == Ident ->
-                        ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
+                        ?INT_LOG(notice, "Changed loglevel of ~s to ~p",
+                            [Ident, Level]),
                         File#file{level=lager_util:level_to_num(Level)};
                     (X) -> X
                 end, Files),
@@ -150,7 +151,8 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
                     %% force a sync on any message at error severity or above
                     Flap2 = case file:datasync(NewFD) of
                         {error, Reason2} when Flap == false ->
-                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s", [Name, file:format_error(Reason2)]),
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                                [Name, file:format_error(Reason2)]),
                             true;
                         ok ->
                             false;
@@ -166,7 +168,8 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
                 true ->
                     File;
                 _ ->
-                    ?INT_LOG(error, "Failed to reopen logfile ~s with error ~s", [Name, file:format_error(Reason)]),
+                    ?INT_LOG(error, "Failed to reopen logfile ~s with error ~s",
+                        [Name, file:format_error(Reason)]),
                     File#file{flap=true}
             end
     end.

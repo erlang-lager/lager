@@ -129,13 +129,17 @@ format_time() ->
     format_time(maybe_utc(localtime_ms())).
 
 format_time({utc, {{Y, M, D}, {H, Mi, S, Ms}}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b UTC", [H, Mi, S, Ms])};
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
+        io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b UTC", [H, Mi, S, Ms])};
 format_time({{Y, M, D}, {H, Mi, S, Ms}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b", [H, Mi, S, Ms])};
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
+        io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b", [H, Mi, S, Ms])};
 format_time({utc, {{Y, M, D}, {H, Mi, S}}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b UTC", [H, Mi, S])};
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
+        io_lib:format("~2..0b:~2..0b:~2..0b UTC", [H, Mi, S])};
 format_time({{Y, M, D}, {H, Mi, S}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]), io_lib:format("~2..0b:~2..0b:~2..0b", [H, Mi, S])}.
+    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
+        io_lib:format("~2..0b:~2..0b:~2..0b", [H, Mi, S])}.
 
 parse_rotation_day_spec([], Res) ->
     {ok, Res ++ [{hour, 0}]};
@@ -183,7 +187,8 @@ parse_rotation_date_spec(_) ->
 calculate_next_rotation(Spec) ->
     Now = calendar:local_time(),
     Later = calculate_next_rotation(Spec, Now),
-    calendar:datetime_to_gregorian_seconds(Later) - calendar:datetime_to_gregorian_seconds(Now).
+    calendar:datetime_to_gregorian_seconds(Later) -
+      calendar:datetime_to_gregorian_seconds(Now).
 
 calculate_next_rotation([], Now) ->
     Now;
@@ -295,31 +300,53 @@ parse_fail_test() ->
     ok.
 
 rotation_calculation_test() ->
-    ?assertMatch({{2000, 1, 2}, {0, 0, 0}}, calculate_next_rotation([{hour, 0}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 2}, {12, 0, 0}}, calculate_next_rotation([{hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 15}, {12, 34, 43}})),
-    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 2}, {12, 34, 43}})),
-    ?assertMatch({{2000, 2, 1}, {12, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 31}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{date, 1}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 15}, {16, 0, 0}}, calculate_next_rotation([{date, 15}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 31}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 31}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {12, 34, 43}})),
-    ?assertMatch({{2000, 2, 29}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {17, 34, 43}})),
-    ?assertMatch({{2001, 2, 28}, {16, 0, 0}}, calculate_next_rotation([{date, last}, {hour, 16}], {{2001, 1, 31}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {0, 0, 0}},
+        calculate_next_rotation([{hour, 0}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}},
+        calculate_next_rotation([{hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {12, 0, 0}},
+        calculate_next_rotation([{hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}},
+        calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}},
+        calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 15}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}},
+        calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 2}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 1}, {12, 0, 0}},
+        calculate_next_rotation([{date, 1}, {hour, 12}], {{2000, 1, 31}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}},
+        calculate_next_rotation([{date, 1}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 15}, {16, 0, 0}},
+        calculate_next_rotation([{date, 15}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 31}, {16, 0, 0}},
+        calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 31}, {16, 0, 0}},
+        calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {12, 34, 43}})),
+    ?assertMatch({{2000, 2, 29}, {16, 0, 0}},
+        calculate_next_rotation([{date, last}, {hour, 16}], {{2000, 1, 31}, {17, 34, 43}})),
+    ?assertMatch({{2001, 2, 28}, {16, 0, 0}},
+        calculate_next_rotation([{date, last}, {hour, 16}], {{2001, 1, 31}, {17, 34, 43}})),
 
-    ?assertMatch({{2000, 1, 1}, {16, 0, 0}}, calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
-    ?assertMatch({{2000, 1, 8}, {16, 0, 0}}, calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
-    ?assertMatch({{2000, 1, 7}, {16, 0, 0}}, calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
-    ?assertMatch({{2000, 1, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 1}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
-    ?assertMatch({{2000, 1, 2}, {16, 0, 0}}, calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
-    ?assertMatch({{2000, 1, 9}, {16, 0, 0}}, calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 2}, {17, 34, 43}})),
-    ?assertMatch({{2000, 2, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 4}, {hour, 16}], {{2000, 1, 29}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {16, 0, 0}},
+        calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 8}, {16, 0, 0}},
+        calculate_next_rotation([{day, 6}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 7}, {16, 0, 0}},
+        calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 3}, {16, 0, 0}},
+        calculate_next_rotation([{day, 1}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {16, 0, 0}},
+        calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 1}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 9}, {16, 0, 0}},
+        calculate_next_rotation([{day, 0}, {hour, 16}], {{2000, 1, 2}, {17, 34, 43}})),
+    ?assertMatch({{2000, 2, 3}, {16, 0, 0}},
+        calculate_next_rotation([{day, 4}, {hour, 16}], {{2000, 1, 29}, {17, 34, 43}})),
 
-    ?assertMatch({{2000, 1, 7}, {16, 0, 0}}, calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 3}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 7}, {16, 0, 0}},
+        calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 3}, {17, 34, 43}})),
     
-    ?assertMatch({{2000, 1, 3}, {16, 0, 0}}, calculate_next_rotation([{day, 1}, {hour, 16}], {{1999, 12, 28}, {17, 34, 43}})),
+    ?assertMatch({{2000, 1, 3}, {16, 0, 0}},
+        calculate_next_rotation([{day, 1}, {hour, 16}], {{1999, 12, 28}, {17, 34, 43}})),
     ok.
 
 rotate_file_test() ->
