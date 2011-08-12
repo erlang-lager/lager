@@ -63,6 +63,15 @@
 %% internal non-blocking logging call
 %% there's some special handing for when we try to log (usually errors) while
 %% lager is still starting.
+-ifdef(TEST).
+-define(INT_LOG(Level, Format, Args),
+    case ?SHOULD_LOG(Level) of
+        true ->
+            ?NOTIFY(Level, self(), Format, Args);
+        _ ->
+            ok
+    end).
+-else.
 -define(INT_LOG(Level, Format, Args),
     Self = self(),
     %% do this in a spawn so we don't cause a deadlock calling gen_event:which_handlers
@@ -83,3 +92,4 @@
                     end
             end
     end)).
+-endif.

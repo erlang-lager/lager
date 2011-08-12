@@ -167,7 +167,7 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
                 true ->
                     File;
                 _ ->
-                    ?INT_LOG(error, "Failed to reopen logfile ~s with error ~s",
+                    ?INT_LOG(error, "Failed to reopen log file ~s with error ~s",
                         [Name, file:format_error(Reason)]),
                     File#file{flap=true}
             end
@@ -175,6 +175,15 @@ write(#file{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
 
 validate_logfiles([]) ->
     [];
+validate_logfiles([{Name, Level}|T]) ->
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            [{Name, Level, 0, undefined, 0}|validate_logfiles(T)];
+        _ ->
+            ?INT_LOG(error, "Invalid log level of ~p for ~s.",
+                [Level, Name]),
+            validate_logfiles(T)
+    end;
 validate_logfiles([{Name, Level, Size, Date, Count}|T]) ->
     ValidLevel = (lists:member(Level, ?LEVELS)),
     ValidSize = (is_integer(Size) andalso Size >= 0),
@@ -208,7 +217,7 @@ validate_logfiles([{Name, Level, Size, Date, Count}|T]) ->
             end
     end;
 validate_logfiles([H|T]) ->
-    ?INT_LOG(error, "Invalid logfile config ~p.", [H]),
+    ?INT_LOG(error, "Invalid log file config ~p.", [H]),
     validate_logfiles(T).
 
 schedule_rotation(_, undefined) ->
