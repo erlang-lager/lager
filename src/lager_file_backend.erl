@@ -213,7 +213,7 @@ validate_logfiles([H|T]) ->
     validate_logfiles(T).
 
 schedule_rotation(_, undefined) ->
-    make_ref();
+    undefined;
 schedule_rotation(Name, Date) ->
     erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}).
 
