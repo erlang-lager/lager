@@ -90,7 +90,9 @@ handle_event(Event, State) ->
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    ?LOG(error, Pid, "Supervisor ~w had child ~s exit with reason ~s in context ~w", [element(2, Name), Offender, format_reason(Reason), Ctx]);
+                    ?LOG(error, Pid,
+                        "Supervisor ~w had child ~s exit with reason ~s in context ~w",
+                        [element(2, Name), Offender, format_reason(Reason), Ctx]);
                 _ ->
                     ?LOG(error, Pid, ["SUPERVISOR REPORT ", print_silly_list(D)])
             end;
@@ -107,7 +109,8 @@ handle_event(Event, State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    ?LOG(info, Pid, "Application ~w exited with reason: ~w", [App, Reason]);
+                    ?LOG(info, Pid, "Application ~w exited with reason: ~w",
+                        [App, Reason]);
                 _ ->
                     ?LOG(info, Pid, print_silly_list(D))
             end;
@@ -122,7 +125,8 @@ handle_event(Event, State) ->
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
-                    ?LOG(debug, P, "Supervisor ~w started ~s at pid ~w", [element(2, Name), MFA, Pid]);
+                    ?LOG(debug, P, "Supervisor ~w started ~s at pid ~w",
+                        [element(2, Name), MFA, Pid]);
                 _ ->
                     ?LOG(info, P, ["PROGRESS REPORT ", print_silly_list(D)])
             end;
@@ -145,21 +149,25 @@ code_change(_OldVsn, State, _Extra) ->
 format_crash_report(Report, Neighbours) ->
     Name = proplists:get_value(registered_name, Report, proplists:get_value(pid, Report)),
     {_Class, Reason, _Trace} = proplists:get_value(error_info, Report),
-    io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s", [Name, length(Neighbours), format_reason(Reason)]).
+    io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s",
+        [Name, length(Neighbours), format_reason(Reason)]).
 
 format_offender(Off) ->
     case proplists:get_value(name, Off) of
         undefined ->
             %% supervisor_bridge
-            io_lib:format("at module ~w at ~w", [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
+            io_lib:format("at module ~w at ~w",
+                [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
         Name ->
             %% regular supervisor
             MFA = format_mfa(proplists:get_value(mfargs, Off)),
-            io_lib:format("~w started with ~s at ~w", [Name, MFA, proplists:get_value(pid, Off)])
+            io_lib:format("~w started with ~s at ~w",
+                [Name, MFA, proplists:get_value(pid, Off)])
     end.
 
 format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
-    ["call to undefined function ", format_mfa({M, F, length(A)}), " from ", format_mfa(MFA)];
+    ["call to undefined function ", format_mfa({M, F, length(A)}),
+        " from ", format_mfa(MFA)];
 format_reason({undef, [MFA|_]}) ->
     ["call to undefined function ", format_mfa(MFA)];
 format_reason({bad_return_value, Val}) ->
@@ -205,7 +213,8 @@ format_reason({badarg, [MFA,MFA2|_]}) ->
     end;
 format_reason({{badarity, {Fun, Args}}, [MFA|_]}) ->
     {arity, Arity} = lists:keyfind(arity, 1, erlang:fun_info(Fun)),
-    [io_lib:format("fun called with wrong arity of ~w instead of ~w in ", [length(Args), Arity]), format_mfa(MFA)];
+    [io_lib:format("fun called with wrong arity of ~w instead of ~w in ",
+            [length(Args), Arity]), format_mfa(MFA)];
 format_reason({noproc, MFA}) ->
     ["no such process or port in call to ", format_mfa(MFA)];
 format_reason({{badfun, Term}, [MFA|_]}) ->

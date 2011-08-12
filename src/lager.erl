@@ -62,22 +62,25 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
-    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p@~p:~p:~p ", [Pid, Module,
-                Function, Line]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "],
+        io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
+        string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
-    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]), string:strip(lists:flatten(Message), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
+        string:strip(lists:flatten(Message), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
-    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]), string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
+        string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Set the loglevel for a particular backend.

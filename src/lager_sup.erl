@@ -41,11 +41,33 @@ init([]) ->
     %% check if the crash log is enabled
     Crash = case application:get_env(lager, crash_log) of
         {ok, File} ->
-            MaxBytes = case application:get_env(lager, crash_log_size) of
-                {ok, Val} -> Val;
+            MaxBytes = case application:get_env(lager, crash_log_msg_size) of
+                {ok, Val} when is_integer(Val) andalso Val > 0 -> Val;
                 _ -> 65536
             end,
-            [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes]},
+            RotationSize = case application:get_env(lager, crash_log_size) of
+                {ok, Val1} when is_integer(Val1) andalso Val1 >= 0 -> Val1;
+                _ -> 0
+            end,
+            RotationCount = case application:get_env(lager, crash_log_count) of
+                {ok, Val2} when is_integer(Val2) andalso Val2 >=0 -> Val2;
+                _ -> 0
+            end,
+            RotationDate = case application:get_env(lager, crash_log_date) of
+                {ok, Val3} ->
+                    case lager_util:parse_rotation_date_spec(Val3) of
+                        {ok, Spec} -> Spec;
+                        {error, _} when Val3 == "" -> undefined; %% blank is ok
+                        {error, _} ->
+                            error_logger:error_msg("Invalid date spec for "
+                                "crash log ~p~n", [Val3]),
+                            undefined
+                    end;
+                _ -> undefined
+            end,
+
+            [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes,
+                        RotationSize, RotationDate, RotationCount]},
                     permanent, 5000, worker, [lager_crash_log]}];
         _ ->
             []

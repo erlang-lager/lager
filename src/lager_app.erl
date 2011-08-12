@@ -34,7 +34,8 @@ start(_StartType, _StartArgs) ->
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, info},
-                {lager_file_backend, [{"log/error.log", error}, {"log/console.log", info}]}];
+                {lager_file_backend, [{"log/error.log", error, 10485760, "", 5},
+                        {"log/console.log", info, 10485760, "", 5}]}];
         {ok, Val} ->
             Val
     end,
