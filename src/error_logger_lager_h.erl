@@ -47,7 +47,7 @@
     end).
 
 -define(CRASH_LOG(Event),
-    gen_server:cast(lager_crash_log, {log, Event})).
+    catch(gen_server:call(lager_crash_log, {log, Event}))).
 
 -spec init(any()) -> {ok, {}}.
 init(_) ->

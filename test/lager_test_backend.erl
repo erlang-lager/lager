@@ -194,12 +194,8 @@ cleanup(_) ->
 
 crash(Type) ->
     spawn(fun() -> gen_server:call(crash, Type) end),
-    timer:sleep(100).
-
-custom_sleep(MSec) ->
-    timer:sleep(MSec),
-    [_|_] = gen_event:which_handlers(error_logger),
-    [_|_] = gen_event:which_handlers(lager_event),
+    timer:sleep(100),
+    _ = gen_event:which_handlers(error_logger),
     ok.
 
 error_logger_redirect_crash_test_() ->
@@ -375,6 +371,7 @@ error_logger_redirect_test_() ->
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, info}]),
                 application:start(lager),
+                lager:log(error, self(), "flush flush"),
                 timer:sleep(100),
                 gen_event:call(lager_event, ?MODULE, flush)
         end,
@@ -386,8 +383,8 @@ error_logger_redirect_test_() ->
         [
             {"error reports are printed",
                 fun() ->
-                        error_logger:error_report([{this, is}, a, {silly, format}]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report([{this, is}, a, {silly, format}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w this: is, a, silly: format", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -395,8 +392,8 @@ error_logger_redirect_test_() ->
             },
             {"string error reports are printed",
                 fun() ->
-                        error_logger:error_report("this is less silly"),
-                        custom_sleep(100),
+                        sync_error_logger:error_report("this is less silly"),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w this is less silly", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -404,8 +401,8 @@ error_logger_redirect_test_() ->
             },
             {"error messages are printed",
                 fun() ->
-                        error_logger:error_msg("doom, doom has come upon you all"),
-                        custom_sleep(100),
+                        sync_error_logger:error_msg("doom, doom has come upon you all"),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w doom, doom has come upon you all", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -413,16 +410,16 @@ error_logger_redirect_test_() ->
             },
             {"error messages are truncated at 4096 characters",
                 fun() ->
-                        error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
-                        custom_sleep(1000),
+                        sync_error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
             {"info reports are printed",
                 fun() ->
-                        error_logger:info_report([{this, is}, a, {silly, format}]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report([{this, is}, a, {silly, format}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w this: is, a, silly: format", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -430,16 +427,16 @@ error_logger_redirect_test_() ->
             },
             {"info reports are truncated at 4096 characters",
                 fun() ->
-                        error_logger:info_report([[{this, is}, a, {silly, format}] || _ <- lists:seq(0, 600)]),
-                        custom_sleep(1000),
+                        sync_error_logger:info_report([[{this, is}, a, {silly, format}] || _ <- lists:seq(0, 600)]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) < 5000)
                 end
             },
             {"single term info reports are printed",
                 fun() ->
-                        error_logger:info_report({foolish, bees}),
-                        custom_sleep(100),
+                        sync_error_logger:info_report({foolish, bees}),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w {foolish,bees}", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -447,8 +444,8 @@ error_logger_redirect_test_() ->
             },
             {"single term error reports are printed",
                 fun() ->
-                        error_logger:error_report({foolish, bees}),
-                        custom_sleep(100),
+                        sync_error_logger:error_report({foolish, bees}),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w {foolish,bees}", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -456,8 +453,8 @@ error_logger_redirect_test_() ->
             },
             {"string info reports are printed",
                 fun() ->
-                        error_logger:info_report("this is less silly"),
-                        custom_sleep(100),
+                        sync_error_logger:info_report("this is less silly"),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w this is less silly", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -465,8 +462,8 @@ error_logger_redirect_test_() ->
             },
             {"string info reports are truncated at 4096 characters",
                 fun() ->
-                        error_logger:info_report(string:copies("this is less silly", 1000)),
-                        custom_sleep(1000),
+                        sync_error_logger:info_report(string:copies("this is less silly", 1000)),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
@@ -474,8 +471,8 @@ error_logger_redirect_test_() ->
 
             {"info messages are printed",
                 fun() ->
-                        error_logger:info_msg("doom, doom has come upon you all"),
-                        custom_sleep(100),
+                        sync_error_logger:info_msg("doom, doom has come upon you all"),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w doom, doom has come upon you all", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -483,8 +480,8 @@ error_logger_redirect_test_() ->
             },
             {"info messages are truncated at 4096 characters",
                 fun() ->
-                        error_logger:info_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
-                        custom_sleep(1000),
+                        sync_error_logger:info_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
@@ -492,9 +489,9 @@ error_logger_redirect_test_() ->
 
             {"warning messages are printed at the correct level",
                 fun() ->
-                        error_logger:warning_msg("doom, doom has come upon you all"),
+                        sync_error_logger:warning_msg("doom, doom has come upon you all"),
                         Map = error_logger:warning_map(),
-                        custom_sleep(100),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[~w] ~w doom, doom has come upon you all", [Map, self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -502,9 +499,9 @@ error_logger_redirect_test_() ->
             },
             {"warning reports are printed at the correct level",
                 fun() ->
-                        error_logger:warning_report([{i, like}, pie]),
+                        sync_error_logger:warning_report([{i, like}, pie]),
                         Map = error_logger:warning_map(),
-                        custom_sleep(100),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[~w] ~w i: like, pie", [Map, self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -512,9 +509,9 @@ error_logger_redirect_test_() ->
             },
             {"single term warning reports are printed at the correct level",
                 fun() ->
-                        error_logger:warning_report({foolish, bees}),
+                        sync_error_logger:warning_report({foolish, bees}),
                         Map = error_logger:warning_map(),
-                        custom_sleep(100),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[~w] ~w {foolish,bees}", [Map, self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -522,8 +519,8 @@ error_logger_redirect_test_() ->
             },
             {"application stop reports",
                 fun() ->
-                        error_logger:info_report([{application, foo}, {exited, quittin_time}, {type, lazy}]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report([{application, foo}, {exited, quittin_time}, {type, lazy}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w Application foo exited with reason: quittin_time", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -531,8 +528,8 @@ error_logger_redirect_test_() ->
             },
             {"supervisor reports",
                 fun() ->
-                        error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason fired in context france", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -540,8 +537,8 @@ error_logger_redirect_test_() ->
             },
             {"supervisor reports with real error",
                 fun() ->
-                        error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, {function_clause,[{crash,handle_info,[foo]}]}}, {supervisor, {local, steve}}]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, {function_clause,[{crash,handle_info,[foo]}]}}, {supervisor, {local, steve}}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason no function clause matching crash:handle_info(foo) in context france", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -550,8 +547,8 @@ error_logger_redirect_test_() ->
 
             {"supervisor_bridge reports",
                 fun() ->
-                        error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{mod, mini_steve}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{mod, mini_steve}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child at module mini_steve at bleh exit with reason fired in context france", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -559,8 +556,8 @@ error_logger_redirect_test_() ->
             },
             {"application progress report",
                 fun() ->
-                        error_logger:info_report(progress, [{application, foo}, {started_at, node()}]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report(progress, [{application, foo}, {started_at, node()}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[info] ~w Application foo started on node ~w", [self(), node()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -569,8 +566,8 @@ error_logger_redirect_test_() ->
             {"supervisor progress report",
                 fun() ->
                         lager:set_loglevel(?MODULE, debug),
-                        error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[debug] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -578,8 +575,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for emfile",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {emfile, [{stack, trace, 1}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {emfile, [{stack, trace, 1}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: maximum number of file descriptors exhausted, check ulimit -n", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -587,8 +584,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system process limit",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn, 1}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn, 1}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -596,8 +593,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system process limit2",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn_opt, 1}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn_opt, 1}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -605,8 +602,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system port limit",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, open_port, 1}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, open_port, 1}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ports exceeded", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -614,8 +611,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system port limit",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, list_to_atom, 1}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, list_to_atom, 1}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: tried to create an atom larger than 255, or maximum atom count exceeded", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -623,8 +620,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system ets table limit",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}, []}}], []]),
-                        custom_sleep(100),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [self(), self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
@@ -632,8 +629,8 @@ error_logger_redirect_test_() ->
             },
             {"crash report for unknown system limit should be truncated at 500 characters",
                 fun() ->
-                        error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{wtf,boom,[string:copies("aaaa", 4096)]}]}, []}}], []]),
-                        custom_sleep(1000),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{wtf,boom,[string:copies("aaaa", 4096)]}]}, []}}], []]),
+                        _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) > 500),
                         ?assert(length(lists:flatten(Msg)) < 700)
@@ -642,19 +639,19 @@ error_logger_redirect_test_() ->
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
-                        error_logger:info_report([hello, world]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report([hello, world]),
+                        _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(0, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, info),
-                        error_logger:info_report([hello, world]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report([hello, world]),
+                        _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(1, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, error),
                         lager_mochiglobal:put(loglevel, ?DEBUG),
-                        error_logger:info_report([hello, world]),
-                        custom_sleep(100),
+                        sync_error_logger:info_report([hello, world]),
+                        _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(1, count()),
                         ?assertEqual(1, count_ignored())
                 end
