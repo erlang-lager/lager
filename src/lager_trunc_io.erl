@@ -106,7 +106,7 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
                         _ ->
                             {String, Length}
                     end,
-                    format(T, AT, Max + 2 - RealLen, ["~s" | Acc], [lists:flatten(Value) | ArgAcc])
+                    format(T, AT, Max + 2 - RealLen, ["~s" | Acc], [Value | ArgAcc])
             end;
         _ ->
             % whatever, just pass them on through
