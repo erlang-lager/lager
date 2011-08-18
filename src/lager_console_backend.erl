@@ -30,17 +30,35 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-include("lager.hrl").
+
 %% @private
 init(Level) when is_atom(Level) ->
-    {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
+        _ ->
+            {error, bad_log_level}
+    end;
 init([Level, Verbose]) ->
-    {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}}.
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}};
+        _ ->
+            {error, bad_log_level}
+    end.
+
 
 %% @private
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loglevel, Level}, State) ->
-    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+        _ ->
+            {ok, {error, bad_log_level}, State}
+    end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
@@ -160,7 +178,16 @@ set_loglevel_test_() ->
                         lager:set_loglevel(lager_console_backend, debug),
                         ?assertEqual(debug, lager:get_loglevel(lager_console_backend))
                 end
+            },
+            {"Get/set invalid loglevel test",
+                fun() ->
+                        ?assertEqual(info, lager:get_loglevel(lager_console_backend)),
+                        ?assertEqual({error, bad_log_level},
+                            lager:set_loglevel(lager_console_backend, fatfinger)),
+                        ?assertEqual(info, lager:get_loglevel(lager_console_backend))
+                end
             }
+
         ]
     }.
 
