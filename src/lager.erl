@@ -53,8 +53,9 @@ start_ok(App, {error, Reason}) ->
     ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
-    Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p@~p:~p:~p ", [Pid, Module,
-                Function, Line]),  string:strip(lists:flatten(Message), right, $\n)],
+    Msg = [["[", atom_to_list(Level), "] "],
+           io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
+           string_reduce(Message)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @private
@@ -64,7 +65,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
         io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-        string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
+        string_reduce(lager_trunc_io:format(Format, Args, 4096))],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -72,7 +73,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
-        string:strip(lists:flatten(Message), right, $\n)],
+        string_reduce(Message)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -80,7 +81,7 @@ log(Level, Pid, Message) ->
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
-        string:strip(lists:flatten(io_lib:format(Format, Args)), right, $\n)],
+        string_reduce(lager_trunc_io:format(Format, Args, 4096))],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Set the loglevel for a particular backend.
@@ -117,7 +118,7 @@ posix_error(Error) when is_atom(Error) ->
         Message -> Message
     end;
 posix_error(Error) ->
-    lists:flatten(io_lib:format("~p", [Error])).
+    lists:flatten(lager_trunc_io:format("~p", [Error], 4096)).
 
 %% @private
 get_loglevels() ->
@@ -139,3 +140,6 @@ safe_notify(Level, Timestamp, Msg) ->
             gen_event:sync_notify(Pid, {log, Level, Timestamp, Msg})
     end.
 
+%% @private
+string_reduce(IOdata) ->
+    re:replace(IOdata, "\n$", "", [{return, list}]).
