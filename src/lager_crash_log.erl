@@ -33,6 +33,11 @@
 
 -behaviour(gen_server).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-include_lib("kernel/include/file.hrl").
+-endif.
+
 %% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
@@ -67,8 +72,11 @@ init([Filename, MaxBytes, Size, Date, Count]) ->
             schedule_rotation(Date),
             {ok, #state{name=Filename, fd=FD, inode=Inode,
                     fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date}};
-        Error ->
-            Error
+        {error, Reason} ->
+            ?INT_LOG(error, "Failed to open crash log file ~s with error: ~s",
+                [Filename, file:format_error(Reason)]),
+            {ok, #state{name=Filename, fmtmaxbytes=MaxBytes, flap=true,
+                    size=Size, count=Count, date=Date}}
     end.
 
 %% @private
@@ -117,7 +125,7 @@ handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                         true ->
                             {noreply, State};
                         _ ->
-                            ?INT_LOG(error, "Failed to reopen logfile ~s with error ~w",
+                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
                                 [Name, file:format_error(Reason)]),
                             {noreply, State#state{flap=true}}
                     end
@@ -212,4 +220,112 @@ sasl_limited_str(progress, Report, FmtMaxBytes) ->
         end || {Tag, Data} <- Report];
 sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     lager_stdlib:proc_lib_format(Report, FmtMaxBytes).
+
+-ifdef(TEST).
+
+filesystem_test_() ->
+    {foreach,
+        fun() ->
+                file:write_file("crash_test.log", ""),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, info}]),
+                application:set_env(lager, error_logger_redirect, true),
+                application:unset_env(lager, crash_log),
+                application:start(lager),
+                timer:sleep(100),
+                lager_test_backend:flush()
+        end,
+        fun(_) ->
+                case whereis(lager_crash_log) of
+                    P when is_pid(P) ->
+                        exit(P, kill);
+                    _ -> ok
+                end,
+                file:delete("crash_test.log"),
+                application:stop(lager),
+                application:unload(lager),
+                error_logger:tty(true)
+        end,
+        [
+            {"under normal circumstances, file should be opened",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
+                        error_logger:error_msg("Test message\n"),
+                        timer:sleep(100),
+                        {ok, Bin} = file:read_file("crash_test.log"),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
+                end
+            },
+            {"file can't be opened on startup triggers an error message",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info("crash_test.log"),
+                        file:write_file_info("crash_test.log", FInfo#file_info{mode = 0}),
+                        {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open crash log file crash_test.log with error: permission denied", lists:flatten(Message))
+                end
+            },
+            {"file that becomes unavailable at runtime should trigger an error message",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        error_logger:error_msg("Test message\n"),
+                        timer:sleep(100),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        file:delete("crash_test.log"),
+                        file:write_file("crash_test.log", ""),
+                        {ok, FInfo} = file:read_file_info("crash_test.log"),
+                        file:write_file_info("crash_test.log", FInfo#file_info{mode = 0}),
+                        error_logger:error_msg("Test message\n"),
+                        timer:sleep(100),
+                        ?assertEqual(3, lager_test_backend:count()),
+                        lager_test_backend:pop(),
+                        lager_test_backend:pop(),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to reopen crash log crash_test.log with error: permission denied", lists:flatten(Message))
+                end
+            },
+            {"unavailable files that are fixed at runtime should start having log messages written",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info("crash_test.log"),
+                        OldPerms = FInfo#file_info.mode,
+                        file:write_file_info("crash_test.log", FInfo#file_info{mode = 0}),
+                        {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open crash log file crash_test.log with error: permission denied", lists:flatten(Message)),
+                        file:write_file_info("crash_test.log", FInfo#file_info{mode = OldPerms}),
+                        error_logger:error_msg("Test message~n"),
+                        timer:sleep(100),
+                        {ok, Bin} = file:read_file("crash_test.log"),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
+                end
+            },
+            {"external logfile rotation/deletion should be handled",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        error_logger:error_msg("Test message~n"),
+                        timer:sleep(100),
+                        {ok, Bin} = file:read_file("crash_test.log"),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}])),
+                        file:delete("crash_test.log"),
+                        file:write_file("crash_test.log", ""),
+                        error_logger:error_msg("Test message1~n"),
+                        timer:sleep(100),
+                        {ok, Bin1} = file:read_file("crash_test.log"),
+                        ?assertMatch([_, "Test message1\n"], re:split(Bin1, "\n", [{return, list}, {parts, 2}])),
+                        file:rename("crash_test.log", "crash_test.log.0"),
+                        error_logger:error_msg("Test message2~n"),
+                        timer:sleep(100),
+                        {ok, Bin2} = file:read_file("crash_test.log"),
+                        ?assertMatch([_, "Test message2\n"], re:split(Bin2, "\n", [{return, list}, {parts, 2}]))
+                end
+            }
+        ]
+    }.
+
+-endif.
 

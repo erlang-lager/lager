@@ -23,6 +23,10 @@
 
 -behaviour(gen_server).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 %% callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
@@ -87,3 +91,67 @@ install_handler(Event, Module, Config) ->
             erlang:send_after(5000, self(), reinstall_handler)
     end.
 
+-ifdef(TEST).
+
+from_now(Seconds) ->
+    {Mega, Secs, Micro} = os:timestamp(),
+    {Mega, Secs + Seconds, Micro}.
+
+reinstall_on_initial_failure_test_() ->
+    {timeout, 60000,
+        [
+            fun() ->
+                    error_logger:tty(false),
+                    application:load(lager),
+                    application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [from_now(2), undefined]}]),
+                    application:set_env(lager, error_logger_redirect, false),
+                    application:unset_env(lager, crash_log),
+                    application:start(lager),
+                    try
+                      ?assertEqual(1, lager_test_backend:count()),
+                      {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                      ?assertMatch("Lager failed to install handler lager_crash_backend into lager_event, retrying later :"++_, Message),
+                      ?assertEqual(0, lager_test_backend:count()),
+                      timer:sleep(6000),
+                      ?assertEqual(0, lager_test_backend:count()),
+                      ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
+                    after
+                      application:stop(lager),
+                      application:unload(lager),
+                      error_logger:tty(true)
+                    end
+            end
+        ]
+    }.
+
+reinstall_on_runtime_failure_test_() ->
+    {timeout, 60000,
+        [
+            fun() ->
+                    error_logger:tty(false),
+                    application:load(lager),
+                    application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [undefined, from_now(5)]}]),
+                    application:set_env(lager, error_logger_redirect, false),
+                    application:unset_env(lager, crash_log),
+                    application:start(lager),
+                    try
+                        ?assertEqual(0, lager_test_backend:count()),
+                        ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event))),
+                        timer:sleep(6000),
+                        ?assertEqual(2, lager_test_backend:count()),
+                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        ?assertEqual("Lager event handler lager_crash_backend exited with reason crash", Message),
+                        {_Level2, _Time2, [_, _, Message2]} = lager_test_backend:pop(),
+                        ?assertMatch("Lager failed to install handler lager_crash_backend into lager_event, retrying later :"++_, Message2),
+                        ?assertEqual(false, lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
+                    after
+                       application:stop(lager),
+                       application:unload(lager),
+                       error_logger:tty(true)
+                   end
+            end
+        ]
+    }.
+
+
+-endif.
