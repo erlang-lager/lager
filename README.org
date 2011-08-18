@@ -150,3 +150,9 @@
   - crash_log_count
 
   See the .app.src file for further details.
+
+* Syslog Support
+  Lager syslog output is provided as a seperate application;
+  [[https://github.com/basho/lager_syslog][lager_syslog]]. It is packaged as a
+  separate application so Lager itself doesn't have an indirect dependancy on a
+  port driver. Please see the lager_syslog README for configuration information.
