@@ -15,7 +15,7 @@ distclean: clean
 	./rebar delete-deps
 
 test:
-	./rebar eunit
+	./rebar compile eunit
 
 ##
 ## Doc targets
