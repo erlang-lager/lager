@@ -166,7 +166,7 @@ schedule_rotation(Date) ->
 %% to limit the formatted string's size.
 
 limited_fmt(Fmt, Args, FmtMaxBytes) ->
-    lager_trunc_io:format(Fmt, Args, FmtMaxBytes).
+    lager:safe_format(Fmt, Args, FmtMaxBytes).
 
 limited_str(Term, FmtMaxBytes) ->
     {Str, _} = lager_trunc_io:print(Term, FmtMaxBytes),
