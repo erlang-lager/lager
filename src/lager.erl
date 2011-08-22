@@ -24,7 +24,8 @@
 -export([start/0,
         log/7, log/8, log/3, log/4,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        minimum_loglevel/1, posix_error/1]).
+        minimum_loglevel/1, posix_error/1,
+        safe_format/3, safe_format_chop/3]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -55,7 +56,7 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           format_string_chop("~s", [Message], 4096)],
+           safe_format_chop("~s", [Message], 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @private
@@ -65,7 +66,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           format_string_chop(Format, Args, 4096)],
+           safe_format_chop(Format, Args, 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -73,7 +74,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
-           format_string_chop("~s", [Message], 4096)],
+           safe_format_chop("~s", [Message], 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -81,7 +82,7 @@ log(Level, Pid, Message) ->
 log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
-           format_string_chop(Format, Args, 4096)],
+           safe_format_chop(Format, Args, 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Set the loglevel for a particular backend.
@@ -118,7 +119,7 @@ posix_error(Error) when is_atom(Error) ->
         Message -> Message
     end;
 posix_error(Error) ->
-    format_string_chop("~p", [Error], 4096).
+    safe_format_chop("~p", [Error], 4096).
 
 %% @private
 get_loglevels() ->
@@ -153,5 +154,5 @@ safe_format(Fmt, Args, Limit) ->
     end.
 
 %% @private
-format_string_chop(Fmt, Args, Limit) ->
+safe_format_chop(Fmt, Args, Limit) ->
     re:replace(safe_format(Fmt, Args, Limit), "\n$", "", [{return, list}]).
