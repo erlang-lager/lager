@@ -80,7 +80,7 @@ handle_event(Event, State) ->
                         [ID, Name, format_reason(Reason)]);
                 _ ->
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, lager_trunc_io:format(Fmt, Args, 4096))
+                    ?LOG(error, Pid, lager:safe_format(Fmt, Args, 4096))
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
             ?CRASH_LOG(Event),
@@ -100,11 +100,11 @@ handle_event(Event, State) ->
             ?CRASH_LOG(Event),
             ?LOG(error, Pid, ["CRASH REPORT ", format_crash_report(Self, Neighbours)]);
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(warning, Pid, lager_trunc_io:format(Fmt, Args, 4096));
+            ?LOG(warning, Pid, lager:safe_format(Fmt, Args, 4096));
         {warning_report, _GL, {Pid, std_warning, Report}} ->
             ?LOG(warning, Pid, print_silly_list(Report));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(info, Pid, lager_trunc_io:format(Fmt, Args, 4096));
+            ?LOG(info, Pid, lager:safe_format(Fmt, Args, 4096));
         {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
