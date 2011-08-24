@@ -117,7 +117,6 @@ console_log_test_() ->
         end,
         fun(_) ->
                 application:stop(lager),
-                application:unload(lager),
                 error_logger:tty(true)
         end,
         [
@@ -168,7 +167,6 @@ set_loglevel_test_() ->
         end,
         fun(_) ->
                 application:stop(lager),
-                application:unload(lager),
                 error_logger:tty(true)
         end,
         [

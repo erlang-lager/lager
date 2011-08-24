@@ -244,7 +244,6 @@ filesystem_test_() ->
                 end,
                 file:delete("crash_test.log"),
                 application:stop(lager),
-                application:unload(lager),
                 error_logger:tty(true)
         end,
         [

@@ -269,7 +269,6 @@ filesystem_test_() ->
         fun(_) ->
                 file:delete("test.log"),
                 application:stop(lager),
-                application:unload(lager),
                 error_logger:tty(true)
         end,
         [

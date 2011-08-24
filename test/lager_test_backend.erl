@@ -189,7 +189,6 @@ setup() ->
 
 cleanup(_) ->
     application:stop(lager),
-    application:unload(lager),
     error_logger:tty(true).
 
 
@@ -216,7 +215,6 @@ error_logger_redirect_crash_test_() ->
 
         fun(_) ->
                 application:stop(lager),
-                application:unload(lager),
                 case whereis(crash) of
                     undefined -> ok;
                     Pid -> exit(Pid, kill)
@@ -365,7 +363,6 @@ error_logger_redirect_test_() ->
 
         fun(_) ->
                 application:stop(lager),
-                application:unload(lager),
                 error_logger:tty(true)
         end,
         [
