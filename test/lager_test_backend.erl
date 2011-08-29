@@ -647,7 +647,6 @@ error_logger_redirect_test_() ->
 safe_format_test() ->
     ?assertEqual("foo bar", lists:flatten(lager:safe_format("~p ~p", [foo, bar], 1024))),
     ?assertEqual("FORMAT ERROR: \"~p ~p ~p\" [foo,bar]", lists:flatten(lager:safe_format("~p ~p ~p", [foo, bar], 1024))),
-    ?assertEqual("FORMAT ERROR: \"~s\" [1]", lists:flatten(lager:safe_format("~s", [1], 1024))),
     ok.
 
 -endif.
