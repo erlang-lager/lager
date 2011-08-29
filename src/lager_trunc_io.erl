@@ -101,8 +101,14 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
                 {String, Length} ->
                     {Value, RealLen} = case H of
                         "s" ->
-                            % strip off the doublequotes
-                            {string:substr(String, 2, length(String) -2), Length -2};
+                            % strip off the doublequotes, if applicable
+                            Trimmed = case {hd(String), lists:last(String)} == {$", $"} of
+                                true ->
+                                    string:strip(String, both, $");
+                                _ ->
+                                    String
+                            end,
+                            {Trimmed, length(Trimmed)};
                         _ ->
                             {String, Length}
                     end,
@@ -428,4 +434,10 @@ sane_float_printing_test() ->
     ?assertEqual("0.1234567", lists:flatten(format("~p", [0.1234567], 50))),
     ok.
 
+quote_strip_test() ->
+    ?assertEqual("\"hello\"", lists:flatten(format("~p", ["hello"], 50))),
+    ?assertEqual("hello", lists:flatten(format("~s", ["hello"], 50))),
+    ?assertEqual("hello", lists:flatten(format("~s", [hello], 50))),
+    ?assertEqual("hello", lists:flatten(format("~p", [hello], 50))),
+    ok.
 -endif.
