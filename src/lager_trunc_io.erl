@@ -232,7 +232,9 @@ print(Binary, Max) when is_binary(Binary) ->
     {["<<", L, ">>"], Len+4};
 
 print(Float, _Max) when is_float(Float) ->
-    L = float_to_list(Float),
+    %% use the same function io_lib:format uses to print floats
+    %% float_to_list is way too verbose.
+    L = io_lib_format:fwrite_g(Float),
     {L, length(L)};
 
 print(Fun, Max) when is_function(Fun) ->
@@ -408,6 +410,22 @@ format_test() ->
     ?assertEqual("\"foobar\"", lists:flatten(format("~10p", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("\"foobar\"", lists:flatten(format("~10P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
+    ok.
+
+atom_quoting_test() ->
+    ?assertEqual("hello", lists:flatten(format("~p", [hello], 50))),
+    ?assertEqual("'hello world'", lists:flatten(format("~p", ['hello world'], 50))),
+    ?assertEqual("hello_world", lists:flatten(format("~p", ['hello_world'], 50))),
+    ?assertEqual("'node@127.0.0.1'", lists:flatten(format("~p", ['node@127.0.0.1'], 50))),
+    ?assertEqual("node@nohost", lists:flatten(format("~p", [node@nohost], 50))),
+    ok.
+
+sane_float_printing_test() ->
+    ?assertEqual("1.0", lists:flatten(format("~p", [1.0], 50))),
+    ?assertEqual("1.23456789", lists:flatten(format("~p", [1.23456789], 50))),
+    ?assertEqual("1.23456789", lists:flatten(format("~p", [1.234567890], 50))),
+    ?assertEqual("0.3333333333333333", lists:flatten(format("~p", [1/3], 50))),
+    ?assertEqual("0.1234567", lists:flatten(format("~p", [0.1234567], 50))),
     ok.
 
 -endif.
