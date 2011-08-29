@@ -214,7 +214,11 @@ print(Tuple, Max) when is_tuple(Tuple) ->
 %%
 print(Atom, _Max) when is_atom(Atom) ->
     L = atom_to_list(Atom),
-    {L, length(L)};
+    R = case atom_needs_quoting_start(L) of
+        true -> lists:flatten([$', L, $']);
+        false -> L
+    end,
+    {R, length(R)};
 
 print(<<>>, _Max) ->
     {"<<>>", 4};
@@ -319,6 +323,20 @@ alist(L, Max) ->
     {R, Len} = list_body(L, Max-3),
     {[$", $[, R, $]], Len + 3}.
 
+%% is the first character in the atom alphabetic & lowercase?
+atom_needs_quoting_start([H|T]) when H >= $a, H =< $z ->
+    atom_needs_quoting(T);
+atom_needs_quoting_start(_) ->
+    true.
+
+atom_needs_quoting([]) ->
+    false;
+atom_needs_quoting([H|T]) when (H >= $a andalso H =< $z);
+                        (H >= $A andalso H =< $Z);
+                         H == $@; H == $_ ->
+    atom_needs_quoting(T);
+atom_needs_quoting(_) ->
+    true.
 
 -ifdef(TEST).
 %%--------------------
