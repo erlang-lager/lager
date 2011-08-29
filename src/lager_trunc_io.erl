@@ -309,10 +309,10 @@ list_bodyc(X,Max) ->  %% improper list
 %%
 alist_start([], _) -> {"[]", 2};
 alist_start(_, Max) when Max < 4 -> {"...", 3};
-alist_start([H|T], Max) when H >= 16#20, H =< 16#7e ->  % definitely printable
+alist_start([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
     {L, Len} = alist([H|T], Max-1),
     {[$"|L], Len + 1};
-alist_start([H|T], Max) when H == 9; H == 10; H == 13 ->   % show as space
+alist_start([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
     {L, Len} = alist(T, Max-1),
     {[$ |L], Len + 1};
 alist_start(L, Max) ->
@@ -321,10 +321,10 @@ alist_start(L, Max) ->
 
 alist([], _) -> {"\"", 1};
 alist(_, Max) when Max < 5 -> {"...\"", 4};
-alist([H|T], Max) when H >= 16#20, H =< 16#7e ->     % definitely printable
+alist([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
     {L, Len} = alist(T, Max-1),
     {[H|L], Len + 1};
-alist([H|T], Max) when H == 9; H == 10; H == 13 ->   % show as space
+alist([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
     {L, Len} = alist(T, Max-1),
     {[$ |L], Len + 1};
 alist(L, Max) ->
@@ -432,6 +432,11 @@ sane_float_printing_test() ->
     ?assertEqual("1.23456789", lists:flatten(format("~p", [1.234567890], 50))),
     ?assertEqual("0.3333333333333333", lists:flatten(format("~p", [1/3], 50))),
     ?assertEqual("0.1234567", lists:flatten(format("~p", [0.1234567], 50))),
+    ok.
+
+float_inside_list_test() ->
+    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~p", [[$a, 38.233913133184835, $c]], 50))),
+    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
     ok.
 
 quote_strip_test() ->
