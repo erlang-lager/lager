@@ -101,8 +101,14 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
                 {String, Length} ->
                     {Value, RealLen} = case H of
                         "s" ->
-                            % strip off the doublequotes
-                            {string:substr(String, 2, length(String) -2), Length -2};
+                            % strip off the doublequotes, if applicable
+                            Trimmed = case {hd(String), lists:last(String)} == {$", $"} of
+                                true ->
+                                    string:strip(String, both, $");
+                                _ ->
+                                    String
+                            end,
+                            {Trimmed, length(Trimmed)};
                         _ ->
                             {String, Length}
                     end,
@@ -303,10 +309,10 @@ list_bodyc(X,Max) ->  %% improper list
 %%
 alist_start([], _) -> {"[]", 2};
 alist_start(_, Max) when Max < 4 -> {"...", 3};
-alist_start([H|T], Max) when H >= 16#20, H =< 16#7e ->  % definitely printable
+alist_start([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
     {L, Len} = alist([H|T], Max-1),
     {[$"|L], Len + 1};
-alist_start([H|T], Max) when H == 9; H == 10; H == 13 ->   % show as space
+alist_start([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
     {L, Len} = alist(T, Max-1),
     {[$ |L], Len + 1};
 alist_start(L, Max) ->
@@ -315,10 +321,10 @@ alist_start(L, Max) ->
 
 alist([], _) -> {"\"", 1};
 alist(_, Max) when Max < 5 -> {"...\"", 4};
-alist([H|T], Max) when H >= 16#20, H =< 16#7e ->     % definitely printable
+alist([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
     {L, Len} = alist(T, Max-1),
     {[H|L], Len + 1};
-alist([H|T], Max) when H == 9; H == 10; H == 13 ->   % show as space
+alist([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
     {L, Len} = alist(T, Max-1),
     {[$ |L], Len + 1};
 alist(L, Max) ->
@@ -428,4 +434,15 @@ sane_float_printing_test() ->
     ?assertEqual("0.1234567", lists:flatten(format("~p", [0.1234567], 50))),
     ok.
 
+float_inside_list_test() ->
+    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~p", [[$a, 38.233913133184835, $c]], 50))),
+    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
+    ok.
+
+quote_strip_test() ->
+    ?assertEqual("\"hello\"", lists:flatten(format("~p", ["hello"], 50))),
+    ?assertEqual("hello", lists:flatten(format("~s", ["hello"], 50))),
+    ?assertEqual("hello", lists:flatten(format("~s", [hello], 50))),
+    ?assertEqual("hello", lists:flatten(format("~p", [hello], 50))),
+    ok.
 -endif.
