@@ -22,11 +22,19 @@ handle_call(badfun, _, State) ->
 	{reply, M(), State};
 handle_call(bad_return, _, _) ->
 	bleh;
+handle_call(bad_return_string, _, _) ->
+	{tuple, {tuple, "string"}};
 handle_call(case_clause, _, State) ->
-		case State of
-			goober ->
-				{reply, ok, State}
-		end;
+	case State of
+		goober ->
+			{reply, ok, State}
+	end;
+handle_call(case_clause_string, _, State) ->
+	Foo = atom_to_list(?MODULE),
+	case Foo of
+		State ->
+			{reply, ok, State}
+	end;
 handle_call(if_clause, _, State) ->
 	if State == 1 ->
 			{reply, ok, State}
@@ -56,12 +64,12 @@ handle_call(system_limit, _, State) ->
 	Res = list_to_atom(lists:flatten(lists:duplicate(256, "a"))),
 	{reply, Res, State};
 handle_call(process_limit, _, State) ->
-    %% run with +P 300 to make this crash
-    [erlang:spawn(fun() -> timer:sleep(5000) end) || _ <- lists:seq(0, 500)],
-    {reply, ok, State};
+	%% run with +P 300 to make this crash
+	[erlang:spawn(fun() -> timer:sleep(5000) end) || _ <- lists:seq(0, 500)],
+	{reply, ok, State};
 handle_call(port_limit, _, State) ->
-    [erlang:open_port({spawn, "ls"}, []) || _ <- lists:seq(0, 1024)],
-    {reply, ok, State};
+	[erlang:open_port({spawn, "ls"}, []) || _ <- lists:seq(0, 1024)],
+	{reply, ok, State};
 handle_call(noproc, _, State) ->
 	Res = gen_event:call(foo, bar, baz),
 	{reply, Res, State};
