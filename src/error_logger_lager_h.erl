@@ -109,8 +109,8 @@ handle_event(Event, State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    ?LOG(info, Pid, "Application ~w exited with reason: ~w",
-                        [App, Reason]);
+                    ?LOG(info, Pid, "Application ~w exited with reason: ~s",
+                        [App, format_reason(Reason)]);
                 _ ->
                     ?LOG(info, Pid, print_silly_list(D))
             end;
@@ -171,19 +171,21 @@ format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
 format_reason({undef, [MFA|_]}) ->
     ["call to undefined function ", format_mfa(MFA)];
 format_reason({bad_return_value, Val}) ->
-    io_lib:format("bad return value: ~w", [Val]);
+    ["bad return value: ", print_val(Val)];
+format_reason({{bad_return_value, Val}, MFA}) ->
+    ["bad return value: ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({{case_clause, Val}, [MFA|_]}) ->
-    [io_lib:format("no case clause matching ~w in ", [Val]), format_mfa(MFA)];
+    ["no case clause matching ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({function_clause, [MFA|_]}) ->
     ["no function clause matching ", format_mfa(MFA)];
 format_reason({if_clause, [MFA|_]}) ->
     ["no true branch found while evaluating if expression in ", format_mfa(MFA)];
 format_reason({{try_clause, Val}, [MFA|_]}) ->
-    [io_lib:format("no try clause matching ~w in ", [Val]), format_mfa(MFA)]; 
+    ["no try clause matching ", print_val(Val), " in ", format_mfa(MFA)]; 
 format_reason({badarith, [MFA|_]}) ->
     ["bad arithmetic expression in ", format_mfa(MFA)];
 format_reason({{badmatch, Val}, [MFA|_]}) ->
-    [io_lib:format("no match of right hand value ~w in ", [Val]), format_mfa(MFA)];
+    ["no match of right hand value ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({emfile, _Trace}) ->
     "maximum number of file descriptors exhausted, check ulimit -n";
 format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
@@ -218,29 +220,24 @@ format_reason({{badarity, {Fun, Args}}, [MFA|_]}) ->
 format_reason({noproc, MFA}) ->
     ["no such process or port in call to ", format_mfa(MFA)];
 format_reason({{badfun, Term}, [MFA|_]}) ->
-    [io_lib:format("bad function ~w in ", [Term]), format_mfa(MFA)];
+    ["bad function ", print_val(Term), " in ", format_mfa(MFA)];
 format_reason(Reason) ->
     {Str, _} = lager_trunc_io:print(Reason, 500),
     Str.
 
 format_mfa({M, F, A}) when is_list(A) ->
-    io_lib:format("~w:~w("++format_args(A, [])++")", [M, F | A]);
+    {FmtStr, Args} = format_args(A, [], []),
+    io_lib:format("~w:~w("++FmtStr++")", [M, F | Args]);
 format_mfa({M, F, A}) when is_integer(A) ->
     io_lib:format("~w:~w/~w", [M, F, A]);
 format_mfa(Other) ->
     io_lib:format("~w", [Other]).
 
-format_args([], Acc) ->
-    string:join(lists:reverse(Acc), ", ");
-format_args([H|T], Acc) when is_list(H) ->
-    case lager_stdlib:string_p(H) of
-        true ->
-            format_args(T, ["\"~s\""|Acc]);
-        _ ->
-            format_args(T, ["~w"|Acc])
-    end;
-format_args([_|T], Acc) ->
-    format_args(T, ["~w"|Acc]).
+format_args([], FmtAcc, ArgsAcc) ->
+    {string:join(lists:reverse(FmtAcc), ", "), lists:reverse(ArgsAcc)};
+format_args([H|T], FmtAcc, ArgsAcc) ->
+    {Str, _} = lager_trunc_io:print(H, 100),
+    format_args(T, ["~s"|FmtAcc], [Str|ArgsAcc]).
 
 print_silly_list(L) when is_list(L) ->
     case lager_stdlib:string_p(L) of
@@ -260,3 +257,7 @@ print_silly_list([{K,V}|T], Fmt, Acc) ->
     print_silly_list(T, ["~w: ~w" | Fmt], [V, K | Acc]);
 print_silly_list([H|T], Fmt, Acc) ->
     print_silly_list(T, ["~w" | Fmt], [H | Acc]).
+
+print_val(Val) ->
+    {Str, _} = lager_trunc_io:print(Val, 500),
+    Str.

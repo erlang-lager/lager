@@ -237,12 +237,30 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"bad return value with string",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(bad_return_string),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: {tuple,{tuple,\"string\"}}", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"case clause",
                 fun() ->
                         Pid = whereis(crash),
                         crash(case_clause),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
+            {"case clause string",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(case_clause_string),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -323,7 +341,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badarg2),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([[102,111,111],bar]) in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
