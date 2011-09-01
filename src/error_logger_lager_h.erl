@@ -153,14 +153,15 @@ format_crash_report(Report, Neighbours) ->
         [Name, length(Neighbours), format_reason(Reason)]).
 
 format_offender(Off) ->
-    case proplists:get_value(name, Off) of
+    case proplists:get_value(mfargs, Off) of
         undefined ->
             %% supervisor_bridge
             io_lib:format("at module ~w at ~w",
                 [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
-        Name ->
+        MFArgs ->
             %% regular supervisor
-            MFA = format_mfa(proplists:get_value(mfargs, Off)),
+            MFA = format_mfa(MFArgs),
+            Name = proplists:get_value(name, Off),
             io_lib:format("~w started with ~s at ~w",
                 [Name, MFA, proplists:get_value(pid, Off)])
     end.
