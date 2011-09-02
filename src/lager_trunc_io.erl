@@ -102,12 +102,7 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) when length(H) == 1 ->
                     {Value, RealLen} = case H of
                         "s" ->
                             % strip off the doublequotes, if applicable
-                            Trimmed = case {hd(String), lists:last(String)} == {$", $"} of
-                                true ->
-                                    string:strip(String, both, $");
-                                _ ->
-                                    String
-                            end,
+                            Trimmed = unquote_string(lists:flatten(String)),
                             {Trimmed, length(Trimmed)};
                         _ ->
                             {String, Length}
@@ -136,8 +131,9 @@ format([[$~|H]| T], [AH | AT], Max, Acc, ArgAcc) ->
                 {String, Length} ->
                     {Value, RealLen} = case C of
                         $s ->
-                            % strip off the doublequotes
-                            {string:substr(String, 2, length(String) -2), Length -2};
+                            % strip off the doublequotes, if applicable
+                            Trimmed = unquote_string(lists:flatten(String)),
+                            {Trimmed, length(Trimmed)};
                         _ ->
                             {String, Length}
                     end,
@@ -235,7 +231,13 @@ print(Binary, 0) when is_binary(Binary) ->
 print(Binary, Max) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, size(Binary)])),
     {L, Len} = alist_start(B, Max-4),
-    {["<<", L, ">>"], Len+4};
+    {Res, Length} = case L of
+        [91, X, 93] ->
+            {X, Len - 2};
+        X ->
+            {X, Len}
+    end,
+    {["<<", Res, ">>"], Length+4};
 
 print(Float, _Max) when is_float(Float) ->
     %% use the same function io_lib:format uses to print floats
@@ -346,6 +348,30 @@ atom_needs_quoting([H|T]) when (H >= $a andalso H =< $z);
 atom_needs_quoting(_) ->
     true.
 
+unquote_string([$<, $<, $"|T] = Str) ->
+    case string:substr(T, length(T) - 2) of
+        "\">>" ->
+            string:substr(T, 1, length(T) - 3);
+        _ ->
+            Str
+    end;
+unquote_string([$"|_] = Str) ->
+    case lists:last(Str) == $" of
+        true ->
+            string:strip(Str, both, $");
+        _ ->
+            Str
+    end;
+unquote_string([$'|_] = Str) ->
+    case lists:last(Str) == $' of
+        true ->
+            string:strip(Str, both, $');
+        _ ->
+            Str
+    end;
+unquote_string(S) ->
+    S.
+
 -ifdef(TEST).
 %%--------------------
 %% The start of a test suite. So far, it only checks for not crashing.
@@ -444,5 +470,16 @@ quote_strip_test() ->
     ?assertEqual("hello", lists:flatten(format("~s", ["hello"], 50))),
     ?assertEqual("hello", lists:flatten(format("~s", [hello], 50))),
     ?assertEqual("hello", lists:flatten(format("~p", [hello], 50))),
+    ?assertEqual("'hello world'", lists:flatten(format("~p", ['hello world'], 50))),
+    ?assertEqual("hello world", lists:flatten(format("~s", ['hello world'], 50))),
+    ok.
+
+binary_printing_test() ->
+    ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<$h, $e, $l, $l, $o>>], 50))),
+    ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<"hello">>], 50))),
+    ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~p", [<<1, 2, 3, 4>>], 50))),
+    ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~s", [<<1, 2, 3, 4>>], 50))),
+    ?assertEqual("hello", lists:flatten(format("~s", [<<"hello">>], 50))),
+    ?assertEqual("hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
     ok.
 -endif.
