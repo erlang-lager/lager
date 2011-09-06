@@ -89,7 +89,7 @@
   Or, for the backend with multiple handles (files, mainly):
 
 #+BEGIN_EXAMPLE
-  lager:set_loglevel(lager_file_backend, "console.log" debug).
+  lager:set_loglevel(lager_file_backend, "console.log", debug).
 #+END_EXAMPLE
 
   Lager keeps track of the minium log level being used by any backend and
