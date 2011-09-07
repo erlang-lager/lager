@@ -80,57 +80,16 @@ init([Filename, MaxBytes, Size, Date, Count]) ->
     end.
 
 %% @private
+handle_call({log, _} = Log, _From, State) ->
+    {Reply, NewState} = do_log(Log, State),
+    {reply, Reply, NewState};
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
 %% @private
-handle_cast({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
-        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
-    %% borrowed from riak_err
-    {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
-        {error, _GL, {Pid1, Fmt, Args}} ->
-            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
-        {error_report, _GL, {Pid1, std_error, Rep}} ->
-            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
-        {error_report, _GL, Other} ->
-            perhaps_a_sasl_report(error_report, Other, FmtMaxBytes);
-        _ ->
-            {ignore, ignore, ignore, false}
-    end,
-    if ReportStr == ignore ->
-            {noreply, State};
-        true ->
-            case lager_util:ensure_logfile(Name, FD, Inode, false) of
-                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
-                    lager_util:rotate_logfile(Name, Count),
-                    handle_cast({log, Event}, State);
-                {ok, {NewFD, NewInode, _Size}} ->
-                    {Date, TS} = lager_util:format_time(
-                        lager_stdlib:maybe_utc(erlang:localtime())),
-                    Time = [Date, " ", TS," =", ReportStr, "====\n"],
-                    NodeSuffix = other_node_suffix(Pid),
-                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
-                    case file:write(NewFD, Msg) of
-                        {error, Reason} when Flap == false ->
-                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
-                                [Name, file:format_error(Reason)]),
-                            {noreply, State#state{fd=NewFD, inode=NewInode, flap=true}};
-                        ok ->
-                            {noreply, State#state{fd=NewFD, inode=NewInode, flap=false}};
-                        _ ->
-                            {noreply, State#state{fd=NewFD, inode=NewInode}}
-                    end;
-                {error, Reason} ->
-                    case Flap of
-                        true ->
-                            {noreply, State};
-                        _ ->
-                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
-                                [Name, file:format_error(Reason)]),
-                            {noreply, State#state{flap=true}}
-                    end
-            end
-    end;
+handle_cast({log, _} = Log, State) ->
+    {_, NewState} = do_log(Log, State),
+    {noreply, NewState};
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -221,6 +180,55 @@ sasl_limited_str(progress, Report, FmtMaxBytes) ->
 sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     lager_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
+do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
+        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
+    %% borrowed from riak_err
+    {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
+        {error, _GL, {Pid1, Fmt, Args}} ->
+            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
+        {error_report, _GL, {Pid1, std_error, Rep}} ->
+            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
+        {error_report, _GL, Other} ->
+            perhaps_a_sasl_report(error_report, Other, FmtMaxBytes);
+        _ ->
+            {ignore, ignore, ignore, false}
+    end,
+    if ReportStr == ignore ->
+            {ok, State};
+        true ->
+            case lager_util:ensure_logfile(Name, FD, Inode, false) of
+                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+                    lager_util:rotate_logfile(Name, Count),
+                    handle_cast({log, Event}, State);
+                {ok, {NewFD, NewInode, _Size}} ->
+                    {Date, TS} = lager_util:format_time(
+                        lager_stdlib:maybe_utc(erlang:localtime())),
+                    Time = [Date, " ", TS," =", ReportStr, "====\n"],
+                    NodeSuffix = other_node_suffix(Pid),
+                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
+                    case file:write(NewFD, Msg) of
+                        {error, Reason} when Flap == false ->
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                                [Name, file:format_error(Reason)]),
+                            {ok, State#state{fd=NewFD, inode=NewInode, flap=true}};
+                        ok ->
+                            {ok, State#state{fd=NewFD, inode=NewInode, flap=false}};
+                        _ ->
+                            {ok, State#state{fd=NewFD, inode=NewInode}}
+                    end;
+                {error, Reason} ->
+                    case Flap of
+                        true ->
+                            {ok, State};
+                        _ ->
+                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
+                                [Name, file:format_error(Reason)]),
+                            {ok, State#state{flap=true}}
+                    end
+            end
+    end.
+
+
 -ifdef(TEST).
 
 filesystem_test_() ->
@@ -250,8 +258,8 @@ filesystem_test_() ->
             {"under normal circumstances, file should be opened",
                 fun() ->
                         {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
-                        error_logger:error_msg("Test message\n"),
-                        timer:sleep(100),
+                        _ = gen_event:which_handlers(error_logger),
+                        sync_error_logger:error_msg("Test message\n"),
                         {ok, Bin} = file:read_file("crash_test.log"),
                         ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
                 end
@@ -270,17 +278,16 @@ filesystem_test_() ->
                 fun() ->
                         {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
                         ?assertEqual(0, lager_test_backend:count()),
-                        error_logger:error_msg("Test message\n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(1, lager_test_backend:count()),
                         file:delete("crash_test.log"),
                         file:write_file("crash_test.log", ""),
                         {ok, FInfo} = file:read_file_info("crash_test.log"),
                         file:write_file_info("crash_test.log", FInfo#file_info{mode = 0}),
-                        error_logger:error_msg("Test message\n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(3, lager_test_backend:count()),
-                        lager_test_backend:pop(),
                         lager_test_backend:pop(),
                         {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
                         ?assertEqual("Failed to reopen crash log crash_test.log with error: permission denied", lists:flatten(Message))
@@ -296,8 +303,8 @@ filesystem_test_() ->
                         {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
                         ?assertEqual("Failed to open crash log file crash_test.log with error: permission denied", lists:flatten(Message)),
                         file:write_file_info("crash_test.log", FInfo#file_info{mode = OldPerms}),
-                        error_logger:error_msg("Test message~n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message~n"),
+                        _ = gen_event:which_handlers(error_logger),
                         {ok, Bin} = file:read_file("crash_test.log"),
                         ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
                 end
@@ -306,19 +313,19 @@ filesystem_test_() ->
                 fun() ->
                         {ok, _} = ?MODULE:start_link("crash_test.log", 65535, 0, undefined, 0),
                         ?assertEqual(0, lager_test_backend:count()),
-                        error_logger:error_msg("Test message~n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message~n"),
+                        _ = gen_event:which_handlers(error_logger),
                         {ok, Bin} = file:read_file("crash_test.log"),
                         ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}])),
                         file:delete("crash_test.log"),
                         file:write_file("crash_test.log", ""),
-                        error_logger:error_msg("Test message1~n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message1~n"),
+                        _ = gen_event:which_handlers(error_logger),
                         {ok, Bin1} = file:read_file("crash_test.log"),
                         ?assertMatch([_, "Test message1\n"], re:split(Bin1, "\n", [{return, list}, {parts, 2}])),
                         file:rename("crash_test.log", "crash_test.log.0"),
-                        error_logger:error_msg("Test message2~n"),
-                        timer:sleep(100),
+                        sync_error_logger:error_msg("Test message2~n"),
+                        _ = gen_event:which_handlers(error_logger),
                         {ok, Bin2} = file:read_file("crash_test.log"),
                         ?assertMatch([_, "Test message2\n"], re:split(Bin2, "\n", [{return, list}, {parts, 2}]))
                 end

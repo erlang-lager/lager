@@ -302,7 +302,6 @@ filesystem_test_() ->
                         {ok, FInfo} = file:read_file_info("test.log"),
                         file:write_file_info("test.log", FInfo#file_info{mode = 0}),
                         lager:log(error, self(), "Test message"),
-                        timer:sleep(100),
                         ?assertEqual(3, lager_test_backend:count()),
                         lager_test_backend:pop(),
                         lager_test_backend:pop(),
