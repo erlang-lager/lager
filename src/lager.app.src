@@ -3,7 +3,7 @@
 {application, lager,
  [
   {description, "Erlang logging framework"},
-  {vsn, "0.9.0"},
+  {vsn, "0.9.1"},
   {modules, []},
   {applications, [
                   kernel,
