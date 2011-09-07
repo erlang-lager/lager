@@ -46,8 +46,14 @@
         _ -> ok
     end).
 
+-ifdef(TEST).
+%% Make CRASH synchronous when testing, to avoid timing headaches
+-define(CRASH_LOG(Event),
+    catch(gen_server:call(lager_crash_log, {log, Event}))).
+-else.
 -define(CRASH_LOG(Event),
     gen_server:cast(lager_crash_log, {log, Event})).
+-endif.
 
 -spec init(any()) -> {ok, {}}.
 init(_) ->
