@@ -80,57 +80,16 @@ init([Filename, MaxBytes, Size, Date, Count]) ->
     end.
 
 %% @private
-handle_call({log, Event}, _From, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
-        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
-    %% borrowed from riak_err
-    {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
-        {error, _GL, {Pid1, Fmt, Args}} ->
-            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
-        {error_report, _GL, {Pid1, std_error, Rep}} ->
-            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
-        {error_report, _GL, Other} ->
-            perhaps_a_sasl_report(error_report, Other, FmtMaxBytes);
-        _ ->
-            {ignore, ignore, ignore, false}
-    end,
-    if ReportStr == ignore ->
-            {reply, ok, State};
-        true ->
-            case lager_util:ensure_logfile(Name, FD, Inode, false) of
-                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
-                    lager_util:rotate_logfile(Name, Count),
-                    handle_cast({log, Event}, State);
-                {ok, {NewFD, NewInode, _Size}} ->
-                    {Date, TS} = lager_util:format_time(
-                        lager_stdlib:maybe_utc(erlang:localtime())),
-                    Time = [Date, " ", TS," =", ReportStr, "====\n"],
-                    NodeSuffix = other_node_suffix(Pid),
-                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
-                    case file:write(NewFD, Msg) of
-                        {error, Reason} when Flap == false ->
-                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
-                                [Name, file:format_error(Reason)]),
-                            {reply, ok, State#state{fd=NewFD, inode=NewInode, flap=true}};
-                        ok ->
-                            {reply, ok, State#state{fd=NewFD, inode=NewInode, flap=false}};
-                        _ ->
-                            {reply, ok, State#state{fd=NewFD, inode=NewInode}}
-                    end;
-                {error, Reason} ->
-                    case Flap of
-                        true ->
-                            {reply, ok, State};
-                        _ ->
-                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
-                                [Name, file:format_error(Reason)]),
-                            {reply, ok, State#state{flap=true}}
-                    end
-            end
-    end;
+handle_call({log, _} = Log, _From, State) ->
+    {Reply, NewState} = do_log(Log, State),
+    {reply, Reply, NewState};
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
 
 %% @private
+handle_cast({log, _} = Log, State) ->
+    {_, NewState} = do_log(Log, State),
+    {noreply, NewState};
 handle_cast(_Request, State) ->
     {noreply, State}.
 
@@ -220,6 +179,55 @@ sasl_limited_str(progress, Report, FmtMaxBytes) ->
         end || {Tag, Data} <- Report];
 sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     lager_stdlib:proc_lib_format(Report, FmtMaxBytes).
+
+do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
+        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
+    %% borrowed from riak_err
+    {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
+        {error, _GL, {Pid1, Fmt, Args}} ->
+            {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
+        {error_report, _GL, {Pid1, std_error, Rep}} ->
+            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
+        {error_report, _GL, Other} ->
+            perhaps_a_sasl_report(error_report, Other, FmtMaxBytes);
+        _ ->
+            {ignore, ignore, ignore, false}
+    end,
+    if ReportStr == ignore ->
+            {ok, State};
+        true ->
+            case lager_util:ensure_logfile(Name, FD, Inode, false) of
+                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+                    lager_util:rotate_logfile(Name, Count),
+                    handle_cast({log, Event}, State);
+                {ok, {NewFD, NewInode, _Size}} ->
+                    {Date, TS} = lager_util:format_time(
+                        lager_stdlib:maybe_utc(erlang:localtime())),
+                    Time = [Date, " ", TS," =", ReportStr, "====\n"],
+                    NodeSuffix = other_node_suffix(Pid),
+                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
+                    case file:write(NewFD, Msg) of
+                        {error, Reason} when Flap == false ->
+                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                                [Name, file:format_error(Reason)]),
+                            {ok, State#state{fd=NewFD, inode=NewInode, flap=true}};
+                        ok ->
+                            {ok, State#state{fd=NewFD, inode=NewInode, flap=false}};
+                        _ ->
+                            {ok, State#state{fd=NewFD, inode=NewInode}}
+                    end;
+                {error, Reason} ->
+                    case Flap of
+                        true ->
+                            {ok, State};
+                        _ ->
+                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
+                                [Name, file:format_error(Reason)]),
+                            {ok, State#state{flap=true}}
+                    end
+            end
+    end.
+
 
 -ifdef(TEST).
 
