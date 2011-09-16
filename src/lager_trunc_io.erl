@@ -312,11 +312,23 @@ list_bodyc(X,Max) ->  %% improper list
 alist_start([], _) -> {"[]", 2};
 alist_start(_, Max) when Max < 4 -> {"...", 3};
 alist_start([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
-    {L, Len} = alist([H|T], Max-1),
-    {[$"|L], Len + 1};
-alist_start([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
-    {L, Len} = alist(T, Max-1),
-    {[$ |L], Len + 1};
+    try alist([H|T], Max -1) of
+        {L, Len} ->
+            {[$"|L], Len + 1}
+    catch
+        throw:unprintable ->
+            {R, Len} = list_body([H|T], Max-2),
+            {[$[, R, $]], Len + 2}
+    end;
+alist_start([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->
+    try alist([H|T], Max -1) of
+        {L, Len} ->
+            {[$"|L], Len + 1}
+    catch
+        throw:unprintable ->
+            {R, Len} = list_body([H|T], Max-2),
+            {[$[, R, $]], Len + 2}
+    end;
 alist_start(L, Max) ->
     {R, Len} = list_body(L, Max-2),
     {[$[, R, $]], Len + 2}.
@@ -326,12 +338,11 @@ alist(_, Max) when Max < 5 -> {"...\"", 4};
 alist([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
     {L, Len} = alist(T, Max-1),
     {[H|L], Len + 1};
-alist([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->   % show as space
+alist([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->
     {L, Len} = alist(T, Max-1),
-    {[$ |L], Len + 1};
-alist(L, Max) ->
-    {R, Len} = list_body(L, Max-3),
-    {[$", $[, R, $]], Len + 3}.
+    {[H|L], Len + 1};
+alist(_L, _Max) ->
+    throw(unprintable).
 
 %% is the first character in the atom alphabetic & lowercase?
 atom_needs_quoting_start([H|T]) when H >= $a, H =< $z ->
@@ -461,8 +472,8 @@ sane_float_printing_test() ->
     ok.
 
 float_inside_list_test() ->
-    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~p", [[$a, 38.233913133184835, $c]], 50))),
-    ?assertEqual("\"a\"[38.233913133184835,99]", lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
+    ?assertEqual("[97,38.233913133184835,99]", lists:flatten(format("~p", [[$a, 38.233913133184835, $c]], 50))),
+    ?assertEqual("[97,38.233913133184835,99]", lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
     ok.
 
 quote_strip_test() ->
@@ -481,5 +492,17 @@ binary_printing_test() ->
     ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~s", [<<1, 2, 3, 4>>], 50))),
     ?assertEqual("hello", lists:flatten(format("~s", [<<"hello">>], 50))),
     ?assertEqual("hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
+    ok.
+
+list_printing_test() ->
+    ?assertEqual("[13,11,10,8,5,4]", lists:flatten(format("~p", [[13,11,10,8,5,4]], 50))),
+    ?assertEqual("[1,2,3|4]", lists:flatten(format("~p", [[1, 2, 3|4]], 50))),
+    ?assertEqual("[1|4]", lists:flatten(format("~p", [[1|4]], 50))),
+    ?assertEqual("\"hello...\"", lists:flatten(format("~p", ["hello world"], 10))),
+    ?assertEqual("hello...", lists:flatten(format("~s", ["hello world"], 10))),
+    ?assertEqual("hello world\r\n", lists:flatten(format("~s", ["hello world\r\n"], 50))),
+    ?assertEqual("\rhello world\r\n", lists:flatten(format("~s", ["\rhello world\r\n"], 50))),
+    ?assertEqual("...", lists:flatten(format("~s", ["\rhello world\r\n"], 3))),
+    ?assertEqual("[]", lists:flatten(format("~s", [[]], 50))),
     ok.
 -endif.
