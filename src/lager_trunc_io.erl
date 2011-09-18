@@ -33,7 +33,7 @@
 -module(lager_trunc_io).
 -author('matthias@corelatus.se').
 %% And thanks to Chris Newcombe for a bug fix 
--export([format/3, print/2, fprint/2, safe/2]).               % interface functions
+-export([format/3, print/2, print/3, fprint/2, fprint/3, safe/2]). % interface functions
 -version("$Id: trunc_io.erl,v 1.11 2009-02-23 12:01:06 matthias Exp $").
 
 -ifdef(TEST).
@@ -41,14 +41,36 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-record(print_options, {
+        %% negative depth means no depth limiting
+        depth = -1 :: integer(),
+        %% whether to print lists as strings, if possible
+        lists_as_strings = false :: boolean(),
+        %% force strings, or binaries to be printed as a string,
+        %% even if they're not printable
+        force_strings = false :: boolean()
+    }).
+
 format(Fmt, Args, Max) ->
-    lager_format:format(Fmt, Args, Max).
+    try lager_format:format(Fmt, Args, Max) of
+        Result -> Result
+    catch
+        _:_ ->
+            erlang:error(badarg, [Fmt, Args])
+    end.
 
 %% @doc Returns an flattened list containing the ASCII representation of the given
 %% term.
 -spec fprint(term(), pos_integer()) -> string().
-fprint(T, Max) -> 
-    {L, _} = print(T, Max),
+fprint(Term, Max) ->
+    fprint(Term, Max, []).
+
+
+%% @doc Returns an flattened list containing the ASCII representation of the given
+%% term.
+-spec fprint(term(), pos_integer(), #print_options{}) -> string().
+fprint(T, Max, Options) -> 
+    {L, _} = print(T, Max, prepare_options(Options, #print_options{})),
     lists:flatten(L).
 
 %% @doc Same as print, but never crashes. 
@@ -69,9 +91,17 @@ safe(What, Len) ->
 
 %% @doc Returns {List, Length}
 -spec print(term(), pos_integer()) -> {iolist(), pos_integer()}.
-print(_, Max) when Max < 0 -> {"...", 3};
-print(Tuple, Max) when is_tuple(Tuple) -> 
-    {TC, Len} = tuple_contents(Tuple, Max-2),
+print(Term, Max) ->
+    print(Term, Max, []).
+
+%% @doc Returns {List, Length}
+-spec print(term(), pos_integer(), #print_options{}) -> {iolist(), pos_integer()}.
+print(Term, Max, Options) when is_list(Options) ->
+    %% need to convert the proplist to a record
+    print(Term, Max, prepare_options(Options, #print_options{}));
+print(_, Max, _Options) when Max < 0 -> {"...", 3};
+print(Tuple, Max, Options) when is_tuple(Tuple) -> 
+    {TC, Len} = tuple_contents(Tuple, Max-2, Options),
     {[${, TC, $}], Len + 2};
 
 %% @doc We assume atoms, floats, funs, integers, PIDs, ports and refs never need 
@@ -79,38 +109,49 @@ print(Tuple, Max) when is_tuple(Tuple) ->
 %% arbitrarily long bignum. Let's assume that won't happen unless someone
 %% is being malicious.
 %%
-print(Atom, _Max) when is_atom(Atom) ->
+print(Atom, _Max, #print_options{force_strings=NoQuote}) when is_atom(Atom) ->
     L = atom_to_list(Atom),
-    R = case atom_needs_quoting_start(L) of
+    R = case atom_needs_quoting_start(L) andalso not NoQuote of
         true -> lists:flatten([$', L, $']);
         false -> L
     end,
     {R, length(R)};
 
-print(<<>>, _Max) ->
+print(<<>>, _Max, _Options) ->
     {"<<>>", 4};
 
-print(Binary, 0) when is_binary(Binary) ->
+print(Binary, 0, _Options) when is_binary(Binary) ->
     {"<<..>>", 6};
 
-print(Binary, Max) when is_binary(Binary) ->
+print(Binary, Max, Options) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, size(Binary)])),
-    {L, Len} = alist_start(B, Max-4),
+    {L, Len} = case Options#print_options.lists_as_strings orelse
+        Options#print_options.force_strings of
+        true ->
+            alist_start(B, Max-4, Options);
+        _ ->
+            list_body(B, Max-4, Options)
+    end,
     {Res, Length} = case L of
         [91, X, 93] ->
             {X, Len - 2};
         X ->
             {X, Len}
     end,
-    {["<<", Res, ">>"], Length+4};
+    case Options#print_options.force_strings of
+        true ->
+            {Res, Length};
+        _ ->
+            {["<<", Res, ">>"], Length+4}
+    end;
 
-print(Float, _Max) when is_float(Float) ->
+print(Float, _Max, _Options) when is_float(Float) ->
     %% use the same function io_lib:format uses to print floats
     %% float_to_list is way too verbose.
     L = io_lib_format:fwrite_g(Float),
     {L, length(L)};
 
-print(Fun, Max) when is_function(Fun) ->
+print(Fun, Max, _Options) when is_function(Fun) ->
     L = erlang:fun_to_list(Fun),
     case length(L) > Max of
         true ->
@@ -121,50 +162,50 @@ print(Fun, Max) when is_function(Fun) ->
             {L, length(L)}
     end;
 
-print(Integer, _Max) when is_integer(Integer) ->
+print(Integer, _Max, _Options) when is_integer(Integer) ->
     L = integer_to_list(Integer),
     {L, length(L)};
 
-print(Pid, _Max) when is_pid(Pid) ->
+print(Pid, _Max, _Options) when is_pid(Pid) ->
     L = pid_to_list(Pid),
     {L, length(L)};
 
-print(Ref, _Max) when is_reference(Ref) ->
+print(Ref, _Max, _Options) when is_reference(Ref) ->
     L = erlang:ref_to_list(Ref),
     {L, length(L)};
 
-print(Port, _Max) when is_port(Port) ->
+print(Port, _Max, _Options) when is_port(Port) ->
     L = erlang:port_to_list(Port),
     {L, length(L)};
 
-print(List, Max) when is_list(List) ->
-    alist_start(List, Max).
+print(List, Max, Options) when is_list(List) ->
+    alist_start(List, Max, Options).
 
 %% Returns {List, Length}
-tuple_contents(Tuple, Max) ->
+tuple_contents(Tuple, Max, Options) ->
     L = tuple_to_list(Tuple),
-    list_body(L, Max).
+    list_body(L, Max, Options).
 
 %% Format the inside of a list, i.e. do not add a leading [ or trailing ].
 %% Returns {List, Length}
-list_body([], _) -> {[], 0};
-list_body(_, Max) when Max < 4 -> {"...", 3};
-list_body([H|T], Max) -> 
-    {List, Len} = print(H, Max),
-    {Final, FLen} = list_bodyc(T, Max - Len),
+list_body([], _Max, _Options) -> {[], 0};
+list_body(_, Max, _Options) when Max < 4 -> {"...", 3};
+list_body([H|T], Max, Options) -> 
+    {List, Len} = print(H, Max, Options),
+    {Final, FLen} = list_bodyc(T, Max - Len, Options),
     {[List|Final], FLen + Len};
-list_body(X, Max) ->  %% improper list
-    {List, Len} = print(X, Max - 1),
+list_body(X, Max, Options) ->  %% improper list
+    {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
-list_bodyc([], _) -> {[], 0};
-list_bodyc(_, Max) when Max < 4 -> {"...", 3};
-list_bodyc([H|T], Max) -> 
-    {List, Len} = print(H, Max),
-    {Final, FLen} = list_bodyc(T, Max - Len - 1),
+list_bodyc([], _Max, _Options) -> {[], 0};
+list_bodyc(_, Max, _Options) when Max < 4 -> {"...", 3};
+list_bodyc([H|T], Max, Options) -> 
+    {List, Len} = print(H, Max, Options),
+    {Final, FLen} = list_bodyc(T, Max - Len - 1, Options),
     {[$,, List|Final], FLen + Len + 1};
-list_bodyc(X,Max) ->  %% improper list
-    {List, Len} = print(X, Max - 1),
+list_bodyc(X, Max, Options) ->  %% improper list
+    {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
 %% The head of a list we hope is ascii. Examples:
@@ -174,39 +215,48 @@ list_bodyc(X,Max) ->  %% improper list
 %% [0,65,66] -> [0,65,66]
 %% [65,b,66] -> "A"[b,66]
 %%
-alist_start([], _) -> {"[]", 2};
-alist_start(_, Max) when Max < 4 -> {"...", 3};
-alist_start([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
-    try alist([H|T], Max -1) of
+alist_start([], _Max, _Options) -> {"[]", 2};
+alist_start(_, Max, _Options) when Max < 4 -> {"...", 3};
+alist_start(L, Max, #print_options{force_strings=true} = Options) ->
+    alist(L, Max, Options);
+alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
+    try alist([H|T], Max -1, Options) of
         {L, Len} ->
             {[$"|L], Len + 1}
     catch
         throw:unprintable ->
-            {R, Len} = list_body([H|T], Max-2),
+            {R, Len} = list_body([H|T], Max-2, Options),
             {[$[, R, $]], Len + 2}
     end;
-alist_start([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->
-    try alist([H|T], Max -1) of
+alist_start([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
+    try alist([H|T], Max -1, Options) of
         {L, Len} ->
             {[$"|L], Len + 1}
     catch
         throw:unprintable ->
-            {R, Len} = list_body([H|T], Max-2),
+            {R, Len} = list_body([H|T], Max-2, Options),
             {[$[, R, $]], Len + 2}
     end;
-alist_start(L, Max) ->
-    {R, Len} = list_body(L, Max-2),
+alist_start(L, Max, Options) ->
+    {R, Len} = list_body(L, Max-2, Options),
     {[$[, R, $]], Len + 2}.
 
-alist([], _) -> {"\"", 1};
-alist(_, Max) when Max < 5 -> {"...\"", 4};
-alist([H|T], Max) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
-    {L, Len} = alist(T, Max-1),
+alist([], _Max, #print_options{force_strings=true}) -> {"", 0};
+alist([], _Max, _Options) -> {"\"", 1};
+alist(_, Max, #print_options{force_strings=true}) when Max < 4 -> {"...", 3};
+alist(_, Max, #print_options{force_strings=false}) when Max < 5 -> {"...\"", 4};
+alist([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
+    {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
-alist([H|T], Max) when H =:= 9; H =:= 10; H =:= 13 ->
-    {L, Len} = alist(T, Max-1),
+alist([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
+    {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
-alist(_L, _Max) ->
+alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(H) ->
+    {L, Len} = alist(T, Max-1, Options),
+    {[H|L], Len + 1};
+alist(_, _, #print_options{force_strings=true}) ->
+    error(badarg);
+alist(_L, _Max, _Options) ->
     throw(unprintable).
 
 %% is the first character in the atom alphabetic & lowercase?
@@ -223,6 +273,16 @@ atom_needs_quoting([H|T]) when (H >= $a andalso H =< $z);
     atom_needs_quoting(T);
 atom_needs_quoting(_) ->
     true.
+
+prepare_options([], Options) ->
+    Options;
+prepare_options([{depth, Depth}|T], Options) when is_integer(Depth) ->
+    prepare_options(T, Options#print_options{depth=Depth});
+prepare_options([{lists_as_strings, Bool}|T], Options) when is_boolean(Bool) ->
+    prepare_options(T, Options#print_options{lists_as_strings = Bool});
+prepare_options([{force_strings, Bool}|T], Options) when is_boolean(Bool) ->
+    prepare_options(T, Options#print_options{force_strings = Bool}).
+
 
 
 -ifdef(TEST).
@@ -286,14 +346,14 @@ perf1() ->
 format_test() ->
     %% simple format strings
     ?assertEqual("foobar", lists:flatten(format("~s", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("\"foobar\"", lists:flatten(format("~p", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("\"foobar\"", lists:flatten(format("~P", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~w", [["foo", $b, $a, $r]], 50))),
     
     %% complex ones
     ?assertEqual("    foobar", lists:flatten(format("~10s", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("  \"foobar\"", lists:flatten(format("~10p", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("  \"foobar\"", lists:flatten(format("~10P", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("**********", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("   [\"foo\",98,97,114]", lists:flatten(format("~20W", [["foo", $b, $a, $r], 10], 50))),
     ok.
@@ -316,7 +376,7 @@ sane_float_printing_test() ->
 
 float_inside_list_test() ->
     ?assertEqual("[97,38.233913133184835,99]", lists:flatten(format("~p", [[$a, 38.233913133184835, $c]], 50))),
-    ?assertEqual("[97,38.233913133184835,99]", lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
+    ?assertError(badarg, lists:flatten(format("~s", [[$a, 38.233913133184835, $c]], 50))),
     ok.
 
 quote_strip_test() ->
@@ -332,7 +392,7 @@ binary_printing_test() ->
     ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<$h, $e, $l, $l, $o>>], 50))),
     ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<"hello">>], 50))),
     ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~p", [<<1, 2, 3, 4>>], 50))),
-    ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~s", [<<1, 2, 3, 4>>], 50))),
+    ?assertEqual([1,2,3,4], lists:flatten(format("~s", [<<1, 2, 3, 4>>], 50))),
     ?assertEqual("hello", lists:flatten(format("~s", [<<"hello">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
     ok.
@@ -341,11 +401,18 @@ list_printing_test() ->
     ?assertEqual("[13,11,10,8,5,4]", lists:flatten(format("~p", [[13,11,10,8,5,4]], 50))),
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~p", [[1, 2, 3|4]], 50))),
     ?assertEqual("[1|4]", lists:flatten(format("~p", [[1|4]], 50))),
+    ?assertError(badarg, lists:flatten(format("~s", [[1|4]], 50))),
     ?assertEqual("\"hello...\"", lists:flatten(format("~p", ["hello world"], 10))),
-    ?assertEqual("hello...", lists:flatten(format("~s", ["hello world"], 10))),
+    ?assertEqual("hello w...", lists:flatten(format("~s", ["hello world"], 10))),
     ?assertEqual("hello world\r\n", lists:flatten(format("~s", ["hello world\r\n"], 50))),
     ?assertEqual("\rhello world\r\n", lists:flatten(format("~s", ["\rhello world\r\n"], 50))),
     ?assertEqual("...", lists:flatten(format("~s", ["\rhello world\r\n"], 3))),
     ?assertEqual("[]", lists:flatten(format("~s", [[]], 50))),
     ok.
+
+unicode_test() ->
+    ?assertEqual([231,167,129], lists:flatten(format("~s", [<<231,167,129>>], 50))),
+    ?assertEqual([31169], lists:flatten(format("~ts", [<<231,167,129>>], 50))),
+    ok.
+
 -endif.

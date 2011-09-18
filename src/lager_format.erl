@@ -209,49 +209,25 @@ control2($w, [A], F, Adj, P, Pad, _Enc, L) ->
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($p, [A], F, Adj, P, Pad, _Enc, L) ->
-    Term = lager_trunc_io:fprint(maybe_flatten(A), L),
+    Term = lager_trunc_io:fprint(A, L, [{lists_as_strings, true}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($W, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
-    Term = lager_trunc_io:fprint(A, L),
+    Term = lager_trunc_io:fprint(A, L, [{depth, Depth}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($P, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
-    Term = lager_trunc_io:fprint(maybe_flatten(A), L),
+    Term = lager_trunc_io:fprint(A, L, [{depth, Depth}, {lists_as_strings, true}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($s, [L0], F, Adj, P, Pad, latin1, L) ->
-    List = lager_trunc_io:fprint(maybe_flatten(L0), L),
-    Res = string(unquote_string(List), F, Adj, P, Pad),
+    List = lager_trunc_io:fprint(maybe_flatten(L0), L, [{force_strings, true}]),
+    Res = string(List, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($s, [L0], F, Adj, P, Pad, unicode, L) ->
-    List = lager_trunc_io:fprint(unicode:characters_to_list(L0), L),
-    Res = uniconv(string(unquote_string(List), F, Adj, P, Pad)),
+    List = lager_trunc_io:fprint(unicode:characters_to_list(L0), L, [{force_strings, true}]),
+    Res = uniconv(string(List, F, Adj, P, Pad)),
     {Res, L - lists:flatlength(Res)}.
-
-unquote_string([$<, $<, $"|T] = Str) ->
-    case string:substr(T, length(T) - 2) of
-        "\">>" ->
-            string:substr(T, 1, length(T) - 3);
-        _ ->
-            Str
-    end;
-unquote_string([$"|_] = Str) ->
-    case lists:last(Str) == $" of
-        true ->
-            string:strip(Str, both, $");
-        _ ->
-            Str
-    end;
-unquote_string([$'|_] = Str) ->
-    case lists:last(Str) == $' of
-        true ->
-            string:strip(Str, both, $');
-        _ ->
-            Str
-    end;
-unquote_string(S) ->
-    S.
 
 maybe_flatten(X) when is_list(X) ->
     lists:flatten(X);
