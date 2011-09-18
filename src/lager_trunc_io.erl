@@ -100,6 +100,7 @@ print(Term, Max, Options) when is_list(Options) ->
     %% need to convert the proplist to a record
     print(Term, Max, prepare_options(Options, #print_options{}));
 print(_, Max, _Options) when Max < 0 -> {"...", 3};
+print(_, _, #print_options{depth=0}) -> {"...", 3};
 print(Tuple, Max, Options) when is_tuple(Tuple) -> 
     {TC, Len} = tuple_contents(Tuple, Max-2, Options),
     {[${, TC, $}], Len + 2};
@@ -130,7 +131,7 @@ print(Binary, Max, Options) when is_binary(Binary) ->
         true ->
             alist_start(B, Max-4, Options);
         _ ->
-            list_body(B, Max-4, Options)
+            list_body(B, Max-4, Options, false)
     end,
     {Res, Length} = case L of
         [91, X, 93] ->
@@ -179,32 +180,37 @@ print(Port, _Max, _Options) when is_port(Port) ->
     {L, length(L)};
 
 print(List, Max, Options) when is_list(List) ->
-    alist_start(List, Max, Options).
+    alist_start(List, Max, dec_depth(Options)).
 
 %% Returns {List, Length}
 tuple_contents(Tuple, Max, Options) ->
     L = tuple_to_list(Tuple),
-    list_body(L, Max, Options).
+    list_body(L, Max, dec_depth(Options), true).
 
 %% Format the inside of a list, i.e. do not add a leading [ or trailing ].
 %% Returns {List, Length}
-list_body([], _Max, _Options) -> {[], 0};
-list_body(_, Max, _Options) when Max < 4 -> {"...", 3};
-list_body([H|T], Max, Options) -> 
+list_body([], _Max, _Options, _Tuple) -> {[], 0};
+list_body(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
+list_body(_, _Max, #print_options{depth=0}, _Tuple) -> {"...", 3};
+list_body([H|T], Max, Options, Tuple) -> 
     {List, Len} = print(H, Max, Options),
-    {Final, FLen} = list_bodyc(T, Max - Len, Options),
+    {Final, FLen} = list_bodyc(T, Max - Len, Options, Tuple),
     {[List|Final], FLen + Len};
-list_body(X, Max, Options) ->  %% improper list
+list_body(X, Max, Options, _Tuple) ->  %% improper list
     {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
-list_bodyc([], _Max, _Options) -> {[], 0};
-list_bodyc(_, Max, _Options) when Max < 4 -> {"...", 3};
-list_bodyc([H|T], Max, Options) -> 
-    {List, Len} = print(H, Max, Options),
-    {Final, FLen} = list_bodyc(T, Max - Len - 1, Options),
-    {[$,, List|Final], FLen + Len + 1};
-list_bodyc(X, Max, Options) ->  %% improper list
+list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
+list_bodyc(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
+list_bodyc([H|T], Max, #print_options{depth=Depth} = Options, Tuple) -> 
+    {List, Len} = print(H, Max, dec_depth(Options)),
+    {Final, FLen} = list_bodyc(T, Max - Len - 1, Options, Tuple),
+    Sep = case Depth == 1 andalso not Tuple of
+        true -> $|;
+        _ -> $,
+    end,
+    {[Sep, List|Final], FLen + Len + 1};
+list_bodyc(X, Max, Options, _Tuple) ->  %% improper list
     {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
@@ -217,6 +223,7 @@ list_bodyc(X, Max, Options) ->  %% improper list
 %%
 alist_start([], _Max, _Options) -> {"[]", 2};
 alist_start(_, Max, _Options) when Max < 4 -> {"...", 3};
+alist_start(_, _Max, #print_options{depth=0}) -> {"[...]", 3};
 alist_start(L, Max, #print_options{force_strings=true} = Options) ->
     alist(L, Max, Options);
 alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
@@ -225,7 +232,7 @@ alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  
             {[$"|L], Len + 1}
     catch
         throw:unprintable ->
-            {R, Len} = list_body([H|T], Max-2, Options),
+            {R, Len} = list_body([H|T], Max-2, Options, false),
             {[$[, R, $]], Len + 2}
     end;
 alist_start([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
@@ -234,11 +241,11 @@ alist_start([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
             {[$"|L], Len + 1}
     catch
         throw:unprintable ->
-            {R, Len} = list_body([H|T], Max-2, Options),
+            {R, Len} = list_body([H|T], Max-2, Options, false),
             {[$[, R, $]], Len + 2}
     end;
 alist_start(L, Max, Options) ->
-    {R, Len} = list_body(L, Max-2, Options),
+    {R, Len} = list_body(L, Max-2, Options, false),
     {[$[, R, $]], Len + 2}.
 
 alist([], _Max, #print_options{force_strings=true}) -> {"", 0};
@@ -283,7 +290,10 @@ prepare_options([{lists_as_strings, Bool}|T], Options) when is_boolean(Bool) ->
 prepare_options([{force_strings, Bool}|T], Options) when is_boolean(Bool) ->
     prepare_options(T, Options#print_options{force_strings = Bool}).
 
-
+dec_depth(#print_options{depth=Depth} = Options) when Depth > 0 ->
+    Options#print_options{depth=Depth-1};
+dec_depth(Options) ->
+    Options.
 
 -ifdef(TEST).
 %%--------------------
@@ -413,6 +423,29 @@ list_printing_test() ->
 unicode_test() ->
     ?assertEqual([231,167,129], lists:flatten(format("~s", [<<231,167,129>>], 50))),
     ?assertEqual([31169], lists:flatten(format("~ts", [<<231,167,129>>], 50))),
+    ok.
+
+depth_limit_test() ->
+    ?assertEqual("{...}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 1], 50))),
+    ?assertEqual("{a,...}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 2], 50))),
+    ?assertEqual("{a,[...]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 3], 50))),
+    ?assertEqual("{a,[b|...]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 4], 50))),
+    ?assertEqual("{a,[b,[...]]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 5], 50))),
+    ?assertEqual("{a,[b,[c|...]]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 6], 50))),
+    ?assertEqual("{a,[b,[c,[...]]]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 7], 50))),
+    ?assertEqual("{a,[b,[c,[d]]]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 8], 50))),
+    ?assertEqual("{a,[b,[c,[d]]]}", lists:flatten(format("~P", [{a, [b, [c, [d]]]}, 9], 50))),
+
+    ?assertEqual("{a,{...}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 3], 50))),
+    ?assertEqual("{a,{b,...}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 4], 50))),
+    ?assertEqual("{a,{b,{...}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 5], 50))),
+    ?assertEqual("{a,{b,{c,...}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 6], 50))),
+    ?assertEqual("{a,{b,{c,{...}}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 7], 50))),
+    ?assertEqual("{a,{b,{c,{d}}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 8], 50))),
+
+    ?assertEqual("{\"a\",[...]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 3], 50))),
+    ?assertEqual("{\"a\",[\"b\",[[...]|...]]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 6], 50))),
+    ?assertEqual("{\"a\",[\"b\",[\"c\",[\"d\"]]]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 9], 50))),
     ok.
 
 -endif.
