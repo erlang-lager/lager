@@ -153,7 +153,12 @@ code_change(_OldVsn, State, _Extra) ->
 %% internal functions
 
 format_crash_report(Report, Neighbours) ->
-    Name = proplists:get_value(registered_name, Report, proplists:get_value(pid, Report)),
+    Name = case proplists:get_value(registered_name, Report, []) of
+        [] ->
+            %% process_info(Pid, registered_name) returns [] for unregistered processes
+            proplists:get_value(pid, Report);
+        Atom -> Atom
+    end,
     {_Class, Reason, _Trace} = proplists:get_value(error_info, Report),
     io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s",
         [Name, length(Neighbours), format_reason(Reason)]).
