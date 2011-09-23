@@ -33,7 +33,7 @@
 -module(lager_trunc_io).
 -author('matthias@corelatus.se').
 %% And thanks to Chris Newcombe for a bug fix 
--export([format/3, print/2, print/3, fprint/2, fprint/3, safe/2]). % interface functions
+-export([format/3, format/4, print/2, print/3, fprint/2, fprint/3, safe/2]). % interface functions
 -version("$Id: trunc_io.erl,v 1.11 2009-02-23 12:01:06 matthias Exp $").
 
 -ifdef(TEST).
@@ -52,7 +52,10 @@
     }).
 
 format(Fmt, Args, Max) ->
-    try lager_format:format(Fmt, Args, Max) of
+    format(Fmt, Args, Max, []).
+
+format(Fmt, Args, Max, Options) ->
+    try lager_format:format(Fmt, Args, Max, Options) of
         Result -> Result
     catch
         _:_ ->

@@ -20,19 +20,27 @@
 
 %% fork of io_lib_format that uses trunc_io to protect against large terms
 
--export([format/3]).
+-export([format/3, format/4]).
+
+-record(options, {
+        chomp = false
+    }).
 
 format(FmtStr, Args, MaxLen) ->
+    format(FmtStr, Args, MaxLen, []).
+
+format(FmtStr, Args, MaxLen, Opts) ->
+    Options = make_options(Opts, #options{}),
     Cs = collect(FmtStr, Args),
-    {Cs2, MaxLen2} = build(Cs, [], MaxLen),
+    {Cs2, MaxLen2} = build(Cs, [], MaxLen, Options),
     %% count how many terms remain
-    Count = lists:foldl(
-        fun({_C, _As, _F, _Adj, _P, _Pad, _Enc}, Acc) ->
-                Acc + 1;
-            (_, Acc) ->
-                Acc
-        end, 0, Cs2),
-    build2(Cs2, Count, MaxLen2).
+    {Count, StrLen} = lists:foldl(
+        fun({_C, _As, _F, _Adj, _P, _Pad, _Enc}, {Terms, Chars}) ->
+                {Terms + 1, Chars};
+            (_, {Terms, Chars}) ->
+                {Terms, Chars + 1}
+        end, {0, 0}, Cs2),
+    build2(Cs2, Count, MaxLen2 - StrLen).
 
 collect([$~|Fmt0], Args0) ->
     {C,Fmt1,Args1} = collect_cseq(Fmt0, Args0),
@@ -117,16 +125,22 @@ collect_cc([$i|Fmt], [A|Args]) -> {$i,[A],Fmt,Args}.
 %%  remaining and only calculate indentation when necessary. Must also
 %%  be smart when calculating indentation for characters in format.
 
-build([{C,As,F,Ad,P,Pad,Enc}|Cs], Acc, MaxLen) ->
+build([{$n, _, _, _, _, _, _}], Acc, MaxLen, #options{chomp=true}) ->
+    %% trailing ~n, ignore
+    {lists:reverse(Acc), MaxLen};
+build([{C,As,F,Ad,P,Pad,Enc}|Cs], Acc, MaxLen, O) ->
     {S, MaxLen2} = control(C, As, F, Ad, P, Pad, Enc, MaxLen),
-    build(Cs, [S|Acc], MaxLen2);
-build([$\n|Cs], Acc, MaxLen) ->
-    build(Cs, [$\n|Acc], MaxLen - 1);
-build([$\t|Cs], Acc, MaxLen) ->
-    build(Cs, [$\t|Acc], MaxLen - 1);
-build([C|Cs], Acc, MaxLen) ->
-    build(Cs, [C|Acc], MaxLen - 1);
-build([], Acc, MaxLen) ->
+    build(Cs, [S|Acc], MaxLen2, O);
+build([$\n], Acc, MaxLen, #options{chomp=true}) ->
+    %% trailing \n, ignore
+    {lists:reverse(Acc), MaxLen};
+build([$\n|Cs], Acc, MaxLen, O) ->
+    build(Cs, [$\n|Acc], MaxLen - 1, O);
+build([$\t|Cs], Acc, MaxLen, O) ->
+    build(Cs, [$\t|Acc], MaxLen - 1, O);
+build([C|Cs], Acc, MaxLen, O) ->
+    build(Cs, [C|Acc], MaxLen - 1, O);
+build([], Acc, MaxLen, _O) ->
     {lists:reverse(Acc), MaxLen}.
 
 build2([{C,As,F,Ad,P,Pad,Enc}|Cs], Count, MaxLen) ->
@@ -233,6 +247,11 @@ maybe_flatten(X) when is_list(X) ->
     lists:flatten(X);
 maybe_flatten(X) ->
     X.
+
+make_options([], Options) ->
+    Options;
+make_options([{chomp, Bool}|T], Options) when is_boolean(Bool) ->
+    make_options(T, Options#options{chomp=Bool}).
 
 -ifdef(UNICODE_AS_BINARIES).
 uniconv(C) ->
