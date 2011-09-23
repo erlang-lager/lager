@@ -575,7 +575,7 @@ error_logger_redirect_test_() ->
             },
             {"crash report for emfile",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {emfile, [{stack, trace, 1}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, {emfile, [{stack, trace, 1}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: maximum number of file descriptors exhausted, check ulimit -n", [self(), self()])),
@@ -584,7 +584,7 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system process limit",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn, 1}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, {system_limit, [{erlang, spawn, 1}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
@@ -593,7 +593,7 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system process limit2",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, spawn_opt, 1}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, {system_limit, [{erlang, spawn_opt, 1}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
@@ -602,7 +602,7 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system port limit",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, open_port, 1}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, {system_limit, [{erlang, open_port, 1}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ports exceeded", [self(), self()])),
@@ -611,7 +611,7 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system port limit",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit, [{erlang, list_to_atom, 1}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, {system_limit, [{erlang, list_to_atom, 1}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
                         Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: tried to create an atom larger than 255, or maximum atom count exceeded", [self(), self()])),
@@ -620,10 +620,10 @@ error_logger_redirect_test_() ->
             },
             {"crash report for system ets table limit",
                 fun() ->
-                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}, []}}], []]),
+                        sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, test}, {error_info, {error, {system_limit,[{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [self(), self()])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [self(), test])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
