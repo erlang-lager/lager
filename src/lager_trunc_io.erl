@@ -45,7 +45,7 @@
         %% negative depth means no depth limiting
         depth = -1 :: integer(),
         %% whether to print lists as strings, if possible
-        lists_as_strings = false :: boolean(),
+        lists_as_strings = true :: boolean(),
         %% force strings, or binaries to be printed as a string,
         %% even if they're not printable
         force_strings = false :: boolean()

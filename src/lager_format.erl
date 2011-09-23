@@ -205,7 +205,7 @@ control(C, A, F, Adj, P, Pad, Enc, L) ->
     {{C, A, F, Adj, P, Pad, Enc}, L}.
 
 control2($w, [A], F, Adj, P, Pad, _Enc, L) ->
-    Term = lager_trunc_io:fprint(A, L),
+    Term = lager_trunc_io:fprint(A, L, [{lists_as_strings, false}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($p, [A], F, Adj, P, Pad, _Enc, L) ->
@@ -213,7 +213,7 @@ control2($p, [A], F, Adj, P, Pad, _Enc, L) ->
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($W, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
-    Term = lager_trunc_io:fprint(A, L, [{depth, Depth}]),
+    Term = lager_trunc_io:fprint(A, L, [{depth, Depth}, {lists_as_strings, false}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, L - lists:flatlength(Res)};
 control2($P, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
