@@ -185,7 +185,14 @@ print(Port, _Max, _Options) when is_port(Port) ->
     {L, length(L)};
 
 print(List, Max, Options) when is_list(List) ->
-    alist_start(List, Max, dec_depth(Options)).
+    case Options#print_options.lists_as_strings orelse
+        Options#print_options.force_strings of
+        true ->
+            alist_start(List, Max, dec_depth(Options));
+        _ ->
+            {R, Len} = list_body(List, Max, dec_depth(Options), false),
+            {[$[, R, $]], Len + 2}
+    end.
 
 %% Returns {List, Length}
 tuple_contents(Tuple, Max, Options) ->
@@ -263,7 +270,12 @@ alist([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->     % d
     {[H|L], Len + 1};
 alist([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
     {L, Len} = alist(T, Max-1, Options),
-    {[H|L], Len + 1};
+    case Options#print_options.force_strings of
+        true ->
+            {[H|L], Len + 1};
+        _ ->
+            {[escape(H)|L], Len + 1}
+    end;
 alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(H) ->
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
@@ -300,6 +312,10 @@ dec_depth(#print_options{depth=Depth} = Options) when Depth > 0 ->
     Options#print_options{depth=Depth-1};
 dec_depth(Options) ->
     Options.
+
+escape(9) -> "\\t";
+escape(10) -> "\\n";
+escape(13) -> "\\r".
 
 -ifdef(TEST).
 %%--------------------
@@ -364,14 +380,14 @@ format_test() ->
     ?assertEqual("foobar", lists:flatten(format("~s", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~p", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~P", [["foo", $b, $a, $r], 10], 50))),
-    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~w", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("[[102,111,111],98,97,114]", lists:flatten(format("~w", [["foo", $b, $a, $r]], 50))),
     
     %% complex ones
     ?assertEqual("    foobar", lists:flatten(format("~10s", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22p", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("**********", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
-    ?assertEqual("   [\"foo\",98,97,114]", lists:flatten(format("~20W", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("[[102,111,111],98,97,114]", lists:flatten(format("~25W", [["foo", $b, $a, $r], 10], 50))),
     ok.
 
 atom_quoting_test() ->
@@ -414,6 +430,8 @@ binary_printing_test() ->
     ?assertEqual("<<1,2,3,4>>", lists:flatten(format("~p", [<<1, 2, 3, 4>>], 50))),
     ?assertEqual([1,2,3,4], lists:flatten(format("~s", [<<1, 2, 3, 4>>], 50))),
     ?assertEqual("hello", lists:flatten(format("~s", [<<"hello">>], 50))),
+    ?assertEqual("hello\nworld", lists:flatten(format("~s", [<<"hello\nworld">>], 50))),
+    ?assertEqual("<<\"hello\\nworld\">>", lists:flatten(format("~p", [<<"hello\nworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
     ok.
 
@@ -424,7 +442,7 @@ list_printing_test() ->
     ?assertEqual("...", lists:flatten(format("~s", [[]], -1))),
     ?assertEqual("[[]]", lists:flatten(format("~p", [[[]]], 50))),
     ?assertEqual("[13,11,10,8,5,4]", lists:flatten(format("~p", [[13,11,10,8,5,4]], 50))),
-    ?assertEqual("\"\rabc\"", lists:flatten(format("~p", [[13,$a, $b, $c]], 50))),
+    ?assertEqual("\"\\rabc\"", lists:flatten(format("~p", [[13,$a, $b, $c]], 50))),
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~p", [[1, 2, 3|4]], 50))),
     ?assertEqual("[...]", lists:flatten(format("~p", [[1, 2, 3,4]], 4))),
     ?assertEqual("[1,...]", lists:flatten(format("~p", [[1, 2, 3,4]], 6))),
@@ -435,6 +453,8 @@ list_printing_test() ->
     ?assertEqual("hello w...", lists:flatten(format("~s", ["hello world"], 10))),
     ?assertEqual("hello world\r\n", lists:flatten(format("~s", ["hello world\r\n"], 50))),
     ?assertEqual("\rhello world\r\n", lists:flatten(format("~s", ["\rhello world\r\n"], 50))),
+    ?assertEqual("\"\\rhello world\\r\\n\"", lists:flatten(format("~p", ["\rhello world\r\n"], 50))),
+    ?assertEqual("[13,104,101,108,108,111,32,119,111,114,108,100,13,10]", lists:flatten(format("~w", ["\rhello world\r\n"], 60))),
     ?assertEqual("...", lists:flatten(format("~s", ["\rhello world\r\n"], 3))),
     ok.
 

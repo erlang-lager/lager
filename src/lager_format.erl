@@ -130,8 +130,8 @@ build([], Acc, MaxLen) ->
     {lists:reverse(Acc), MaxLen}.
 
 build2([{C,As,F,Ad,P,Pad,Enc}|Cs], Count, MaxLen) ->
-    {S, MaxLen2} = control2(C, As, F, Ad, P, Pad, Enc, MaxLen div Count),
-    [S|build2(Cs, Count - 1, MaxLen2)];
+    {S, Len} = control2(C, As, F, Ad, P, Pad, Enc, MaxLen div Count),
+    [S|build2(Cs, Count - 1, MaxLen - Len)];
 build2([C|Cs], Count, MaxLen) ->
     [C|build2(Cs, Count, MaxLen)];
 build2([], _, _) -> [].
