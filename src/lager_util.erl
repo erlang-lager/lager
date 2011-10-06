@@ -21,7 +21,7 @@
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
         ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1]).
+        calculate_next_rotation/1, check_traces/4]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -269,6 +269,35 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
     NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
     calculate_next_rotation(T, NewNow).
 
+check_traces(_, _,  [], Acc) ->
+    lists:flatten(Acc);
+check_traces(Attrs, Level, [{_, FilterLevel, _}|Flows], Acc) when Level > FilterLevel ->
+    check_traces(Attrs, Level, Flows, Acc);
+check_traces(Attrs, Level, [{Filter, _, _}|Flows], Acc) when length(Attrs) < length(Filter) ->
+    check_traces(Attrs, Level, Flows, Acc);
+check_traces(Attrs, Level, [Flow|Flows], Acc) ->
+    check_traces(Attrs, Level, Flows, [check_trace(Attrs, Flow)|Acc]).
+
+check_trace(Attrs, {Filter, _Level, Dest}) ->
+    case check_trace_iter(Attrs, Filter) of
+        true ->
+            Dest;
+        false ->
+            []
+    end.
+
+check_trace_iter(_, []) ->
+    true;
+check_trace_iter(Attrs, [{Key, Match}|T]) ->
+    case lists:keyfind(Key, 1, Attrs) of
+        {Key, _} when Match == '*' ->
+            check_trace_iter(Attrs, T);
+        {Key, Match} ->
+            check_trace_iter(Attrs, T);
+        _ ->
+            false
+    end.
+
 -ifdef(TEST).
 
 parse_test() ->
@@ -369,6 +398,31 @@ rotate_file_test() ->
                 rotate_logfile("rotation.log", 10)
     end || N <- lists:seq(0, 20)].
 
-
+check_trace_test() ->
+    ?assertEqual([foo], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE}],
+                    0, foo},
+                {[{module, test}], 0, bar}], [])),
+    ?assertEqual([], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
+                        {foo, bar}], 0, foo},
+                {[{module, test}], 0, bar}], [])),
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
+                        {foo, bar}], 0, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
+                        {foo, bar}], 0, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
+                        {foo, '*'}], 0, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ?assertEqual([bar, foo], check_traces([{module, ?MODULE}, {foo, bar}], 0, [{[{module, '*'},
+                        {foo, '*'}], 0, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ?assertEqual([], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
+                        {foo, '*'}], 0, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ?assertEqual([foo], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
+                        {foo, '*'}], 7, foo},
+                {[{module, '*'}], 0, bar}], [])),
+    ok.
 
 -endif.

@@ -32,7 +32,7 @@ start() ->
 
 start(_StartType, _StartArgs) ->
     %% until lager is completely started, allow all messages to go through
-    lager_mochiglobal:put(loglevel, ?DEBUG),
+    lager_mochiglobal:put(loglevel, {?DEBUG, []}),
     {ok, Pid} = lager_sup:start_link(),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
@@ -47,7 +47,8 @@ start(_StartType, _StartArgs) ->
 
     %% mask the messages we have no use for
     MinLog = lager:minimum_loglevel(lager:get_loglevels()),
-    lager_mochiglobal:put(loglevel, MinLog),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
 
     SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->

@@ -22,7 +22,7 @@
 
 %% API
 -export([start/0,
-        log/7, log/8, log/3, log/4,
+        log/8, log_dest/9, log/3, log/4,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
         safe_format/3, safe_format_chop/3]).
@@ -50,16 +50,6 @@ start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 %% @private
--spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list()) ->
-    ok | {error, lager_not_running}.
-log(Level, Module, Function, Line, Pid, Time, Message) ->
-    Timestamp = lager_util:format_time(Time),
-    Msg = [["[", atom_to_list(Level), "] "],
-           io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           safe_format_chop("~s", [Message], 4096)],
-    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
-
-%% @private
 -spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), string(), list()) ->
     ok | {error, lager_not_running}.
 log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
@@ -67,7 +57,20 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
+    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
+
+%% @private
+-spec log_dest(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list(), string(), list()) ->
+    ok | {error, lager_not_running}.
+log_dest(_Level, _Module, _Function, _Line, _Pid, _Time, [], _Format, _Args) ->
+    ok;
+log_dest(Level, Module, Function, Line, Pid, Time, Dest, Format, Args) ->
+    Timestamp = lager_util:format_time(Time),
+    Msg = [["[", atom_to_list(Level), "] "],
+           io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
+           safe_format_chop(Format, Args, 4096)],
+    safe_notify({log, Dest, lager_util:level_to_num(Level), Timestamp, Msg}).
+
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
@@ -75,7 +78,7 @@ log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
            safe_format_chop("~s", [Message], 4096)],
-    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
+    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
@@ -83,14 +86,15 @@ log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
+    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
-    lager_mochiglobal:put(loglevel, MinLog),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
     Reply.
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
@@ -99,7 +103,8 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
-    lager_mochiglobal:put(loglevel, MinLog),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
     Reply.
 
 %% @doc Get the loglevel for a particular backend. In the case that the backend
@@ -132,13 +137,13 @@ minimum_loglevel([]) ->
 minimum_loglevel(Levels) ->
     erlang:hd(lists:reverse(lists:sort(Levels))).
 
-safe_notify(Level, Timestamp, Msg) ->
+safe_notify(Event) ->
     case whereis(lager_event) of
         undefined ->
             %% lager isn't running
             {error, lager_not_running};
         Pid ->
-            gen_event:sync_notify(Pid, {log, Level, Timestamp, Msg})
+            gen_event:sync_notify(Pid, Event)
     end.
 
 %% @doc Print the format string `Fmt' with `Args' safely with a size
