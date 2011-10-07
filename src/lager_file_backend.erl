@@ -35,6 +35,7 @@
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("kernel/include/file.hrl").
+-compile([{parse_transform, lager_transform}]).
 -endif.
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
@@ -84,6 +85,13 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
+handle_event({log, Dest, Level, {Date, Time}, Message}, #state{name=Name} = State) ->
+    case lists:member({lager_file_backend, Name}, Dest) of
+        true ->
+            {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
+        false ->
+            {ok, State}
+    end;
 handle_event({log, Level, {Date, Time}, Message}, #state{level=L} = State) when Level =< L->
     NewState = write(State, Level, [Date, " ", Time, " ", Message, "\n"]),
     {ok, NewState};
@@ -329,8 +337,22 @@ filesystem_test_() ->
                         ?assertEqual({error, bad_identifier}, lager:set_loglevel(lager_file_backend, "test2.log", warning)),
                         ?assertEqual({error, missing_identifier}, lager:set_loglevel(lager_file_backend, warning))
                 end
+            },
+            {"tracing should work",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend,
+                            {"test.log", critical}),
+                        lager:error("Test message"),
+                        ?assertEqual({ok, <<>>}, file:read_file("test.log")),
+                        {Level, _} = lager_mochiglobal:get(loglevel),
+                        lager_mochiglobal:put(loglevel, {Level, [{[{module,
+                                                ?MODULE}], ?DEBUG,
+                                        {lager_file_backend, "test.log"}}]}),
+                        lager:error("Test message"),
+                        {ok, Bin} = file:read_file("test.log"),
+                        ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
+                end
             }
-
         ]
     }.
 
