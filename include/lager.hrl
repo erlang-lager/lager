@@ -15,7 +15,7 @@
 %% under the License.
 
 -define(LEVELS,
-    [debug, info, notice, warning, error, critical, alert, emergency]).
+    [debug, info, notice, warning, error, critical, alert, emergency, none]).
 
 -define(DEBUG, 7).
 -define(INFO, 6).

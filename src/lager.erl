@@ -23,6 +23,8 @@
 %% API
 -export([start/0,
         log/8, log_dest/9, log/3, log/4,
+        trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
         safe_format/3, safe_format_chop/3]).
@@ -87,6 +89,63 @@ log(Level, Pid, Format, Args) ->
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
            safe_format_chop(Format, Args, 4096)],
     safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
+
+trace_file(File, Filter) ->
+    trace_file(File, Filter, debug).
+
+trace_file(File, Filter, Level) ->
+    Trace0 = {Filter, Level, {lager_file_backend, File}},
+    case lager_util:validate_trace(Trace0) of
+        {ok, Trace} ->
+            Handlers = gen_event:which_handlers(lager_event),
+            %% check if this file backend is already installed
+            case lists:member({lager_file_backend, File}, Handlers) of
+                false ->
+                    %% install the handler
+                    supervisor:start_child(lager_handler_watcher_sup,
+                        [lager_event, {lager_file_backend, File}, {File, none}]);
+                _ ->
+                    ok
+            end,
+            %% install the trace.
+            {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+            lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+        Error ->
+            Error
+    end.
+
+trace_console(Filter) ->
+    trace_file(Filter, debug).
+
+trace_console(Filter, Level) ->
+    Trace0 = {Filter, Level, lager_console_backend},
+    case lager_util:validate_trace(Trace0) of
+        {ok, Trace} ->
+            {Level, Traces} = lager_mochiglobal:get(loglevel),
+            lager_mochiglobal:put(loglevel, {Level, [Trace|Traces]});
+        Error ->
+            Error
+    end.
+
+status() ->
+    Handlers = gen_event:which_handlers(lager_event),
+    Status = ["Lager status:\n",
+        [begin
+                    Level = get_loglevel(Handler),
+                    case Handler of
+                        {lager_file_backend, File} ->
+                            io_lib:format("File ~s at level ~p\n", [File, Level]);
+                        lager_console_backend ->
+                            io_lib:format("Console at level ~p\n", [Level]);
+                        _ ->
+                            []
+                    end
+            end || Handler <- Handlers],
+        "Active Traces:\n",
+        [begin
+                    io_lib:format("Tracing messages matching ~p at level ~p to ~p\n", [Filter, lager_util:num_to_level(Level), Destination])
+            end || {Filter, Level, Destination} <- element(2, lager_mochiglobal:get(loglevel))]],
+    io:put_chars(Status).
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->

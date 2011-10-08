@@ -21,7 +21,7 @@
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
         ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1, check_traces/4]).
+        calculate_next_rotation/1, validate_trace/1, check_traces/4]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -37,7 +37,8 @@ level_to_num(warning)   -> 4;
 level_to_num(error)     -> 3;
 level_to_num(critical)  -> 2;
 level_to_num(alert)     -> 1;
-level_to_num(emergency) -> 0.
+level_to_num(emergency) -> 0;
+level_to_num(none)      -> -1.
 
 num_to_level(7) -> debug;
 num_to_level(6) -> info;
@@ -46,7 +47,8 @@ num_to_level(4) -> warning;
 num_to_level(3) -> error;
 num_to_level(2) -> critical;
 num_to_level(1) -> alert;
-num_to_level(0) -> emergency.
+num_to_level(0) -> emergency;
+num_to_level(-1) -> none.
 
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
@@ -268,6 +270,31 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
     Seconds = calendar:datetime_to_gregorian_seconds(Now) + (86400 * PlusDays),
     NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
     calculate_next_rotation(T, NewNow).
+
+validate_trace({Filter, Level, {Destination, ID}}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
+    case validate_trace({Filter, Level, Destination}) of
+        {ok, {F, L, D}} ->
+            {ok, {F, L, {D, ID}}};
+        Error ->
+            Error
+    end;
+validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
+    try level_to_num(Level) of
+        L ->
+            case lists:all(fun({Key, _Value}) when is_atom(Key) -> true; (_) ->
+                            false end, Filter) of
+                true ->
+                    {ok, {Filter, L, Destination}};
+                _ ->
+                    {error, invalid_filter}
+            end
+    catch
+        _:_ ->
+            {error, invalid_level}
+    end;
+validate_trace(_) ->
+    {error, invalid_trace}.
+
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
