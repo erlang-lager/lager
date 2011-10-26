@@ -156,3 +156,45 @@
   [[https://github.com/basho/lager_syslog][lager_syslog]]. It is packaged as a
   separate application so Lager itself doesn't have an indirect dependancy on a
   port driver. Please see the lager_syslog README for configuration information.
+
+* Tracing
+  Lager supports basic support for redirecting log messages based on log message
+  attributes. Lager automatically captures the module, function and line at the
+  log message callsite. However, you can add any additional attributes you wish:
+
+#+BEGIN_EXAMPLE
+  lager:warning([{request, RequestID},{vhost, Vhost}], "Permission denied to ~s", [User])
+#+END_EXAMPLE
+
+  Then, in addition to the default trace attributes, you'll be able to trace
+  based on request or vhost:
+
+#+BEGIN_EXAMPLE
+  lager:trace_file("logs/example.com.error", [{vhost, "example.com"}], error)
+#+END_EXAMPLE
+
+  You can also omit the final argument, and the loglevel will default to
+  'debug'.
+
+  Tracing to the console is similar:
+
+#+BEGIN_EXAMPLE
+  lager:trace_console([{request, 117}])
+#+END_EXAMPLE
+
+  In the above example, the loglevel is omitted, but it can be specified as the
+  second argument if desired.
+
+  You can also specify multiple expressions in a filter, or use the '*' atom as
+  a wildcard to match any message that has that attribute, regardless of its
+  value.
+
+  Tracing to an existing logfile is also supported, if you wanted to log
+  warnings from a particular module to the default error.log:
+
+#+BEGIN_EXAMPLE
+  lager:trace_file("log/error.log", [{module, mymodule}], warning)
+#+END_EXAMPLE
+
+  To view the active log backends and traces, you can use the lager:status()
+  function. To clear all active traces, you can use lager:clear_all_traces().

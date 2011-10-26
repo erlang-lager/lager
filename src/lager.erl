@@ -23,7 +23,7 @@
 %% API
 -export([start/0,
         log/8, log_dest/9, log/3, log/4,
-        trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        trace_file/2, trace_file/3, trace_console/1, trace_console/2, clear_all_traces/0,
         status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
@@ -129,6 +129,10 @@ trace_console(Filter, Level) ->
             Error
     end.
 
+clear_all_traces() ->
+    {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLevel, []}).
+
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
     Status = ["Lager status:\n",
@@ -145,7 +149,8 @@ status() ->
             end || Handler <- Handlers],
         "Active Traces:\n",
         [begin
-                    io_lib:format("Tracing messages matching ~p at level ~p to ~p\n", [Filter, lager_util:num_to_level(Level), Destination])
+                    io_lib:format("Tracing messages matching ~p at level ~p to ~p\n",
+                        [Filter, lager_util:num_to_level(Level), Destination])
             end || {Filter, Level, Destination} <- element(2, lager_mochiglobal:get(loglevel))]],
     io:put_chars(Status).
 
