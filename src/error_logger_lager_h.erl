@@ -250,6 +250,13 @@ format_mfa({M, F, A}) when is_list(A) ->
     io_lib:format("~w:~w("++FmtStr++")", [M, F | Args]);
 format_mfa({M, F, A}) when is_integer(A) ->
     io_lib:format("~w:~w/~w", [M, F, A]);
+format_mfa({M, F, A, Props}) when is_list(Props) ->
+    case {proplists:get_value(file, Props), proplists:get_value(line, Props)} of
+        {undefined, undefined} ->
+            format_mfa({M, F, A});
+        {File, Line} ->
+            [format_mfa({M, F, A}), io_lib:format(" (~s:~w)", [File, Line])]
+    end;
 format_mfa(Other) ->
     io_lib:format("~w", [Other]).
 
