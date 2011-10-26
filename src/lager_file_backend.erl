@@ -85,7 +85,8 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Dest, Level, {Date, Time}, Message}, #state{name=Name} = State) ->
+handle_event({log, Dest, Level, {Date, Time}, Message},
+    #state{name=Name, level=L} = State) when Level > L ->
     case lists:member({lager_file_backend, Name}, Dest) of
         true ->
             {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
@@ -352,7 +353,29 @@ filesystem_test_() ->
                         {ok, Bin} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
                 end
+            },
+            {"tracing should not duplicate messages",
+                fun() ->
+                        gen_event:add_handler(lager_event, lager_file_backend,
+                            {"test.log", critical}),
+                        lager:critical("Test message"),
+                        {ok, Bin1} = file:read_file("test.log"),
+                        ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin1, " ", [{return, list}, {parts, 5}])),
+                        ok = file:delete("test.log"),
+                        {Level, _} = lager_mochiglobal:get(loglevel),
+                        lager_mochiglobal:put(loglevel, {Level, [{[{module,
+                                                ?MODULE}], ?DEBUG,
+                                        {lager_file_backend, "test.log"}}]}),
+                        lager:critical("Test message"),
+                        {ok, Bin2} = file:read_file("test.log"),
+                        ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}])),
+                        ok = file:delete("test.log"),
+                        lager:error("Test message"),
+                        {ok, Bin3} = file:read_file("test.log"),
+                        ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+                end
             }
+
         ]
     }.
 

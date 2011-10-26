@@ -28,6 +28,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-compile([{parse_transform, lager_transform}]).
 -endif.
 
 -include("lager.hrl").
@@ -63,6 +64,20 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
+handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
+    #state{level=L, verbose=Verbose} = State) when Level > L ->
+    case lists:member(lager_console_backend, Dest) of
+        true ->
+            case Verbose of
+                true ->
+                    io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\n"]);
+                _ ->
+                    io:put_chars([Time, " ", LevelStr, Message, "\n"])
+            end,
+            {ok, State};
+        false ->
+            {ok, State}
+    end;
 handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
   #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
     case Verbose of
@@ -152,7 +167,71 @@ console_log_test_() ->
                                 ?assert(false)
                         end
                 end
+            },
+            {"tracing should work",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        erlang:group_leader(Pid, whereis(lager_event)),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager:debug("Test message"),
+                        receive
+                            {io_request, From, ReplyAs, {put_chars, unicode, _Msg}} ->
+                                From ! {io_reply, ReplyAs, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end,
+                        ok = lager:trace_console([{module, ?MODULE}]),
+                        lager:debug("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                ?assertMatch([_, "[debug]", "Test message\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            500 ->
+                                ?assert(false)
+                        end
+                end
+            },
+            {"tracing doesn't duplicate messages",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        erlang:group_leader(Pid, whereis(lager_event)),
+                        lager:debug("Test message"),
+                        receive
+                            {io_request, From, ReplyAs, {put_chars, unicode, _Msg}} ->
+                                From ! {io_reply, ReplyAs, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end,
+                        ok = lager:trace_console([{module, ?MODULE}]),
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                ?assertMatch([_, "[error]", "Test message\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            1000 ->
+                                ?assert(false)
+                        end,
+                        %% make sure this event wasn't duplicated
+                        receive
+                            {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
+                                From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
             }
+
         ]
     }.
 
