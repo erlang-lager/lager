@@ -23,8 +23,8 @@
 %% API
 -export([start/0,
         log/8, log_dest/9, log/3, log/4,
-        trace_file/2, trace_file/3, trace_console/1, trace_console/2, clear_all_traces/0,
-        status/0,
+        trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
         safe_format/3, safe_format_chop/3]).
@@ -114,7 +114,7 @@ trace_file(File, Filter, Level) ->
                     lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
                 _ -> ok
             end,
-            ok;
+            {ok, Trace};
         Error ->
             Error
     end.
@@ -132,10 +132,17 @@ trace_console(Filter, Level) ->
                     lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
                 _ -> ok
             end,
-            ok;
+            {ok, Trace};
         Error ->
             Error
     end.
+
+stop_trace(Trace) ->
+    {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLevel, lists:delete(Trace, Traces)}),
+    %% TODO - somehow determine if the handler is safe to stop, its not
+    %$ straightforward to tell.
+    ok.
 
 clear_all_traces() ->
     {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
