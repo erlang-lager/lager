@@ -183,7 +183,7 @@ console_log_test_() ->
                             500 ->
                                 ?assert(true)
                         end,
-                        ok = lager:trace_console([{module, ?MODULE}]),
+                        {ok, _} = lager:trace_console([{module, ?MODULE}]),
                         lager:debug("Test message"),
                         receive
                             {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
@@ -210,7 +210,7 @@ console_log_test_() ->
                             500 ->
                                 ?assert(true)
                         end,
-                        ok = lager:trace_console([{module, ?MODULE}]),
+                        {ok, _} = lager:trace_console([{module, ?MODULE}]),
                         lager:error("Test message"),
                         receive
                             {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->

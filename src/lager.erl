@@ -137,16 +137,36 @@ trace_console(Filter, Level) ->
             Error
     end.
 
-stop_trace(Trace) ->
+stop_trace({_Filter, _Level, Target} = Trace) ->
     {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLevel, lists:delete(Trace, Traces)}),
-    %% TODO - somehow determine if the handler is safe to stop, its not
-    %$ straightforward to tell.
+    NewTraces =  lists:delete(Trace, Traces),
+    lager_mochiglobal:put(loglevel, {MinLevel, NewTraces}),
+    case get_loglevel(Target) of
+        none ->
+            %% check no other traces point here
+            case lists:keyfind(Target, 3, NewTraces) of
+                false ->
+                    gen_event:delete_handler(lager_event, Target, []);
+                _ ->
+                    ok
+            end;
+        _ ->
+            ok
+    end,
     ok.
 
 clear_all_traces() ->
     {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLevel, []}).
+    lager_mochiglobal:put(loglevel, {MinLevel, []}),
+    [begin
+                case get_loglevel(Handler) of
+                    none ->
+                        gen_event:delete_handler(lager_event, Handler, []);
+                    _ ->
+                        ok
+                end
+        end || Handler <- gen_event:which_handlers(lager_event)],
+    ok.
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),

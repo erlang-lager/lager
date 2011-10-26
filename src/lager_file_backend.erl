@@ -376,7 +376,7 @@ filesystem_test_() ->
             {"tracing to a dedicated file should work",
                 fun() ->
                         file:delete("foo.log"),
-                        lager:trace_file("foo.log", [{module, ?MODULE}]),
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}]),
                         lager:error("Test message"),
                         {ok, Bin3} = file:read_file("foo.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))

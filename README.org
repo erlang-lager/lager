@@ -198,3 +198,12 @@
 
   To view the active log backends and traces, you can use the lager:status()
   function. To clear all active traces, you can use lager:clear_all_traces().
+
+  To delete a specific trace, store a handle for the trace when you create it,
+  that you later pass to lager:stop_trace/1:
+
+#+BEGIN_EXAMPLE
+  {ok, Trace} = lager:trace_file("log/error.log", [{module, mymodule}]),
+  ...
+  lager:stop_trace(Trace)
+#+END_EXAMPLE
