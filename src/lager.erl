@@ -161,7 +161,8 @@ set_loglevel(Handler, Level) when is_atom(Level) ->
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Ident, Level}, infinity),
+    io:format("handler: ~p~n", [{Handler, Ident}]),
+    Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),

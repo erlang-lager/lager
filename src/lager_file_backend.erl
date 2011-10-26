@@ -74,9 +74,7 @@ init(LogFile) ->
     end.
 
 %% @private
-handle_call({set_loglevel, _}, State) ->
-    {ok, {error, missing_identifier}, State};
-handle_call({set_loglevel, Ident, Level}, #state{name=Ident} = State) ->
+handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
     ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
     {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
 handle_call(get_loglevel, #state{level=Level} = State) ->
@@ -317,7 +315,7 @@ filesystem_test_() ->
             },
             {"runtime level changes",
                 fun() ->
-                        gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
+                        gen_event:add_handler(lager_event, {lager_file_backend, "test.log"}, {"test.log", info}),
                         ?assertEqual(0, lager_test_backend:count()),
                         lager:log(info, self(), "Test message1"),
                         lager:log(error, self(), "Test message2"),
@@ -335,8 +333,8 @@ filesystem_test_() ->
             {"invalid runtime level changes",
                 fun() ->
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
-                        ?assertEqual({error, bad_identifier}, lager:set_loglevel(lager_file_backend, "test2.log", warning)),
-                        ?assertEqual({error, missing_identifier}, lager:set_loglevel(lager_file_backend, warning))
+                        gen_event:add_handler(lager_event, lager_file_backend, {"test3.log", info}),
+                        ?assertEqual({error, bad_module}, lager:set_loglevel(lager_file_backend, "test.log", warning))
                 end
             },
             {"tracing should work",
@@ -374,8 +372,16 @@ filesystem_test_() ->
                         {ok, Bin3} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
+            },
+            {"tracing to a dedicated file should work",
+                fun() ->
+                        file:delete("foo.log"),
+                        lager:trace_file("foo.log", [{module, ?MODULE}]),
+                        lager:error("Test message"),
+                        {ok, Bin3} = file:read_file("foo.log"),
+                        ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+                end
             }
-
         ]
     }.
 
