@@ -109,7 +109,11 @@ trace_file(File, Filter, Level) ->
             end,
             %% install the trace.
             {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-            lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]}),
+            case lists:member(Trace, Traces) of
+                false ->
+                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                _ -> ok
+            end,
             ok;
         Error ->
             Error
@@ -123,7 +127,11 @@ trace_console(Filter, Level) ->
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-            lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]}),
+            case lists:member(Trace, Traces) of
+                false ->
+                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                _ -> ok
+            end,
             ok;
         Error ->
             Error
