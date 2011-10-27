@@ -159,7 +159,7 @@
 
 * Tracing
   Lager supports basic support for redirecting log messages based on log message
-  attributes. Lager automatically captures the module, function and line at the
+  attributes. Lager automatically captures the pid, module, function and line at the
   log message callsite. However, you can add any additional attributes you wish:
 
 #+BEGIN_EXAMPLE
@@ -206,4 +206,11 @@
   {ok, Trace} = lager:trace_file("log/error.log", [{module, mymodule}]),
   ...
   lager:stop_trace(Trace)
+#+END_EXAMPLE
+
+  Tracing to a pid is somewhat of a special case, since a pid is not a
+  data-type that serializes well. To trace by pid, use the pid as a string:
+
+#+BEGIN_EXAMPLE
+  lager:trace_console([{pid, "<0.410.0>"}])
 #+END_EXAMPLE

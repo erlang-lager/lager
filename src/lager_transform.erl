@@ -65,9 +65,14 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                         {atom, Line, module}, {atom, Line, get(module)}]},
                     {cons, Line, {tuple, Line, [
                                 {atom, Line, function}, {atom, Line, get(function)}]},
-                    {cons, Line, {tuple, Line, [{atom, Line, line}, {integer,
-                                    Line, Line}]},
-                        {nil, Line}}}},
+                        {cons, Line, {tuple, Line, [
+                                    {atom, Line, line},
+                                    {integer, Line, Line}]},
+                        {cons, Line, {tuple, Line, [
+                                    {atom, Line, pid},
+                                    {call, Line, {atom, Line, pid_to_list}, [
+                                            {call, Line, {atom, Line ,self}, []}]}]},
+                            {nil, Line}}}}},
             {Traces, Arguments} = case Arguments0 of
                 [Format] ->
                     {DefaultAttrs, [Format, {nil, Line}]};
