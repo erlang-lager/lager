@@ -54,6 +54,8 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
+handle_event({log, [?MODULE], Level, Time, Message}, #state{buffer=Buffer} = State) ->
+    {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
 handle_event({log, Level, Time, Message}, #state{level=LogLevel,
         buffer=Buffer} = State) when Level =< LogLevel ->
     {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
@@ -164,7 +166,7 @@ lager_test_() ->
                         lager:debug("this message will be ignored"),
                         ?assertEqual(0, count()),
                         ?assertEqual(0, count_ignored()),
-                        lager_mochiglobal:put(loglevel, ?DEBUG),
+                        lager_mochiglobal:put(loglevel, {?DEBUG, []}),
                         lager:debug("this message should be ignored"),
                         ?assertEqual(0, count()),
                         ?assertEqual(1, count_ignored()),
@@ -173,6 +175,45 @@ lager_test_() ->
                         ?assertEqual(1, count()),
                         ?assertEqual(1, count_ignored()),
                         ?assertEqual(debug, lager:get_loglevel(?MODULE)),
+                        ok
+                end
+            },
+            {"tracing works",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, []}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(0, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR, [{[{module,
+                                                ?MODULE}], ?DEBUG, ?MODULE}]}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(1, count()),
+                        ok
+                end
+            },
+            {"tracing works with custom attributes",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, []}),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(0, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR,
+                                [{[{requestid, 6}], ?DEBUG, ?MODULE}]}),
+                        lager:info([{requestid, 6}, {foo, bar}], "hello world"),
+                        ?assertEqual(1, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR,
+                                [{[{requestid, '*'}], ?DEBUG, ?MODULE}]}),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(2, count()),
+                        ok
+                end
+            },
+            {"tracing honors loglevel",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, [{[{module,
+                                                ?MODULE}], ?NOTICE, ?MODULE}]}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(0, count()),
+                        ok = lager:notice("hello world"),
+                        ?assertEqual(1, count()),
                         ok
                 end
             }
@@ -649,7 +690,7 @@ error_logger_redirect_test_() ->
                         ?assertEqual(1, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, error),
-                        lager_mochiglobal:put(loglevel, ?DEBUG),
+                        lager_mochiglobal:put(loglevel, {?DEBUG, []}),
                         sync_error_logger:info_report([hello, world]),
                         _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(1, count()),
