@@ -56,7 +56,7 @@ log(Level, Module, Function, Line, Pid, Time, Message) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           safe_format_chop("~s", [Message], 4096)],
+           safe_format_chop(Message, [], 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @private
@@ -74,7 +74,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
 log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
-           safe_format_chop("~s", [Message], 4096)],
+           safe_format_chop(Message, [], 4096)],
     safe_notify(lager_util:level_to_num(Level), Timestamp, Msg).
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -147,7 +147,10 @@ safe_notify(Level, Timestamp, Msg) ->
 %% arguments. The caller is NOT crashed.
 
 safe_format(Fmt, Args, Limit) ->
-    try lager_trunc_io:format(Fmt, Args, Limit) of
+    safe_format(Fmt, Args, Limit, []).
+
+safe_format(Fmt, Args, Limit, Options) ->
+    try lager_trunc_io:format(Fmt, Args, Limit, Options) of
         Result -> Result
     catch
         _:_ -> lager_trunc_io:format("FORMAT ERROR: ~p ~p", [Fmt, Args], Limit)
@@ -155,4 +158,4 @@ safe_format(Fmt, Args, Limit) ->
 
 %% @private
 safe_format_chop(Fmt, Args, Limit) ->
-    re:replace(safe_format(Fmt, Args, Limit), "\n$", "", [{return, list}]).
+    safe_format(Fmt, Args, Limit, [{chomp, true}]).

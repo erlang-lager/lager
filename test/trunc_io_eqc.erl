@@ -23,7 +23,7 @@
 
 -ifdef(TEST).
 -ifdef(EQC).
--export([test/0, test/1, check/0]).
+-export([test/0, test/1, check/0, prop_format/0]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -76,13 +76,13 @@ gen_fmt_args() ->
                 {"~.36B", nat()},
                 {"~62P", gen_any(5), 4},
                 {"~c", gen_char()},
-                {"~tc", gen_char()}
-                %{"~f", real()}, %% floats like to make the fudge limit fail, so don't enable them
-                %{"~10.f", real()},
-                %{"~g", real()},
-                %{"~10.g", real()},
-                %{"~e", real()},
-                %{"~10.e", real()}
+                {"~tc", gen_char()},
+                {"~f", real()},
+                {"~10.f", real()},
+                {"~g", real()},
+                {"~10.g", real()},
+                {"~e", real()},
+                {"~10.e", real()}
                ])).
              
 
@@ -139,7 +139,8 @@ gen_char() ->
 prop_format() ->
     ?FORALL({FmtArgs, MaxLen}, {gen_fmt_args(), gen_max_len()},
             begin
-                FudgeLen = 50, %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
+                %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
+                FudgeLen = calculate_fudge(FmtArgs, 50),
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
                     Str = lists:flatten(lager_trunc_io:format(FmtStr, Args, MaxLen)),
@@ -181,6 +182,19 @@ build_fmt_args(FmtArgs) ->
                 {FmtStr0 ++ Str, Args0}
         end,
     lists:foldl(F, {"", []}, FmtArgs).
+
+calculate_fudge([], Acc) ->
+    Acc;
+calculate_fudge([{"~62P", _Arg, _Depth}|T], Acc) ->
+    calculate_fudge(T, Acc+62);
+calculate_fudge([{Fmt, Arg}|T], Acc) when
+        Fmt == "~f"; Fmt == "~10.f";
+        Fmt == "~g"; Fmt == "~10.g";
+        Fmt == "~e"; Fmt == "~10.e";
+        Fmt == "~x"; Fmt == "~X" ->
+    calculate_fudge(T, Acc + length(lists:flatten(io_lib:format(Fmt, [Arg]))));
+calculate_fudge([_|T], Acc) ->
+    calculate_fudge(T, Acc).
 
 -endif. % (EQC).
 -endif. % (TEST).
