@@ -40,6 +40,8 @@ init([]) ->
 
     %% check if the crash log is enabled
     Crash = case application:get_env(lager, crash_log) of
+        {ok, undefined} ->
+            [];
         {ok, File} ->
             MaxBytes = case application:get_env(lager, crash_log_msg_size) of
                 {ok, Val} when is_integer(Val) andalso Val > 0 -> Val;
