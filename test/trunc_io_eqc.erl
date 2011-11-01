@@ -139,7 +139,13 @@ gen_char() ->
 prop_format() ->
     ?FORALL({FmtArgs, MaxLen}, {gen_fmt_args(), gen_max_len()},
             begin
-                %% trunc_io does not correctly calc safe size of pid/port/numbers/funs
+                %% Because trunc_io will print '...' when its running out of
+                %% space, even if the remaining space is less than 3, it
+                %% doesn't *exactly* stick to the specified limit.
+
+                %% Also, since we don't truncate terms not printed with
+                %% ~p/~P/~w/~W/~s, we also need to calculate the wiggle room
+                %% for those. Hence the fudge factor calculated below.
                 FudgeLen = calculate_fudge(FmtArgs, 50),
                 {FmtStr, Args} = build_fmt_args(FmtArgs),
                 try
@@ -191,7 +197,9 @@ calculate_fudge([{Fmt, Arg}|T], Acc) when
         Fmt == "~f"; Fmt == "~10.f";
         Fmt == "~g"; Fmt == "~10.g";
         Fmt == "~e"; Fmt == "~10.e";
-        Fmt == "~x"; Fmt == "~X" ->
+        Fmt == "~x"; Fmt == "~X";
+        Fmt == "~B"; Fmt == "~b"; Fmt == "~36B";
+        Fmt == "~.10#"; Fmt == "~10+" ->
     calculate_fudge(T, Acc + length(lists:flatten(io_lib:format(Fmt, [Arg]))));
 calculate_fudge([_|T], Acc) ->
     calculate_fudge(T, Acc).
