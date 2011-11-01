@@ -632,8 +632,8 @@ error_logger_redirect_test_() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, {system_limit,[{wtf,boom,[string:copies("aaaa", 4096)]}]}, []}}], []]),
                         _ = gen_event:which_handlers(error_logger),
                         {_, _, Msg} = pop(),
-                        ?assert(length(lists:flatten(Msg)) > 500),
-                        ?assert(length(lists:flatten(Msg)) < 700)
+                        ?assert(length(lists:flatten(Msg)) > 600),
+                        ?assert(length(lists:flatten(Msg)) < 650)
                 end
             },
             {"messages should not be generated if they don't satisfy the threshold",

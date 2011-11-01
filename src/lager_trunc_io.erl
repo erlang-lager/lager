@@ -193,7 +193,7 @@ print(List, Max, Options) when is_list(List) ->
         true ->
             alist_start(List, Max, dec_depth(Options));
         _ ->
-            {R, Len} = list_body(List, Max, dec_depth(Options), false),
+            {R, Len} = list_body(List, Max - 2, dec_depth(Options), false),
             {[$[, R, $]], Len + 2}
     end.
 
@@ -216,7 +216,7 @@ list_body(X, Max, Options, _Tuple) ->  %% improper list
     {[$|,List], Len + 1}.
 
 list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
-list_bodyc(_, Max, _Options, _Tuple) when Max < 4 -> {",...", 3};
+list_bodyc(_, Max, _Options, _Tuple) when Max < 5 -> {",...", 4};
 list_bodyc([H|T], Max, #print_options{depth=Depth} = Options, Tuple) -> 
     {List, Len} = print(H, Max, dec_depth(Options)),
     {Final, FLen} = list_bodyc(T, Max - Len - 1, Options, Tuple),
@@ -239,7 +239,7 @@ list_bodyc(X, Max, Options, _Tuple) ->  %% improper list
 alist_start([], _Max, #print_options{force_strings=true}) -> {"", 0};
 alist_start([], _Max, _Options) -> {"[]", 2};
 alist_start(_, Max, _Options) when Max < 4 -> {"...", 3};
-alist_start(_, _Max, #print_options{depth=0}) -> {"[...]", 3};
+alist_start(_, _Max, #print_options{depth=0}) -> {"[...]", 5};
 alist_start(L, Max, #print_options{force_strings=true} = Options) ->
     alist(L, Max, Options);
 alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
@@ -427,6 +427,7 @@ quote_strip_test() ->
 binary_printing_test() ->
     ?assertEqual("<<>>", lists:flatten(format("~p", [<<>>], 50))),
     ?assertEqual("<<..>>", lists:flatten(format("~p", [<<"hi">>], 0))),
+    ?assertEqual("<<...>>", lists:flatten(format("~p", [<<"hi">>], 1))),
     ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<$h, $e, $l, $l, $o>>], 50))),
     ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<"hello">>], 50))),
     ?assertEqual("<<104,101,108,108,111>>", lists:flatten(format("~w", [<<"hello">>], 50))),
@@ -448,7 +449,9 @@ list_printing_test() ->
     ?assertEqual("\"\\rabc\"", lists:flatten(format("~p", [[13,$a, $b, $c]], 50))),
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~p", [[1, 2, 3|4]], 50))),
     ?assertEqual("[...]", lists:flatten(format("~p", [[1, 2, 3,4]], 4))),
-    ?assertEqual("[1,...]", lists:flatten(format("~p", [[1, 2, 3,4]], 6))),
+    ?assertEqual("[1,...]", lists:flatten(format("~p", [[1, 2, 3, 4]], 6))),
+    ?assertEqual("[1,...]", lists:flatten(format("~p", [[1, 2, 3, 4]], 7))),
+    ?assertEqual("[1,2,...]", lists:flatten(format("~p", [[1, 2, 3, 4]], 8))),
     ?assertEqual("[1|4]", lists:flatten(format("~p", [[1|4]], 50))),
     ?assertEqual("[1]", lists:flatten(format("~p", [[1]], 50))),
     ?assertError(badarg, lists:flatten(format("~s", [[1|4]], 50))),
@@ -459,15 +462,41 @@ list_printing_test() ->
     ?assertEqual("\"\\rhello world\\r\\n\"", lists:flatten(format("~p", ["\rhello world\r\n"], 50))),
     ?assertEqual("[13,104,101,108,108,111,32,119,111,114,108,100,13,10]", lists:flatten(format("~w", ["\rhello world\r\n"], 60))),
     ?assertEqual("...", lists:flatten(format("~s", ["\rhello world\r\n"], 3))),
+    ?assertEqual("[22835963083295358096932575511191922182123945984,...]",
+        lists:flatten(format("~p", [
+                    [22835963083295358096932575511191922182123945984,
+                        22835963083295358096932575511191922182123945984]], 9))),
+    ?assertEqual("[22835963083295358096932575511191922182123945984,...]",
+        lists:flatten(format("~p", [
+                    [22835963083295358096932575511191922182123945984,
+                        22835963083295358096932575511191922182123945984]], 53))),
     ok.
 
 tuple_printing_test() ->
     ?assertEqual("{}", lists:flatten(format("~p", [{}], 50))),
     ?assertEqual("{}", lists:flatten(format("~w", [{}], 50))),
     ?assertError(badarg, lists:flatten(format("~s", [{}], 50))),
+    ?assertEqual("{...}", lists:flatten(format("~p", [{foo}], 1))),
+    ?assertEqual("{...}", lists:flatten(format("~p", [{foo}], 2))),
     ?assertEqual("{...}", lists:flatten(format("~p", [{foo}], 3))),
+    ?assertEqual("{...}", lists:flatten(format("~p", [{foo}], 4))),
+    ?assertEqual("{...}", lists:flatten(format("~p", [{foo}], 5))),
     ?assertEqual("{foo,...}", lists:flatten(format("~p", [{foo,bar}], 6))),
-    ?assertEqual("{foo,bar}", lists:flatten(format("~p", [{foo,bar}], 9))),
+    ?assertEqual("{foo,...}", lists:flatten(format("~p", [{foo,bar}], 7))),
+    ?assertEqual("{foo,...}", lists:flatten(format("~p", [{foo,bar}], 9))),
+    ?assertEqual("{foo,bar}", lists:flatten(format("~p", [{foo,bar}], 10))),
+    ?assertEqual("{22835963083295358096932575511191922182123945984,...}",
+        lists:flatten(format("~w", [
+                    {22835963083295358096932575511191922182123945984,
+                        22835963083295358096932575511191922182123945984}], 10))),
+    ?assertEqual("{22835963083295358096932575511191922182123945984,...}",
+        lists:flatten(format("~w", [
+                    {22835963083295358096932575511191922182123945984,
+                        bar}], 10))),
+    ?assertEqual("{22835963083295358096932575511191922182123945984,...}",
+        lists:flatten(format("~w", [
+                    {22835963083295358096932575511191922182123945984,
+                        22835963083295358096932575511191922182123945984}], 53))),
     ok.
 
 unicode_test() ->
