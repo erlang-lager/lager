@@ -266,9 +266,9 @@ print_silly_list([], Fmt, Acc) ->
     lager_trunc_io:format(string:join(lists:reverse(Fmt), ", "),
         lists:reverse(Acc), 4096);
 print_silly_list([{K,V}|T], Fmt, Acc) ->
-    print_silly_list(T, ["~w: ~w" | Fmt], [V, K | Acc]);
+    print_silly_list(T, ["~p: ~p" | Fmt], [V, K | Acc]);
 print_silly_list([H|T], Fmt, Acc) ->
-    print_silly_list(T, ["~w" | Fmt], [H | Acc]).
+    print_silly_list(T, ["~p" | Fmt], [H | Acc]).
 
 print_val(Val) ->
     {Str, _} = lager_trunc_io:print(Val, 500),

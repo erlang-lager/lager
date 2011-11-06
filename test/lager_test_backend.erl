@@ -509,7 +509,15 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
-
+            {"strings in a mixed report are printed as strings",
+                fun() ->
+                        sync_error_logger:info_report(["this is less silly", {than, "this"}]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[info] ~w \"this is less silly\", than: \"this\"", [self()])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"info messages are printed",
                 fun() ->
                         sync_error_logger:info_msg("doom, doom has come upon you all"),
