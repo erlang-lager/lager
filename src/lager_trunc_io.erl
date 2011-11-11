@@ -283,7 +283,7 @@ alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
 alist(_, _, #print_options{force_strings=true}) ->
-    error(badarg);
+    erlang:error(badarg);
 alist(_L, _Max, _Options) ->
     throw(unprintable).
 
