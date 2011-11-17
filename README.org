@@ -157,6 +157,12 @@
   separate application so Lager itself doesn't have an indirect dependancy on a
   port driver. Please see the lager_syslog README for configuration information.
 
+* AMQP Support
+  Jon Brisbin has written a lager backend to send lager messages into AMQP, so
+  you can aggregate logs from a cluster into a central point. You can find it
+  under the [[https://github.com/jbrisbin/lager_amqp_backend][lager_amqp_backend]]
+  project on github.
+
 * Tracing
   Lager supports basic support for redirecting log messages based on log message
   attributes. Lager automatically captures the pid, module, function and line at the
