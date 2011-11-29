@@ -297,6 +297,7 @@ atom_needs_quoting([]) ->
     false;
 atom_needs_quoting([H|T]) when (H >= $a andalso H =< $z);
                         (H >= $A andalso H =< $Z);
+                        (H >= $0 andalso H =< $9);
                          H == $@; H == $_ ->
     atom_needs_quoting(T);
 atom_needs_quoting(_) ->
@@ -400,6 +401,7 @@ atom_quoting_test() ->
     ?assertEqual("hello_world", lists:flatten(format("~p", ['hello_world'], 50))),
     ?assertEqual("'node@127.0.0.1'", lists:flatten(format("~p", ['node@127.0.0.1'], 50))),
     ?assertEqual("node@nohost", lists:flatten(format("~p", [node@nohost], 50))),
+    ?assertEqual("abc123", lists:flatten(format("~p", [abc123], 50))),
     ok.
 
 sane_float_printing_test() ->
