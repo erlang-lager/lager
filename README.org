@@ -64,6 +64,45 @@
   The available configuration options for each backend are listed in their
   module's documentation.
 
+* Custom Formatting
+  All loggers have a default formatting that can be overriden.  A formatter is any module that
+  exports format(#lager_log_message{},Config#any()).  It is specified as part of the configuration
+  for the backend:
+
+#+BEGIN_EXAMPLE
+  {lager, [
+    {handlers, [
+      {lager_console_backend, [info, {lager_default_formatter, [time," [",severity,"] ", message, "\n"]}},
+      {lager_file_backend, [
+        [{"error.log", error, 10485760, "$D0", 5,{lager_default_formatter,[date, " ", time," [",severity,"] ",pid, " ", message, "\n"]}],
+        {"console.log", info, 10485760, "$D0", 5}
+      ]}
+    ]}
+  ]}.
+#+END_EXAMPLE  
+  
+  Included is lager_default_formatter.  This provides a generic, default formatting for log messages using a "semi-iolist" 
+  as configuration.  Any iolist allowed elements in the configuration are printed verbatim.  Atoms in the configuration 
+  are treated as metadata properties and extracted from the log message.  
+  The metadata properties date,time, message, and severity will always exist.  
+  The properties pid, file, line, module, and function will always exist if the parser transform is used.
+
+#+BEGIN_EXAMPLE
+    ["Foo"] -> "Foo", regardless of message content.
+    [message] -> The content of the logged message, alone.
+    [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
+    [date, " ", time," [",severity,"] ",pid, " ", message, "\n"] -> default formatting if none is provided
+#+END_EXAMPLE  
+
+  Optionally, a tuple of {atom(),semi-iolist()}   
+  can be used.  The atom will look up the property, but if not found it will use the semi-iolist() instead.  These fallbacks 
+  can be nested or refer to other properties.
+
+#+BEGIN_EXAMPLE
+    [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
+    [{server,[$(,{pid,"Unknown Server"},$)]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
+#+END_EXAMPLE  
+
 * Error logger integration
   Lager is also supplied with a error_logger handler module that translates
   traditional erlang error messages into a friendlier format and sends them into
