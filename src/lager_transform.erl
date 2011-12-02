@@ -73,9 +73,9 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                                     {call, Line, {atom, Line, pid_to_list}, [
                                             {call, Line, {atom, Line ,self}, []}]}]},
                             {nil, Line}}}}},
-            {Traces, Arguments} = case Arguments0 of
+            {Traces, Message, Arguments} = case Arguments0 of
                 [Format] ->
-                    {DefaultAttrs, [Format, {nil, Line}]};
+                    {DefaultAttrs, Format, {nil, Line}};
                 [Arg1, Arg2] ->
                     %% some ambiguity here, figure out if these arguments are
                     %% [Format, Args] or [Attr, Format].
@@ -84,86 +84,28 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                     case Arg1 of
                         {cons, _, {tuple, _, _}, _} ->
                             {concat_lists(Arg1, DefaultAttrs),
-                                [Arg2, {nil,Line}]};
+                                Arg2, {nil,Line}};
                         _ ->
-                            {DefaultAttrs, [Arg1, Arg2]}
+                            {DefaultAttrs, Arg1, Arg2}
                     end;
                 [Attrs, Format, Args] ->
-                    {concat_lists(Attrs, DefaultAttrs), [Format, Args]}
+                    {concat_lists(Attrs, DefaultAttrs), Format, Args}
             end,
-            %% a case to check the mochiglobal 'loglevel' key against the
-            %% message we're trying to log
-            LevelVar = list_to_atom("Level" ++ atom_to_list(get(module)) ++
-                    integer_to_list(Line)),
-                TraceVar = list_to_atom("Traces" ++atom_to_list(get(module)) ++
-                    integer_to_list(Line)),
-            MatchVar = list_to_atom("X" ++ atom_to_list(get(module)) ++
-                    integer_to_list(Line)),
-            ResultVar = list_to_atom("Res" ++ atom_to_list(get(module)) ++
-                    integer_to_list(Line)),
-            {block, Line, [
-                {match,Line, {tuple,Line,[{var,Line,LevelVar},{var,Line,TraceVar}]},
-                    {call,Line, {remote,Line,{atom,Line,lager_mochiglobal},{atom,Line,get}},
-                        [{atom,Line,loglevel},
-                            {tuple,Line,
-                                [{integer,Line,?LOG_NONE}, {nil,Line}]}]}},
-                {match, Line,
-                    {var, Line, ResultVar},
-                {'case',Line,
-                    {op,Line,'>=',
-                        {var, Line, LevelVar},
-                        {integer, Line, lager_util:level_to_num(Severity)}},
-                    [{clause,Line,
-                            [{atom,Line,true}], %% yes, we log!
-                            [],
-                            [{call, Line, {remote, Line1, {atom, Line2, lager},
-                                        {atom, Line3, log}}, [
-                                        {atom, Line3, Severity},
-                                        {atom, Line3, get(module)},
-                                        {atom, Line3, get(function)},
-                                        {integer, Line3, Line},
-                                        {call, Line3, {atom, Line3 ,self}, []},
-                                        {call, Line3, {remote, Line3,
-                                                {atom, Line3 ,lager_util},
-                                                {atom,Line3,maybe_utc}},
-                                            [{call,Line3,{remote,Line3,
-                                                        {atom,Line3,lager_util},
-                                                        {atom,Line3,localtime_ms}},[]}]}
-                                        | Arguments
-                                    ]}]},
-                        %% No, don't log
-                        {clause,Line3,[{var,Line3,'_'}],[],[{atom,Line3,ok}]}]}},
-                {'case', Line, {var, Line3, TraceVar},
-                    [{clause, Line3, [{nil, Line3}], [], [{var, Line3, ResultVar}]},
-                            {clause, Line3, [{var, Line3, MatchVar}],
-                                [[{call,1,{atom,1,is_list},[{var,1,MatchVar}]}]],
-                                [{call, Line, {remote, Line1, {atom, Line2, lager},
-                                        {atom, Line3, log_dest}}, [
-                                        {atom, Line3, Severity},
-                                        {atom, Line3, get(module)},
-                                        {atom, Line3, get(function)},
-                                        {integer, Line3, Line},
-                                        {call, Line3, {atom, Line3 ,self}, []},
-                                        {call, Line3, {remote, Line3,
-                                                {atom, Line3 ,lager_util},
-                                                {atom,Line3,maybe_utc}},
-                                            [{call,Line3,{remote,Line3,
-                                                        {atom,Line3,lager_util},
-                                                        {atom,Line3,localtime_ms}},[]}]},
-                                        {call, Line3, {remote, Line3,
-                                                {atom, Line3, lager_util},
-                                                {atom, Line3, check_traces}},
-                                                [Traces,
-                                                    {integer, Line3,
-                                                        lager_util:level_to_num(Severity)},
-                                                    {var, Line3, TraceVar},
-                                                    {nil, Line3}]}
-                                        | Arguments
-                                    ]}]},
-                            {clause, Line3, [{var, Line3, '_'}], [], [{var,
-                                        Line3, ResultVar}]}
-                        ]}
-                    ]};
+            {block, Line, 
+                [
+                    {call, Line, {remote, Line, {atom,Line1,lager},{atom,Line2,dispatch_log}},
+                            [
+                                {atom, Line3, Severity},
+                                {atom, Line3, get(module)},
+                                {atom, Line3, get(function)},
+                                {integer, Line3, Line},
+                                {call, Line3, {atom, Line3 ,self}, []},
+                                Traces,
+                                Message,
+                                Arguments
+                            ]
+                    }
+                ]}; % block contents
             false ->
                 Stmt
         end;
