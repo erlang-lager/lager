@@ -59,8 +59,8 @@ walk_body(Acc, []) ->
 walk_body(Acc, [H|T]) ->
     walk_body([transform_statement(H)|Acc], T).
 
-transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
-            {atom, Line3, Severity}}, Arguments0} = Stmt) ->
+transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
+            {atom, _Line3, Severity}}, Arguments0} = Stmt) ->
     case lists:member(Severity, ?LEVELS) of
         true ->
             DefaultAttrs = {cons, Line, {tuple, Line, [
@@ -77,7 +77,7 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                             {nil, Line}}}}},
             {Traces, Message, Arguments} = case Arguments0 of
                 [Format] ->
-                    {DefaultAttrs, Format, {nil, Line}};
+                    {DefaultAttrs, Format, {atom, Line, none}};
                 [Arg1, Arg2] ->
                     %% some ambiguity here, figure out if these arguments are
                     %% [Format, Args] or [Attr, Format].
@@ -86,29 +86,23 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                     case Arg1 of
                         {cons, _, {tuple, _, _}, _} ->
                             {concat_lists(Arg1, DefaultAttrs),
-                                Arg2, {nil,Line}};
+                                Arg2, {atom, Line, none}};
                         _ ->
                             {DefaultAttrs, Arg1, Arg2}
                     end;
                 [Attrs, Format, Args] ->
                     {concat_lists(Attrs, DefaultAttrs), Format, Args}
             end,
-            {block, Line,
+
+            {call, Line, {remote, Line, {atom,Line,lager},{atom,Line,dispatch_log}},
                 [
-                    {call, Line, {remote, Line, {atom,Line1,lager},{atom,Line2,dispatch_log}},
-                            [
-                                {atom, Line3, Severity},
-                                {atom, Line3, get(module)},
-                                {atom, Line3, get(function)},
-                                {integer, Line3, Line},
-                                {call, Line3, {atom, Line3 ,self}, []},
-                                Traces,
-                                Message,
-                                Arguments,
-                                {integer, Line3, get(truncation_size)}
-                            ]
-                    }
-                ]}; % block contents
+                    {atom,Line,Severity},
+                    Traces,
+                    Message,
+                    Arguments,
+                    {integer, Line, get(truncation_size)}
+                ]
+            };
             false ->
                 Stmt
         end;
