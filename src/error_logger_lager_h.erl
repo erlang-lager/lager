@@ -173,7 +173,7 @@ format_offender(Off) ->
             %% regular supervisor
             MFA = format_mfa(MFArgs),
             Name = proplists:get_value(name, Off),
-            io_lib:format("~w started with ~s at ~w",
+            io_lib:format("~s started with ~s at ~w",
                 [Name, MFA, proplists:get_value(pid, Off)])
     end.
 
