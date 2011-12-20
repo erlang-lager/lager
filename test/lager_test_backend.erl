@@ -685,6 +685,19 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 650)
                 end
             },
+            {"crash reports for 'special processes' should be handled right", 
+                fun() ->
+                        {ok, Pid} = special_process:start(),
+                        unlink(Pid),
+                        Pid ! function_clause,
+                        timer:sleep(500),
+                        _ = gen_event:which_handlers(error_logger),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours crashed with reason: no function clause matching special_process:foo(bar)",
+                                [Pid, Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),

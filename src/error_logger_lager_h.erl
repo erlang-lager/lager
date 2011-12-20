@@ -159,9 +159,15 @@ format_crash_report(Report, Neighbours) ->
             proplists:get_value(pid, Report);
         Atom -> Atom
     end,
-    {_Class, Reason, _Trace} = proplists:get_value(error_info, Report),
+    {_Class, Reason, Trace} = proplists:get_value(error_info, Report),
+    ReasonStr = case is_atom(Reason) of
+        true ->
+            format_reason({Reason, Trace});
+        _ ->
+            format_reason(Reason)
+    end,
     io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s",
-        [Name, length(Neighbours), format_reason(Reason)]).
+        [Name, length(Neighbours), ReasonStr]).
 
 format_offender(Off) ->
     case proplists:get_value(mfargs, Off) of
