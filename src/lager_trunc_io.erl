@@ -129,11 +129,11 @@ print(Atom, _Max, #print_options{force_strings=NoQuote}) when is_atom(Atom) ->
 print(<<>>, _Max, _Options) ->
     {"<<>>", 4};
 
-print(Binary, 0, _Options) when is_binary(Binary) ->
+print(Binary, 0, _Options) when is_bitstring(Binary) ->
     {"<<..>>", 6};
 
 print(Binary, Max, Options) when is_binary(Binary) ->
-    B = binary_to_list(Binary, 1, lists:min([Max, size(Binary)])),
+    B = binary_to_list(Binary, 1, lists:min([Max, byte_size(Binary)])),
     {L, Len} = case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
         true ->
@@ -153,6 +153,21 @@ print(Binary, Max, Options) when is_binary(Binary) ->
         _ ->
             {["<<", Res, ">>"], Length+4}
     end;
+
+%% bitstrings are binary's evil brother who doesn't end on an 8 bit boundary.
+%% This makes printing them extremely annoying, so list_body/list_bodyc has
+%% some magic for dealing with the output of bitstring_to_list, which returns
+%% a list of integers (as expected) but with a trailing binary that represents
+%% the remaining bits.
+print(BitString, Max, Options) when is_bitstring(BitString) ->
+    case byte_size(BitString) > Max of
+        true ->
+            BL = binary_to_list(BitString, 1, Max);
+        _ ->
+            BL = erlang:bitstring_to_list(BitString)
+    end,
+    {X, Len0} = list_body(BL, Max - 4, Options, false),
+    {["<<", X, ">>"], Len0 + 4};
 
 print(Float, _Max, _Options) when is_float(Float) ->
     %% use the same function io_lib:format uses to print floats
@@ -207,6 +222,12 @@ tuple_contents(Tuple, Max, Options) ->
 list_body([], _Max, _Options, _Tuple) -> {[], 0};
 list_body(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
 list_body(_, _Max, #print_options{depth=0}, _Tuple) -> {"...", 3};
+list_body([B], _Max, _Options, _Tuple) when is_bitstring(B) ->
+    Size = bit_size(B),
+    <<Value:Size>> = B,
+    ValueStr = integer_to_list(Value),
+    SizeStr = integer_to_list(Size),
+    {[ValueStr, $:, SizeStr], length(ValueStr) + length(SizeStr) +1};
 list_body([H|T], Max, Options, Tuple) -> 
     {List, Len} = print(H, Max, Options),
     {Final, FLen} = list_bodyc(T, Max - Len, Options, Tuple),
@@ -217,6 +238,12 @@ list_body(X, Max, Options, _Tuple) ->  %% improper list
 
 list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
 list_bodyc(_, Max, _Options, _Tuple) when Max < 5 -> {",...", 4};
+list_bodyc([B], _Max, _Options, _Tuple) when is_bitstring(B) ->
+    Size = bit_size(B),
+    <<Value:Size>> = B,
+    ValueStr = integer_to_list(Value),
+    SizeStr = integer_to_list(Size),
+    {[$, , ValueStr, $:, SizeStr], length(ValueStr) + length(SizeStr) +2};
 list_bodyc([H|T], Max, #print_options{depth=Depth} = Options, Tuple) -> 
     {List, Len} = print(H, Max, dec_depth(Options)),
     {Final, FLen} = list_bodyc(T, Max - Len - 1, Options, Tuple),
@@ -439,6 +466,21 @@ binary_printing_test() ->
     ?assertEqual("hello\nworld", lists:flatten(format("~s", [<<"hello\nworld">>], 50))),
     ?assertEqual("<<\"hello\\nworld\">>", lists:flatten(format("~p", [<<"hello\nworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
+    ok.
+
+bitstring_printing_test() ->
+    ?assertEqual("<<1,2,3,1:7>>", lists:flatten(format("~p",
+                [<<1, 2, 3, 1:7>>], 100))),
+    ?assertEqual("<<1:7>>", lists:flatten(format("~p",
+                [<<1:7>>], 100))),
+    ?assertEqual("<<1,2,3,...>>", lists:flatten(format("~p",
+                [<<1, 2, 3, 1:7>>], 12))),
+    ?assertEqual("<<1,2,3,...>>", lists:flatten(format("~p",
+                [<<1, 2, 3, 1:7>>], 13))),
+    ?assertEqual("<<1,2,3,1:7>>", lists:flatten(format("~p",
+                [<<1, 2, 3, 1:7>>], 14))),
+    ?assertEqual("<<..>>", lists:flatten(format("~p", [<<1:7>>], 0))),
+    ?assertEqual("<<...>>", lists:flatten(format("~p", [<<1:7>>], 1))),
     ok.
 
 list_printing_test() ->
