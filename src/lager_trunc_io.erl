@@ -222,7 +222,7 @@ tuple_contents(Tuple, Max, Options) ->
 list_body([], _Max, _Options, _Tuple) -> {[], 0};
 list_body(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
 list_body(_, _Max, #print_options{depth=0}, _Tuple) -> {"...", 3};
-list_body([B], _Max, _Options, _Tuple) when is_bitstring(B) ->
+list_body([B], _Max, _Options, _Tuple) when is_bitstring(B), not is_binary(B) ->
     Size = bit_size(B),
     <<Value:Size>> = B,
     ValueStr = integer_to_list(Value),
@@ -238,7 +238,7 @@ list_body(X, Max, Options, _Tuple) ->  %% improper list
 
 list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
 list_bodyc(_, Max, _Options, _Tuple) when Max < 5 -> {",...", 4};
-list_bodyc([B], _Max, _Options, _Tuple) when is_bitstring(B) ->
+list_bodyc([B], _Max, _Options, _Tuple) when is_bitstring(B), not is_binary(B) ->
     Size = bit_size(B),
     <<Value:Size>> = B,
     ValueStr = integer_to_list(Value),
@@ -481,6 +481,8 @@ bitstring_printing_test() ->
                 [<<1, 2, 3, 1:7>>], 14))),
     ?assertEqual("<<..>>", lists:flatten(format("~p", [<<1:7>>], 0))),
     ?assertEqual("<<...>>", lists:flatten(format("~p", [<<1:7>>], 1))),
+    ?assertEqual("[<<1>>,<<2>>]", lists:flatten(format("~p", [[<<1>>, <<2>>]],
+                100))),
     ok.
 
 list_printing_test() ->
