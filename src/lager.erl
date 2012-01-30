@@ -27,7 +27,7 @@
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
-        safe_format/3, safe_format_chop/3]).
+        safe_format/3, safe_format_chop/3,dispatch_log/8]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -50,6 +50,32 @@ start_ok(App, {error, {not_started, Dep}}) ->
     start(App);
 start_ok(App, {error, Reason}) -> 
     erlang:error({app_start_failed, App, Reason}).
+
+
+-spec dispatch_log(log_level(), atom(), atom(), pos_integer(), pid(), list(), string(), list()) ->
+    ok | {error, lager_not_running}.
+
+dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args) ->
+    {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
+    Result=
+    case LevelThreshold >= lager_util:level_to_num(Severity) of
+        true -> lager:log(Severity,Module,Function,Line,Pid,
+                lager_util:maybe_utc(lager_util:localtime_ms()),
+                Format,Args);
+        _ -> ok
+    end,
+    case TraceFilters of
+        [] -> Result;
+        Match when is_list(Match) ->
+            lager:log_dest(Severity,Module,Function,Line,Pid,
+                lager_util:maybe_utc(lager_util:localtime_ms()),
+                lager_util:check_traces(Traces,
+                    lager_util:level_to_num(Severity),
+                    TraceFilters,
+                    []),
+                Format,Args);
+        _ -> ok
+    end.
 
 %% @private
 -spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), string(), list()) ->
