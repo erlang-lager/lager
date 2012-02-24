@@ -7,7 +7,9 @@
   {modules, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  compiler,
+                  syntax_tools
                  ]},
   {registered, []},
   {mod, {lager_app, []}},
