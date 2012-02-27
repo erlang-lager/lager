@@ -225,6 +225,8 @@ setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
+    application:start(compiler),
+    application:start(syntax_tools),
     application:start(lager),
     gen_event:call(lager_event, ?MODULE, flush).
 
@@ -246,6 +248,8 @@ error_logger_redirect_crash_test_() ->
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, error}]),
+                application:start(compiler),
+                application:start(syntax_tools),
                 application:start(lager),
                 crash:start()
         end,

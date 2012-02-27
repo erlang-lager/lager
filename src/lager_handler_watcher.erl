@@ -106,6 +106,8 @@ reinstall_on_initial_failure_test_() ->
                     application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [from_now(2), undefined]}]),
                     application:set_env(lager, error_logger_redirect, false),
                     application:unset_env(lager, crash_log),
+                    application:start(compiler),
+                    application:start(syntax_tools),
                     application:start(lager),
                     try
                       ?assertEqual(1, lager_test_backend:count()),
@@ -132,6 +134,8 @@ reinstall_on_runtime_failure_test_() ->
                     application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [undefined, from_now(5)]}]),
                     application:set_env(lager, error_logger_redirect, false),
                     application:unset_env(lager, crash_log),
+                    application:start(compiler),
+                    application:start(syntax_tools),
                     application:start(lager),
                     try
                         ?assertEqual(0, lager_test_backend:count()),

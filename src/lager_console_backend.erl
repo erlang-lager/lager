@@ -128,6 +128,8 @@ console_log_test_() ->
                 application:load(lager),
                 application:set_env(lager, handlers, []),
                 application:set_env(lager, error_logger_redirect, false),
+                application:start(compiler),
+                application:start(syntax_tools),
                 application:start(lager)
         end,
         fun(_) ->
