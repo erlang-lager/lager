@@ -53,14 +53,13 @@ start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 
--spec dispatch_log(log_level(), list(), string(), list() | none, integer()) ->  ok | {error, lager_not_running}.
+-spec dispatch_log(log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     case whereis(lager_event) of
         undefined ->
             %% lager isn't running
             {error, lager_not_running};
         Pid ->
-
             {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
             SeverityAsInt=lager_util:level_to_num(Severity),
             Destinations = case TraceFilters of 
@@ -72,7 +71,7 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                 true -> 
                     Timestamp = lager_util:format_time(),
                     Msg=case Args of 
-                        A when is_list(A) ->safe_format_chop(Format,Args, Size);
+                        A when is_list(A) ->safe_format_chop(Format,Args,Size);
                         _ -> Format
                     end,
                     gen_event:sync_notify(Pid, #lager_log_message{destinations=Destinations, 
@@ -87,13 +86,17 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
-log(Level, Pid, Message) ->
-    dispatch_log(Level, [{pid,Pid}], Message,none, 4096).
+log(Level, Pid, Message) when is_pid(Pid) ->
+    dispatch_log(Level, [{pid,Pid}], Message, none, 4096);
+log(Level, Metadata, Message) when is_list(Metadata) ->
+    dispatch_log(Level, Metadata, Message, none, 4096).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
-log(Level, Pid, Format, Args) ->
-    dispatch_log(Level, [{pid,Pid}], Format, Args, 4096).
+log(Level, Pid, Format, Args) when is_pid(Pid) ->
+    dispatch_log(Level, [{pid,Pid}], Format, Args, 4096);
+log(Level, Metadata, Format, Args) when is_list(Metadata) ->
+    dispatch_log(Level, Metadata, Format, Args, 4096).
 
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug).

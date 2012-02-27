@@ -37,7 +37,15 @@
 %% @end
 -spec format(#lager_log_message{},list()) -> any().
 format(#lager_log_message{}=Msg,[]) ->
-    format(Msg,[date, " ", time," [",severity,"] ",pid, " ", message, "\n"]);
+    format(Msg,
+        [date, " ", time, " [", severity, "] ",
+            {pid, ""},
+            {module, [
+                    {pid, ["@"], ""},
+                    module,
+                    {function, [":", function], ""},
+                    {line, [":",line], ""}], ""},
+            " ", message, "\n"]);
 format(Message,Config) ->
     [ output(V,Message) || V <- Config ].
 
@@ -46,9 +54,20 @@ format(Message,Config) ->
 output(message,#lager_log_message{message=M}) -> M;
 output(date,#lager_log_message{timestamp={D,_T}}) -> D;
 output(time,#lager_log_message{timestamp={_D,T}}) -> T;
-output(severity,#lager_log_message{severity_as_int=S}) -> atom_to_list(lager_util:num_to_level(S));
-output(Prop,#lager_log_message{metadata=Metadata}) when is_atom(Prop) -> make_printable(proplists:get_value(Prop,Metadata,<<"Undefined">>));
-output({Prop,Default},#lager_log_message{metadata=Metadata}=L) when is_atom(Prop) -> make_printable(proplists:get_value(Prop,Metadata,output(Default,L)));
+output(severity,#lager_log_message{severity_as_int=S}) ->
+    atom_to_list(lager_util:num_to_level(S));
+output(Prop,#lager_log_message{metadata=Metadata}) when is_atom(Prop) ->
+    make_printable(get_metadata(Prop,Metadata,<<"Undefined">>));
+output({Prop,Default},#lager_log_message{metadata=Metadata}=L) when is_atom(Prop) ->
+    make_printable(get_metadata(Prop,Metadata,output(Default,L)));
+output({Prop, Present, Absent}, #lager_log_message{metadata=Metadata}=L) when is_atom(Prop) ->
+    %% sort of like a poor man's ternary operator
+    case get_metadata(Prop, Metadata) of
+        undefined ->
+            [ output(V, L) || V <- Absent];
+        _ ->
+            [ output(V, L) || V <- Present]
+    end;
 output(Other,_) -> make_printable(Other).
 
 -spec make_printable(any()) -> iolist().
@@ -56,6 +75,17 @@ make_printable(A) when is_atom(A) -> atom_to_list(A);
 make_printable(P) when is_pid(P) -> pid_to_list(P);
 make_printable(L) when is_list(L) orelse is_binary(L) -> L; 
 make_printable(Other) -> io_lib:format("~p",[Other]).
+
+get_metadata(Key, Metadata) ->
+    get_metadata(Key, Metadata, undefined).
+
+get_metadata(Key, Metadata, Default) ->
+    case lists:keyfind(Key, 1, Metadata) of
+        false ->
+            Default;
+        {Key, Value} ->
+            Value
+    end.
 
 -ifdef(TEST).
 basic_test_() ->
