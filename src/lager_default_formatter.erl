@@ -37,6 +37,8 @@
 %% @end
 -spec format(#lager_log_message{},list()) -> any().
 format(#lager_log_message{}=Msg,[]) ->
+    format(Msg, [{eol, "\n"}]);
+format(#lager_log_message{}=Msg,[{eol, EOL}]) ->
     format(Msg,
         [date, " ", time, " [", severity, "] ",
             {pid, ""},
@@ -45,7 +47,7 @@ format(#lager_log_message{}=Msg,[]) ->
                     module,
                     {function, [":", function], ""},
                     {line, [":",line], ""}], ""},
-            " ", message, "\n"]);
+            " ", message, EOL]);
 format(Message,Config) ->
     [ output(V,Message) || V <- Config ].
 

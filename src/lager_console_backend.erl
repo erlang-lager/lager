@@ -33,18 +33,15 @@
 
 -include("lager.hrl").
 
--define(VERBOSE_FORMAT,[date, " ", time, " [", severity, "] ", pid, "@", module,":", function, ":",line," ", message, "\r\n"]).
 -define(TERSE_FORMAT,[time, " [", severity,"] ", message, "\r\n"]).
 
 %% @private
 init(Level) when is_atom(Level) ->
     init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
 init([Level, true]) -> % for backwards compatibility
-    init([Level,{lager_default_formatter,?VERBOSE_FORMAT}]);
+    init([Level,{lager_default_formatter,[{eol, "\r\n"}]}]);
 init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
-init([Level,{Formatter,[]}]) ->
-    init([Level,{Formatter,[]}]);
 init([Level,{Formatter,FormatterConfig}])  when is_atom(Level), is_atom(Formatter)->
     case lists:member(Level, ?LEVELS) of
         true ->
