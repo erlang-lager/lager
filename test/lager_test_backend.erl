@@ -288,7 +288,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(case_clause),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3 (test/crash.erl:28)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -297,7 +297,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(case_clause_string),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3 (test/crash.erl:34)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -306,7 +306,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(function_clause),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no function clause matching crash:function({})", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no function clause matching crash:function({}) (test/crash.erl:95)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -315,7 +315,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(if_clause),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3 (test/crash.erl:39)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -324,7 +324,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(try_clause),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3 (test/crash.erl:43)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -333,7 +333,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(undef),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3 (test/crash.erl:19)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -342,7 +342,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badarith),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3 (test/crash.erl:55)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -351,7 +351,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badmatch),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3 (test/crash.erl:50)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -360,7 +360,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badarity),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3 (test/crash.erl:78)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -369,7 +369,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badarg1),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in crash:handle_call/3 (test/crash.erl:58)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -378,7 +378,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badarg2),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3 (test/crash.erl:61)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -396,7 +396,7 @@ error_logger_redirect_crash_test_() ->
                         Pid = whereis(crash),
                         crash(badfun),
                         {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad function booger in crash:handle_call/3", [Pid])),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad function booger in crash:handle_call/3 (test/crash.erl:22)", [Pid])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             }
@@ -683,6 +683,19 @@ error_logger_redirect_test_() ->
                         {_, _, Msg} = pop(),
                         ?assert(length(lists:flatten(Msg)) > 600),
                         ?assert(length(lists:flatten(Msg)) < 650)
+                end
+            },
+            {"crash reports for 'special processes' should be handled right", 
+                fun() ->
+                        {ok, Pid} = special_process:start(),
+                        unlink(Pid),
+                        Pid ! function_clause,
+                        timer:sleep(500),
+                        _ = gen_event:which_handlers(error_logger),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours crashed with reason: no function clause matching special_process:foo(bar) (test/special_process.erl:26)",
+                                [Pid, Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
             {"messages should not be generated if they don't satisfy the threshold",
