@@ -41,6 +41,11 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
+-type option() :: {'depth', integer()}
+		| {'lists_as_strings', boolean()}
+		| {'force_strings', boolean()}.
+-type options() :: [option()].
+
 -record(print_options, {
         %% negative depth means no depth limiting
         depth = -1 :: integer(),
@@ -71,7 +76,7 @@ fprint(Term, Max) ->
 
 %% @doc Returns an flattened list containing the ASCII representation of the given
 %% term.
--spec fprint(term(), pos_integer(), #print_options{}) -> string().
+-spec fprint(term(), pos_integer(), options()) -> string().
 fprint(T, Max, Options) -> 
     {L, _} = print(T, Max, prepare_options(Options, #print_options{})),
     lists:flatten(L).
@@ -98,7 +103,7 @@ print(Term, Max) ->
     print(Term, Max, []).
 
 %% @doc Returns {List, Length}
--spec print(term(), pos_integer(), #print_options{}) -> {iolist(), pos_integer()}.
+-spec print(term(), pos_integer(), options() | #print_options{}) -> {iolist(), pos_integer()}.
 print(Term, Max, Options) when is_list(Options) ->
     %% need to convert the proplist to a record
     print(Term, Max, prepare_options(Options, #print_options{}));
@@ -330,6 +335,7 @@ atom_needs_quoting([H|T]) when (H >= $a andalso H =< $z);
 atom_needs_quoting(_) ->
     true.
 
+-spec prepare_options(options(), #print_options{}) -> #print_options{}.
 prepare_options([], Options) ->
     Options;
 prepare_options([{depth, Depth}|T], Options) when is_integer(Depth) ->
