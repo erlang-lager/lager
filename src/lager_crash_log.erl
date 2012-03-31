@@ -110,9 +110,10 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 schedule_rotation(undefined) ->
-    undefined;
+    ok;
 schedule_rotation(Date) ->
-    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), rotate).
+    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), rotate),
+    ok.
 
 %% ===== Begin code lifted from riak_err =====
 

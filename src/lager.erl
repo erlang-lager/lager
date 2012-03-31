@@ -125,7 +125,7 @@ trace_file(File, Filter, Level) ->
         {ok, Trace} ->
             Handlers = gen_event:which_handlers(lager_event),
             %% check if this file backend is already installed
-            case lists:member({lager_file_backend, File}, Handlers) of
+            Res = case lists:member({lager_file_backend, File}, Handlers) of
                 false ->
                     %% install the handler
                     supervisor:start_child(lager_handler_watcher_sup,
@@ -133,14 +133,20 @@ trace_file(File, Filter, Level) ->
                 _ ->
                     ok
             end,
-            %% install the trace.
-            {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-            case lists:member(Trace, Traces) of
-                false ->
+            case Res of
+              {ok, _} ->
+                %% install the trace.
+                {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+                case lists:member(Trace, Traces) of
+                  false ->
                     lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
-                _ -> ok
-            end,
-            {ok, Trace};
+                  _ ->
+                    ok
+                end,
+                {ok, Trace};
+              {error, _} = E ->
+                E
+            end;
         Error ->
             Error
     end.
@@ -184,15 +190,14 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
 clear_all_traces() ->
     {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
     lager_mochiglobal:put(loglevel, {MinLevel, []}),
-    [begin
-                case get_loglevel(Handler) of
-                    none ->
-                        gen_event:delete_handler(lager_event, Handler, []);
-                    _ ->
-                        ok
-                end
-        end || Handler <- gen_event:which_handlers(lager_event)],
-    ok.
+    lists:foreach(fun(Handler) ->
+          case get_loglevel(Handler) of
+            none ->
+              gen_event:delete_handler(lager_event, Handler, []);
+            _ ->
+              ok
+          end
+      end, gen_event:which_handlers(lager_event)).
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
@@ -283,8 +288,7 @@ safe_format(Fmt, Args, Limit) ->
     safe_format(Fmt, Args, Limit, []).
 
 safe_format(Fmt, Args, Limit, Options) ->
-    try lager_trunc_io:format(Fmt, Args, Limit, Options) of
-        Result -> Result
+    try lager_trunc_io:format(Fmt, Args, Limit, Options)
     catch
         _:_ -> lager_trunc_io:format("FORMAT ERROR: ~p ~p", [Fmt, Args], Limit)
     end.

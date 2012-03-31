@@ -108,8 +108,8 @@ handle_info(_Info, State) ->
 %% @private
 terminate(_Reason, #state{fd=FD}) ->
     %% flush and close any file handles
-    file:datasync(FD),
-    file:close(FD),
+    _ = file:datasync(FD),
+    _ = file:close(FD),
     ok.
 
 %% @private
@@ -123,7 +123,8 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
             lager_util:rotate_logfile(Name, Count),
             write(State, Level, Msg);
         {ok, {NewFD, NewInode, _}} ->
-            file:write(NewFD, Msg),
+            %% delayed_write doesn't report errors
+            _ = file:write(NewFD, Msg),
             case Level of
                 _ when Level =< ?ERROR ->
                     %% force a sync on any message at error severity or above
@@ -196,9 +197,10 @@ validate_logfile(H) ->
     false.
 
 schedule_rotation(_, undefined) ->
-    undefined;
+    ok;
 schedule_rotation(Name, Date) ->
-    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}).
+    erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}),
+    ok.
 
 -ifdef(TEST).
 

@@ -61,9 +61,14 @@ handle_info({gen_event_EXIT, Module, shutdown}, #state{module=Module} = State) -
     {stop, normal, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         config=Config, event=Event} = State) ->
-    lager:log(error, self(), "Lager event handler ~p exited with reason ~s",
-        [Module, error_logger_lager_h:format_reason(Reason)]),
-    install_handler(Event, Module, Config),
+    case lager:log(error, self(), "Lager event handler ~p exited with reason ~s",
+        [Module, error_logger_lager_h:format_reason(Reason)]) of
+      ok ->
+        install_handler(Event, Module, Config);
+      {error, _} ->
+        %% lager is not working, so installing a handler won't work
+        ok
+    end,
     {noreply, State};
 handle_info(reinstall_handler, #state{module=Module, config=Config, event=Event} = State) ->
     install_handler(Event, Module, Config),
@@ -82,13 +87,14 @@ code_change(_OldVsn, State, _Extra) ->
 install_handler(Event, Module, Config) ->
     case gen_event:add_sup_handler(Event, Module, Config) of
         ok ->
-            lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
+            _ = lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
             ok;
         Error ->
             %% try to reinstall it later
-            lager:log(error, self(), "Lager failed to install handler ~p into"
+            _ = lager:log(error, self(), "Lager failed to install handler ~p into"
                " ~p, retrying later : ~p", [Module, Event, Error]),
-            erlang:send_after(5000, self(), reinstall_handler)
+            erlang:send_after(5000, self(), reinstall_handler),
+            ok
     end.
 
 -ifdef(TEST).

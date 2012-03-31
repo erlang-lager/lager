@@ -43,7 +43,8 @@ start(_StartType, _StartArgs) ->
             Val
     end,
 
-    [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
+    %% handlers failing to start are handled in the handler_watcher
+    _ = [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
         {Module, Config} <- expand_handlers(Handlers)],
 
     %% mask the messages we have no use for
@@ -55,18 +56,23 @@ start(_StartType, _StartArgs) ->
         {ok, false} ->
             [];
         _ ->
-            supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]),
-            %% Should we allow user to whitelist handlers to not be removed?
-            [begin error_logger:delete_report_handler(X), X end ||
-                X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]]
+            case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]) of
+              {ok, _} ->
+                %% Should we allow user to whitelist handlers to not be removed?
+                [begin error_logger:delete_report_handler(X), X end ||
+                  X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]];
+              {error, _} ->
+                []
+            end
     end,
 
     {ok, Pid, SavedHandlers}.
 
 
 stop(Handlers) ->
-    [error_logger:add_report_handler(Handler) || Handler <- Handlers],
-    ok.
+    lists:foreach(fun(Handler) ->
+          error_logger:add_report_handler(Handler)
+      end, Handlers).
 
 expand_handlers([]) ->
     [];

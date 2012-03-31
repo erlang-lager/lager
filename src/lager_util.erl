@@ -79,8 +79,8 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
                     {ok, {FD, Inode, FInfo#file_info.size}};
                 false ->
                     %% delayed write can cause file:close not to do a close
-                    file:close(FD),
-                    file:close(FD),
+                    _ = file:close(FD),
+                    _ = file:close(FD),
                     case open_logfile(Name, Buffer) of
                         {ok, {FD2, Inode3, Size}} ->
                             %% inode changed, file was probably moved and
@@ -92,8 +92,8 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
             end;
         _ ->
             %% delayed write can cause file:close not to do a close
-            file:close(FD),
-            file:close(FD),
+            _ = file:close(FD),
+            _ = file:close(FD),
             case open_logfile(Name, Buffer) of
                 {ok, {FD2, Inode3, Size}} ->
                     %% file was removed
@@ -117,13 +117,15 @@ maybe_utc({Date, {H, M, S, Ms}}) ->
             {Date1, {H1, M1, S1, Ms}}
     end.
 
+%% renames and deletes failing are OK
 rotate_logfile(File, 0) ->
-    file:delete(File);
+    _ = file:delete(File),
+    ok;
 rotate_logfile(File, 1) ->
-    file:rename(File, File++".0"),
+    _ = file:rename(File, File++".0"),
     rotate_logfile(File, 0);
 rotate_logfile(File, Count) ->
-    file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++
+    _ =file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++
         integer_to_list(Count - 1)),
     rotate_logfile(File, Count - 1).
 

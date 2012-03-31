@@ -60,8 +60,7 @@ format(Fmt, Args, Max) ->
     format(Fmt, Args, Max, []).
 
 format(Fmt, Args, Max, Options) ->
-    try lager_format:format(Fmt, Args, Max, Options) of
-        Result -> Result
+    try lager_format:format(Fmt, Args, Max, Options)
     catch
         _:_ ->
             erlang:error(badarg, [Fmt, Args])
