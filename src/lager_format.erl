@@ -473,19 +473,14 @@ adjust(Data, Pad, left) -> [Data|Pad];
 adjust(Data, Pad, right) -> [Pad|Data].
 
 %% Flatten and truncate a deep list to at most N elements.
-
 flat_trunc(List, N) when is_integer(N), N >= 0 ->
-    flat_trunc(List, N, [], []).
+    flat_trunc(List, N, []).
 
-flat_trunc(L, 0, _, R) when is_list(L) ->
+flat_trunc(L, 0, R) when is_list(L) ->
     lists:reverse(R);
-flat_trunc([H|T], N, S, R) when is_list(H) ->
-    flat_trunc(H, N, [T|S], R);
-flat_trunc([H|T], N, S, R) ->
-    flat_trunc(T, N-1, S, [H|R]);
-flat_trunc([], N, [H|S], R) ->
-    flat_trunc(H, N, S, R);
-flat_trunc([], _, [], R) ->
+flat_trunc([H|T], N, R) ->
+    flat_trunc(T, N-1, [H|R]);
+flat_trunc([], _, R) ->
     lists:reverse(R).
 
 %% A deep version of string:chars/2,3
