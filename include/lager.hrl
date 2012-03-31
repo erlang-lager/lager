@@ -14,6 +14,15 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
+-record(lager_log_message,{
+						   destinations,
+						   metadata,
+						   severity_as_int,
+						   timestamp,
+						   message
+						   }).
+
+
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
 
@@ -55,10 +64,13 @@
     lager_util:level_to_num(Level) =< element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))).
 
 -define(NOTIFY(Level, Pid, Format, Args),
-    gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
-            lager_util:format_time(), [io_lib:format("[~p] ", [Level]),
-                io_lib:format("~p ", [Pid]), io_lib:format(Format, Args)]})).
-
+    gen_event:notify(lager_event,#lager_log_message{destinations=[],
+													message=io_lib:format(Format,Args),
+													metadata=[{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
+													timestamp=lager_util:format_time(),
+													severity_as_int=lager_util:level_to_num(Level)
+													})). 
+					 
 %% FOR INTERNAL USE ONLY
 %% internal non-blocking logging call
 %% there's some special handing for when we try to log (usually errors) while
@@ -93,3 +105,4 @@
             end
     end)).
 -endif.
+

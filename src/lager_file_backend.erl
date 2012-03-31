@@ -49,29 +49,37 @@
         flap=false :: boolean(),
         size = 0 :: integer(),
         date,
-        count = 10
+        count = 10,
+		formatter,
+		formatter_config
     }).
 
 %% @private
 -spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
-init(LogFile) ->
-    case validate_logfile(LogFile) of
+init([LogFile,{Formatter}]) ->
+	init([LogFile,{Formatter,[]}]);
+init([LogFile,{Formatter,FormatterConfig}]) ->
+	case validate_logfile(LogFile) of
         {Name, Level, Size, Date, Count} -> 
             schedule_rotation(Name, Date),
             State = case lager_util:open_logfile(Name, true) of
                 {ok, {FD, Inode, _}} ->
                     #state{name=Name, level=lager_util:level_to_num(Level),
-                        fd=FD, inode=Inode, size=Size, date=Date, count=Count};
+                        fd=FD, inode=Inode, size=Size, date=Date, count=Count, formatter=Formatter, formatter_config=FormatterConfig};
                 {error, Reason} ->
                     ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                         [Name, file:format_error(Reason)]),
                     #state{name=Name, level=lager_util:level_to_num(Level),
-                        flap=true, size=Size, date=Date, count=Count}
+                        flap=true, size=Size, date=Date, count=Count, formatter=Formatter, formatter_config=FormatterConfig}
             end,
+			
             {ok, State};
         false ->
             ignore
-    end.
+    end;
+init(LogFile) ->
+	init([LogFile,{lager_default_formatter,[]}]).
+
 
 %% @private
 handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
@@ -83,17 +91,14 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Dest, Level, {Date, Time}, Message},
-    #state{name=Name, level=L} = State) when Level > L ->
-    case lists:member({lager_file_backend, Name}, Dest) of
+handle_event(Message,
+    #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
+    case lager_backend_utils:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-            {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
+			{ok,write(State, Message#lager_log_message.severity_as_int, Formatter:format(Message,FormatConfig)) };
         false ->
             {ok, State}
     end;
-handle_event({log, Level, {Date, Time}, Message}, #state{level=L} = State) when Level =< L->
-    NewState = write(State, Level, [Date, " ", Time, " ", Message, "\n"]),
-    {ok, NewState};
 handle_event(_Event, State) ->
     {ok, State}.
 
@@ -259,7 +264,7 @@ filesystem_test_() ->
                         file:write_file_info("test.log", FInfo#file_info{mode = 0}),
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
                         ?assertEqual(1, lager_test_backend:count()),
-                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        {_Level, _Time,Message,_Metadata} = lager_test_backend:pop(),
                         ?assertEqual("Failed to open log file test.log with error permission denied", lists:flatten(Message))
                 end
             },
@@ -277,7 +282,7 @@ filesystem_test_() ->
                         ?assertEqual(3, lager_test_backend:count()),
                         lager_test_backend:pop(),
                         lager_test_backend:pop(),
-                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
                         ?assertEqual("Failed to reopen log file test.log with error permission denied", lists:flatten(Message))
                 end
             },
@@ -288,7 +293,7 @@ filesystem_test_() ->
                         file:write_file_info("test.log", FInfo#file_info{mode = 0}),
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
                         ?assertEqual(1, lager_test_backend:count()),
-                        {_Level, _Time, [_, _, Message]} = lager_test_backend:pop(),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
                         ?assertEqual("Failed to open log file test.log with error permission denied", lists:flatten(Message)),
                         file:write_file_info("test.log", FInfo#file_info{mode = OldPerms}),
                         lager:log(error, self(), "Test message"),
@@ -350,6 +355,7 @@ filesystem_test_() ->
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:error("Test message"),
+						timer:sleep(1000),
                         {ok, Bin} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
                 end
@@ -387,6 +393,33 @@ filesystem_test_() ->
         ]
     }.
 
+formatting_test_() ->
+    {foreach,
+        fun() ->
+                file:write_file("test.log", ""),
+                file:write_file("test2.log", ""),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, info}]),
+                application:set_env(lager, error_logger_redirect, false),
+                application:start(lager)
+        end,
+        fun(_) ->
+                file:delete("test.log"),
+                file:delete("test2.log"),
+                application:stop(lager),
+                error_logger:tty(true)
+        end,
+            [{"Should have two log files, the second prefixed with 2>",
+                fun() ->
+                       gen_event:add_handler(lager_event, lager_file_backend,[{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]),
+                       gen_event:add_handler(lager_event, lager_file_backend,[{"test2.log", debug},{lager_default_formatter,["2> [",severity,"] ", message, "\n"]}]),
+                       lager:log(error, self(), "Test message"),
+                       ?assertMatch({ok, <<"[error] Test message\n">>},file:read_file("test.log")),
+                       ?assertMatch({ok, <<"2> [error] Test message\n">>},file:read_file("test2.log"))
+                end
+            }
+		]}.
 
 -endif.
 
