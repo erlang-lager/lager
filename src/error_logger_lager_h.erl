@@ -194,6 +194,10 @@ format_reason({'function not exported', [{M, F, A, _Props},MFA|_]}) ->
         " from ", format_mfa(MFA)];
 format_reason({undef, [MFA|_]}) ->
     ["call to undefined function ", format_mfa(MFA)];
+format_reason({bad_return, {_MFA, {'EXIT', Reason}}}) ->
+    format_reason(Reason);
+format_reason({bad_return, {MFA, Val}}) ->
+    ["bad return value ", print_val(Val), " from ", format_mfa(MFA)];
 format_reason({bad_return_value, Val}) ->
     ["bad return value: ", print_val(Val)];
 format_reason({{bad_return_value, Val}, MFA}) ->
