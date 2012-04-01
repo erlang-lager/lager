@@ -188,6 +188,10 @@ format_offender(Off) ->
 format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
     ["call to undefined function ", format_mfa({M, F, length(A)}),
         " from ", format_mfa(MFA)];
+format_reason({'function not exported', [{M, F, A, _Props},MFA|_]}) ->
+    %% R15 line numbers
+    ["call to undefined function ", format_mfa({M, F, length(A)}),
+        " from ", format_mfa(MFA)];
 format_reason({undef, [MFA|_]}) ->
     ["call to undefined function ", format_mfa(MFA)];
 format_reason({bad_return_value, Val}) ->
@@ -227,6 +231,9 @@ format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
     ["system limit: ", Limit];
 format_reason({badarg, [MFA,MFA2|_]}) ->
     case MFA of
+        {_M, _F, A, _Props} when is_list(A) ->
+            %% R15 line numbers
+            ["bad argument in call to ", format_mfa(MFA), " in ", format_mfa(MFA2)];
         {_M, _F, A} when is_list(A) ->
             ["bad argument in call to ", format_mfa(MFA), " in ", format_mfa(MFA2)];
         _ ->
