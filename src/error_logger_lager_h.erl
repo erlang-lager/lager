@@ -188,8 +188,16 @@ format_offender(Off) ->
 format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
     ["call to undefined function ", format_mfa({M, F, length(A)}),
         " from ", format_mfa(MFA)];
+format_reason({'function not exported', [{M, F, A, _Props},MFA|_]}) ->
+    %% R15 line numbers
+    ["call to undefined function ", format_mfa({M, F, length(A)}),
+        " from ", format_mfa(MFA)];
 format_reason({undef, [MFA|_]}) ->
     ["call to undefined function ", format_mfa(MFA)];
+format_reason({bad_return, {_MFA, {'EXIT', Reason}}}) ->
+    format_reason(Reason);
+format_reason({bad_return, {MFA, Val}}) ->
+    ["bad return value ", print_val(Val), " from ", format_mfa(MFA)];
 format_reason({bad_return_value, Val}) ->
     ["bad return value: ", print_val(Val)];
 format_reason({{bad_return_value, Val}, MFA}) ->
@@ -227,6 +235,9 @@ format_reason({system_limit, [{M, F, _}|_] = Trace}) ->
     ["system limit: ", Limit];
 format_reason({badarg, [MFA,MFA2|_]}) ->
     case MFA of
+        {_M, _F, A, _Props} when is_list(A) ->
+            %% R15 line numbers
+            ["bad argument in call to ", format_mfa(MFA), " in ", format_mfa(MFA2)];
         {_M, _F, A} when is_list(A) ->
             ["bad argument in call to ", format_mfa(MFA), " in ", format_mfa(MFA2)];
         _ ->
@@ -250,6 +261,13 @@ format_mfa({M, F, A}) when is_list(A) ->
     io_lib:format("~w:~w("++FmtStr++")", [M, F | Args]);
 format_mfa({M, F, A}) when is_integer(A) ->
     io_lib:format("~w:~w/~w", [M, F, A]);
+format_mfa({M, F, A, Props}) when is_list(Props) ->
+    case proplists:get_value(line, Props) of
+        undefined ->
+            format_mfa({M, F, A});
+        Line ->
+            [format_mfa({M, F, A}), io_lib:format(" line ~w", [Line])]
+    end;
 format_mfa(Other) ->
     io_lib:format("~w", [Other]).
 
