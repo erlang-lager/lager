@@ -202,6 +202,8 @@ format_reason({bad_return_value, Val}) ->
     ["bad return value: ", print_val(Val)];
 format_reason({{bad_return_value, Val}, MFA}) ->
     ["bad return value: ", print_val(Val), " in ", format_mfa(MFA)];
+format_reason({{badrecord, Record}, [MFA|_]}) ->
+    ["bad record ", print_val(Record), " in ", format_mfa(MFA)];
 format_reason({{case_clause, Val}, [MFA|_]}) ->
     ["no case clause matching ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({function_clause, [MFA|_]}) ->
