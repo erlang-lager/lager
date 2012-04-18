@@ -9,6 +9,11 @@
 
 -export([start/0]).
 
+-record(state, {
+        host,
+        port
+    }).
+
 start() ->
 	gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
@@ -49,6 +54,9 @@ handle_call(try_clause, _, State) ->
 handle_call(badmatch, _, State) ->
 	{A, B, C} = State,
 	{reply, [A, B, C], State};
+handle_call(badrecord, _, State) ->
+	Host = State#state.host,
+	{reply, Host, State};
 handle_call(function_clause, _, State) ->
 	{reply, function(State), State};
 handle_call(badarith, _, State) ->

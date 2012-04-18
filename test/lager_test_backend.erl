@@ -404,6 +404,15 @@ error_logger_redirect_crash_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
+            {"bad record",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(badrecord),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad record state in crash:handle_call/3", [Pid])),
+                        test_body(Expected, lists:flatten(Msg))
+                end
+            },
             {"noproc",
                 fun() ->
                         Pid = whereis(crash),
