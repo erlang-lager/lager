@@ -128,8 +128,9 @@ trace_file(File, Filter, Level) ->
             Res = case lists:member({lager_file_backend, File}, Handlers) of
                 false ->
                     %% install the handler
-                    supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, {File, none}]);
+                    {ok, _} = supervisor:start_child(lager_handler_watcher_sup,
+                      [lager_event, {lager_file_backend, File}, {File, none}]),
+                    ok;
                 _ ->
                     ok
             end,
