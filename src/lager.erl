@@ -134,7 +134,7 @@ trace_file(File, Filter, Level) ->
                     ok
             end,
             case Res of
-              {ok, _} ->
+              ok ->
                 %% install the trace.
                 {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
                 case lists:member(Trace, Traces) of
