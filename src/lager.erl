@@ -128,14 +128,13 @@ trace_file(File, Filter, Level) ->
             Res = case lists:member({lager_file_backend, File}, Handlers) of
                 false ->
                     %% install the handler
-                    {ok, _} = supervisor:start_child(lager_handler_watcher_sup,
-                      [lager_event, {lager_file_backend, File}, {File, none}]),
-                    ok;
+                    supervisor:start_child(lager_handler_watcher_sup,
+                        [lager_event, {lager_file_backend, File}, {File, none}]);
                 _ ->
-                    ok
+                    {ok, exists}
             end,
             case Res of
-              ok ->
+              {ok, _} ->
                 %% install the trace.
                 {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
                 case lists:member(Trace, Traces) of
