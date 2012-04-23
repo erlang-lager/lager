@@ -19,6 +19,14 @@ loop() ->
         error ->
             erlang:error(mybad),
             loop();
+        {case_clause, X} ->
+            case X of
+                notgonnamatch ->
+                    ok;
+                notthiseither ->
+                    error
+            end,
+            loop();
         _ ->
             loop()
     end.
