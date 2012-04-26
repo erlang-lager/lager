@@ -62,7 +62,7 @@ format(Fmt, Args, Max) ->
 format(Fmt, Args, Max, Options) ->
     try lager_format:format(Fmt, Args, Max, Options)
     catch
-        _:_ ->
+        _What:_Why ->
             erlang:error(badarg, [Fmt, Args])
     end.
 
@@ -282,7 +282,7 @@ alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  
             {R, Len} = list_body([H|T], Max-2, Options, false),
             {[$[, R, $]], Len + 2}
     end;
-alist_start([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
+alist_start([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:= $\e; H=:= $\f; H=:= $\b ->
     try alist([H|T], Max -1, Options) of
         {L, Len} ->
             {[$"|L], Len + 1}
@@ -299,10 +299,14 @@ alist([], _Max, #print_options{force_strings=true}) -> {"", 0};
 alist([], _Max, _Options) -> {"\"", 1};
 alist(_, Max, #print_options{force_strings=true}) when Max < 4 -> {"...", 3};
 alist(_, Max, #print_options{force_strings=false}) when Max < 5 -> {"...\"", 4};
+alist([H|T], Max, Options = #print_options{force_strings=false,lists_as_strings=true}) when H =:= $"; H =:= $\\ ->
+    %% preserve escaping around quotes
+    {L, Len} = alist(T, Max-1, Options),
+    {[$\\,H|L], Len + 2};
 alist([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
-alist([H|T], Max, Options) when H =:= 9; H =:= 10; H =:= 13 ->
+alist([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:= $\e; H=:= $\f; H=:= $\b ->
     {L, Len} = alist(T, Max-1, Options),
     case Options#print_options.force_strings of
         true ->
@@ -349,9 +353,12 @@ dec_depth(#print_options{depth=Depth} = Options) when Depth > 0 ->
 dec_depth(Options) ->
     Options.
 
-escape(9) -> "\\t";
-escape(10) -> "\\n";
-escape(13) -> "\\r".
+escape($\t) -> "\\t";
+escape($\n) -> "\\n";
+escape($\r) -> "\\r";
+escape($\e) -> "\\e";
+escape($\f) -> "\\f";
+escape($\b) -> "\\b".
 
 -ifdef(TEST).
 %%--------------------
@@ -470,6 +477,16 @@ binary_printing_test() ->
     ?assertEqual("hello", lists:flatten(format("~s", [<<"hello">>], 50))),
     ?assertEqual("hello\nworld", lists:flatten(format("~s", [<<"hello\nworld">>], 50))),
     ?assertEqual("<<\"hello\\nworld\">>", lists:flatten(format("~p", [<<"hello\nworld">>], 50))),
+    ?assertEqual("<<\"\\\"hello world\\\"\">>", lists:flatten(format("~p", [<<"\"hello world\"">>], 50))),
+    ?assertEqual("<<\"hello\\\\world\">>", lists:flatten(format("~p", [<<"hello\\world">>], 50))),
+    ?assertEqual("<<\"hello\\\\\world\">>", lists:flatten(format("~p", [<<"hello\\\world">>], 50))),
+    ?assertEqual("<<\"hello\\\\\\\\world\">>", lists:flatten(format("~p", [<<"hello\\\\world">>], 50))),
+    ?assertEqual("<<\"hello\\bworld\">>", lists:flatten(format("~p", [<<"hello\bworld">>], 50))),
+    ?assertEqual("<<\"hello\\tworld\">>", lists:flatten(format("~p", [<<"hello\tworld">>], 50))),
+    ?assertEqual("<<\"hello\\nworld\">>", lists:flatten(format("~p", [<<"hello\nworld">>], 50))),
+    ?assertEqual("<<\"hello\\rworld\">>", lists:flatten(format("~p", [<<"hello\rworld">>], 50))),
+    ?assertEqual("<<\"hello\\eworld\">>", lists:flatten(format("~p", [<<"hello\eworld">>], 50))),
+    ?assertEqual("<<\"hello\\fworld\">>", lists:flatten(format("~p", [<<"hello\fworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
     ok.
 
