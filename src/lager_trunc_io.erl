@@ -358,7 +358,8 @@ escape($\n) -> "\\n";
 escape($\r) -> "\\r";
 escape($\e) -> "\\e";
 escape($\f) -> "\\f";
-escape($\b) -> "\\b".
+escape($\b) -> "\\b";
+escape($\v) -> "\\v".
 
 -ifdef(TEST).
 %%--------------------
@@ -487,6 +488,7 @@ binary_printing_test() ->
     ?assertEqual("<<\"hello\\rworld\">>", lists:flatten(format("~p", [<<"hello\rworld">>], 50))),
     ?assertEqual("<<\"hello\\eworld\">>", lists:flatten(format("~p", [<<"hello\eworld">>], 50))),
     ?assertEqual("<<\"hello\\fworld\">>", lists:flatten(format("~p", [<<"hello\fworld">>], 50))),
+    ?assertEqual("<<\"hello\\vworld\">>", lists:flatten(format("~p", [<<"hello\vworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
     ok.
 
