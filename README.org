@@ -2,7 +2,7 @@
   Lager (as in the beer) is a logging framework for Erlang. Its purpose is
   to provide a more traditional way to perform logging in an erlang application
   that plays nicely with traditional UNIX logging tools like logrotate and
-  syslog.
+  syslog. You can view the Lager EDocs [[http://basho.github.com/lager/][here]].
 
 *  Features
     - Finer grained log levels (debug, info, notice, warning, error, critical,
