@@ -28,7 +28,9 @@
 -export([parse_transform/2]).
 
 %% @private
-parse_transform(AST, _Options) ->
+parse_transform(AST, Options) ->
+    TruncSize = proplists:get_value(lager_truncation_size, Options, 4096),
+    put(truncation_size, TruncSize),
     walk_ast([], AST).
 
 walk_ast(Acc, []) ->
@@ -91,7 +93,7 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                 [Attrs, Format, Args] ->
                     {concat_lists(Attrs, DefaultAttrs), Format, Args}
             end,
-            {block, Line, 
+            {block, Line,
                 [
                     {call, Line, {remote, Line, {atom,Line1,lager},{atom,Line2,dispatch_log}},
                             [
@@ -102,7 +104,8 @@ transform_statement({call, Line, {remote, Line1, {atom, Line2, lager},
                                 {call, Line3, {atom, Line3 ,self}, []},
                                 Traces,
                                 Message,
-                                Arguments
+                                Arguments,
+                                {integer, Line3, get(truncation_size)}
                             ]
                     }
                 ]}; % block contents
