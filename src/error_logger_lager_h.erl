@@ -161,15 +161,14 @@ format_crash_report(Report, Neighbours) ->
             proplists:get_value(pid, Report);
         Atom -> Atom
     end,
-    {_Class, Reason, Trace} = proplists:get_value(error_info, Report),
-    ReasonStr = case is_atom(Reason) of
-        true ->
-            format_reason({Reason, Trace});
-        _ ->
-            format_reason(Reason)
+    {Class, Reason, Trace} = proplists:get_value(error_info, Report),
+    ReasonStr = format_reason({Reason, Trace}),
+    Type = case Class of
+        exit -> "exited";
+        _ -> "crashed"
     end,
-    io_lib:format("Process ~w with ~w neighbours crashed with reason: ~s",
-        [Name, length(Neighbours), ReasonStr]).
+    io_lib:format("Process ~w with ~w neighbours ~s with reason: ~s",
+        [Name, length(Neighbours), Type, ReasonStr]).
 
 format_offender(Off) ->
     case proplists:get_value(mfargs, Off) of
@@ -254,6 +253,11 @@ format_reason({noproc, MFA}) ->
     ["no such process or port in call to ", format_mfa(MFA)];
 format_reason({{badfun, Term}, [MFA|_]}) ->
     ["bad function ", print_val(Term), " in ", format_mfa(MFA)];
+format_reason({Reason, [{M, F, A}|_]}) when is_atom(M), is_atom(F), is_integer(A) ->
+    [format_reason(Reason), " in ", format_mfa({M, F, A})];
+format_reason({Reason, [{M, F, A, Props}|_]}) when is_atom(M), is_atom(F), is_integer(A), is_list(Props) ->
+    %% line numbers
+    [format_reason(Reason), " in ", format_mfa({M, F, A, Props})];
 format_reason(Reason) ->
     {Str, _} = lager_trunc_io:print(Reason, 500),
     Str.
