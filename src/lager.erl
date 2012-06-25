@@ -85,14 +85,14 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     end.
 
 %% @doc Manually log a message into lager without using the parse transform.
--spec log(log_level(), pid(), list()) -> ok | {error, lager_not_running}.
+-spec log(log_level(), pid() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) when is_pid(Pid) ->
-    dispatch_log(Level, [{pid,Pid}], Message, none, 4096);
+    dispatch_log(Level, [{pid,Pid}], Message, [], 4096);
 log(Level, Metadata, Message) when is_list(Metadata) ->
-    dispatch_log(Level, Metadata, Message, none, 4096).
+    dispatch_log(Level, Metadata, Message, [], 4096).
 
 %% @doc Manually log a message into lager without using the parse transform.
--spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
+-spec log(log_level(), pid() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Format, Args) when is_pid(Pid) ->
     dispatch_log(Level, [{pid,Pid}], Format, Args, 4096);
 log(Level, Metadata, Format, Args) when is_list(Metadata) ->
