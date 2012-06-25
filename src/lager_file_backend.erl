@@ -50,16 +50,16 @@
         size = 0 :: integer(),
         date,
         count = 10,
-		formatter,
-		formatter_config
+        formatter,
+        formatter_config
     }).
 
 %% @private
 -spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
 init([LogFile,{Formatter}]) ->
-	init([LogFile,{Formatter,[]}]);
+    init([LogFile,{Formatter,[]}]);
 init([LogFile,{Formatter,FormatterConfig}]) ->
-	case validate_logfile(LogFile) of
+    case validate_logfile(LogFile) of
         {Name, Level, Size, Date, Count} -> 
             schedule_rotation(Name, Date),
             State = case lager_util:open_logfile(Name, true) of
@@ -72,13 +72,13 @@ init([LogFile,{Formatter,FormatterConfig}]) ->
                     #state{name=Name, level=lager_util:level_to_num(Level),
                         flap=true, size=Size, date=Date, count=Count, formatter=Formatter, formatter_config=FormatterConfig}
             end,
-			
+
             {ok, State};
         false ->
             ignore
     end;
 init(LogFile) ->
-	init([LogFile,{lager_default_formatter,[]}]).
+    init([LogFile,{lager_default_formatter,[]}]).
 
 
 %% @private
@@ -95,7 +95,7 @@ handle_event(Message,
     #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_backend_utils:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-			{ok,write(State, Message#lager_log_message.severity_as_int, Formatter:format(Message,FormatConfig)) };
+            {ok,write(State, Message#lager_log_message.severity_as_int, Formatter:format(Message,FormatConfig)) };
         false ->
             {ok, State}
     end;
@@ -357,7 +357,7 @@ filesystem_test_() ->
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:error("Test message"),
-						timer:sleep(1000),
+                        timer:sleep(1000),
                         {ok, Bin} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
                 end
@@ -421,7 +421,7 @@ formatting_test_() ->
                        ?assertMatch({ok, <<"2> [error] Test message\n">>},file:read_file("test2.log"))
                 end
             }
-		]}.
+        ]}.
 
 -endif.
 

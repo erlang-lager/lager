@@ -133,7 +133,7 @@ basic_test_() ->
                             metadata=[{pid,"Fallback"}]},
                         [date, " ", time," [",severity,"] ",{does_not_exist,pid}, " ", message, "\n"]
                     )))
-        }	 
+        }
     ].
 
 -endif.

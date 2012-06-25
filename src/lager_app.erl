@@ -96,7 +96,7 @@ to_config({Name,Severity,Size,Rotation,Count,Format}) ->
 -ifdef(TEST).
 application_config_mangling_test_() ->
     [{"Explode the file backend handlers",
-            ?_assertMatch( 
+            ?_assertMatch(
                 [{lager_console_backend, info},
                     {{lager_file_backend,"error.log"},{"error.log",error,10485760, "$D0",5}},
                     {{lager_file_backend,"console.log"},{"console.log",info,10485760, "$D0",5}}
