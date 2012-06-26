@@ -4,7 +4,9 @@
   that plays nicely with traditional UNIX logging tools like logrotate and
   syslog.
 
-*  Features
+  [[https://travis-ci.org/basho/lager][https://secure.travis-ci.org/basho/lager.png]]
+
+* Features
     - Finer grained log levels (debug, info, notice, warning, error, critical,
       alert, emergency)
     - Logger calls are transformed using a parse transform to allow capturing
