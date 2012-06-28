@@ -85,7 +85,7 @@ handle_call(badarity, _, State) ->
 	F = fun(A, B, C) -> A + B + C end,
 	Res = F(State),
 	{reply, Res, State};
-handle_call(throw, _, State) ->
+handle_call(throw, _, _State) ->
 	throw(a_ball);
 handle_call(_Call, _From, State) ->
 	{reply, ok, State}.
