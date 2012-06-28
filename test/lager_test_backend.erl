@@ -305,6 +305,15 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+           {"bad return value uncaught throw",
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(throw),
+                        {_, _, Msg} = pop(),
+                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: a_ball", [Pid])),
+                        ?assertEqual(Expected, lists:flatten(Msg))
+                end
+            },
             {"case clause",
                 fun() ->
                         Pid = whereis(crash),
