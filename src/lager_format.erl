@@ -224,16 +224,18 @@ control2($w, [A], F, Adj, P, Pad, _Enc, L) ->
     {Res, lists:flatlength(Res)};
 control2($p, [A], F, Adj, P, Pad, _Enc, L) ->
     Term = lager_trunc_io:fprint(A, L, [{lists_as_strings, true}]),
-    Res = term(Term, F, Adj, P, Pad),
-    {Res, lists:flatlength(Res)};
+    %Res = term(Term, F, Adj, P, Pad),
+    %{Res, lists:flatlength(Res)};
+    {Term, lists:flatlength(Term)};
 control2($W, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
     Term = lager_trunc_io:fprint(A, L, [{depth, Depth}, {lists_as_strings, false}]),
     Res = term(Term, F, Adj, P, Pad),
     {Res, lists:flatlength(Res)};
 control2($P, [A,Depth], F, Adj, P, Pad, _Enc, L) when is_integer(Depth) ->
     Term = lager_trunc_io:fprint(A, L, [{depth, Depth}, {lists_as_strings, true}]),
-    Res = term(Term, F, Adj, P, Pad),
-    {Res, lists:flatlength(Res)};
+    {Term, lists:flatlength(Term)};
+    %Res = term(Term, F, Adj, P, Pad),
+    %{Res, lists:flatlength(Res)};
 control2($s, [L0], F, Adj, P, Pad, latin1, L) ->
     List = lager_trunc_io:fprint(maybe_flatten(L0), L, [{force_strings, true}]),
     Res = string(List, F, Adj, P, Pad),
