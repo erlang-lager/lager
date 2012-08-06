@@ -428,6 +428,7 @@ format_test() ->
     
     %% complex ones
     ?assertEqual("    foobar", lists:flatten(format("~10s", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("f", lists:flatten(format("~1s", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~22p", [["foo", $b, $a, $r]], 50))),
     ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~22P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("**********", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
