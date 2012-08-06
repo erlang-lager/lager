@@ -428,10 +428,15 @@ format_test() ->
     
     %% complex ones
     ?assertEqual("    foobar", lists:flatten(format("~10s", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22p", [["foo", $b, $a, $r]], 50))),
-    ?assertEqual("     [\"foo\",98,97,114]", lists:flatten(format("~22P", [["foo", $b, $a, $r], 10], 50))),
+    ?assertEqual("f", lists:flatten(format("~1s", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~22p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~22P", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("**********", lists:flatten(format("~10W", [["foo", $b, $a, $r], 10], 50))),
     ?assertEqual("[[102,111,111],98,97,114]", lists:flatten(format("~25W", [["foo", $b, $a, $r], 10], 50))),
+    % Note these next two diverge from io_lib:format; the field width is
+    % ignored, when it should be used as max line length.
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~10p", [["foo", $b, $a, $r]], 50))),
+    ?assertEqual("[\"foo\",98,97,114]", lists:flatten(format("~10P", [["foo", $b, $a, $r], 10], 50))),
     ok.
 
 atom_quoting_test() ->
