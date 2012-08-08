@@ -70,9 +70,9 @@ handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
         true ->
             case Verbose of
                 true ->
-                    io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\n"]);
+                    io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
                 _ ->
-                    io:put_chars([Time, " ", LevelStr, Message, "\n"])
+                    io:put_chars([Time, " ", LevelStr, Message, "\r\n"])
             end,
             {ok, State};
         false ->
@@ -82,9 +82,9 @@ handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
   #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
     case Verbose of
         true ->
-            io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\n"]);
+            io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
         _ ->
-            io:put_chars([Time, " ", LevelStr, Message, "\n"])
+            io:put_chars([Time, " ", LevelStr, Message, "\r\n"])
     end,
     {ok, State};
 handle_event(_Event, State) ->
@@ -146,7 +146,7 @@ console_log_test_() ->
                         receive
                             {io_request, From, ReplyAs, {put_chars, unicode, Msg}} ->
                                 From ! {io_reply, ReplyAs, ok},
-                                ?assertMatch([_, "[info]", "Test message\n"], re:split(Msg, " ", [{return, list}, {parts, 3}]))
+                                ?assertMatch([_, "[info]", "Test message\r\n"], re:split(Msg, " ", [{return, list}, {parts, 3}]))
                         after
                             500 ->
                                 ?assert(false)
@@ -163,7 +163,7 @@ console_log_test_() ->
                         PidStr = pid_to_list(self()),
                         receive
                             {io_request, _, _, {put_chars, unicode, Msg}} ->
-                                ?assertMatch([_, _, "[info]", PidStr, "Test message\n"], re:split(Msg, " ", [{return, list}, {parts, 5}]))
+                                ?assertMatch([_, _, "[info]", PidStr, "Test message\r\n"], re:split(Msg, " ", [{return, list}, {parts, 5}]))
                         after
                             500 ->
                                 ?assert(false)
@@ -190,7 +190,7 @@ console_log_test_() ->
                         receive
                             {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
                                 From1 ! {io_reply, ReplyAs1, ok},
-                                ?assertMatch([_, "[debug]", "Test message\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                                ?assertMatch([_, "[debug]", "Test message\r\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
                         after
                             500 ->
                                 ?assert(false)
@@ -217,7 +217,7 @@ console_log_test_() ->
                         receive
                             {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
                                 From1 ! {io_reply, ReplyAs1, ok},
-                                ?assertMatch([_, "[error]", "Test message\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                                ?assertMatch([_, "[error]", "Test message\r\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
                         after
                             1000 ->
                                 ?assert(false)
