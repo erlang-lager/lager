@@ -121,7 +121,6 @@ console_log_test_() ->
                     YComb(YComb)
             end
     end,
-
     {foreach,
         fun() ->
                 error_logger:tty(false),
@@ -130,9 +129,12 @@ console_log_test_() ->
                 application:set_env(lager, error_logger_redirect, false),
                 application:start(compiler),
                 application:start(syntax_tools),
-                application:start(lager)
+                application:start(lager),
+                whereis(user)
         end,
-        fun(_) ->
+        fun(User) ->
+                unregister(user),
+                register(user, User),
                 application:stop(lager),
                 error_logger:tty(true)
         end,
