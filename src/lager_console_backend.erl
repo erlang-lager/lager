@@ -70,9 +70,9 @@ handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
         true ->
             case Verbose of
                 true ->
-                    io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
+                    io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
                 _ ->
-                    io:put_chars([Time, " ", LevelStr, Message, "\r\n"])
+                    io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
             end,
             {ok, State};
         false ->
@@ -82,9 +82,9 @@ handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
   #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
     case Verbose of
         true ->
-            io:put_chars([Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
+            io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
         _ ->
-            io:put_chars([Time, " ", LevelStr, Message, "\r\n"])
+            io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
     end,
     {ok, State};
 handle_event(_Event, State) ->
@@ -121,7 +121,6 @@ console_log_test_() ->
                     YComb(YComb)
             end
     end,
-
     {foreach,
         fun() ->
                 error_logger:tty(false),
@@ -130,9 +129,12 @@ console_log_test_() ->
                 application:set_env(lager, error_logger_redirect, false),
                 application:start(compiler),
                 application:start(syntax_tools),
-                application:start(lager)
+                application:start(lager),
+                whereis(user)
         end,
-        fun(_) ->
+        fun(User) ->
+                unregister(user),
+                register(user, User),
                 application:stop(lager),
                 error_logger:tty(true)
         end,
@@ -141,6 +143,8 @@ console_log_test_() ->
                 fun() ->
                         Pid = spawn(F(self())),
                         gen_event:add_handler(lager_event, lager_console_backend, info),
+                        unregister(user),
+                        register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager:log(info, self(), "Test message"),
                         receive
@@ -156,6 +160,8 @@ console_log_test_() ->
             {"verbose console logging",
                 fun() ->
                         Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         gen_event:add_handler(lager_event, lager_console_backend, [info, true]),
                         lager:log(info, self(), "Test message"),
@@ -173,6 +179,8 @@ console_log_test_() ->
             {"tracing should work",
                 fun() ->
                         Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
                         gen_event:add_handler(lager_event, lager_console_backend, info),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager_mochiglobal:put(loglevel, {?INFO, []}),
@@ -200,6 +208,8 @@ console_log_test_() ->
             {"tracing doesn't duplicate messages",
                 fun() ->
                         Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
                         gen_event:add_handler(lager_event, lager_console_backend, info),
                         lager_mochiglobal:put(loglevel, {?INFO, []}),
                         erlang:group_leader(Pid, whereis(lager_event)),
