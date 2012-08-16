@@ -31,8 +31,16 @@
   -compile([{parse_transform, lager_transform}]).
 #+END_EXAMPLE
 
-  Once you have built your code with lager, you can then generate log messages
-  by doing the following:
+  Before logging any messages, you'll need to start the lager application. The 
+  lager module's start function takes care of loading and starting any dependencies
+  lager requires.
+  
+#+BEGIN_EXAMPLE
+  lager:start().
+#+END_EXAMPLE
+
+  Once you have built your code with lager and started the lager application, 
+  you can then generate log messages by doing the following:
 
 #+BEGIN_EXAMPLE
   lager:error("Some message")
