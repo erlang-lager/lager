@@ -22,12 +22,12 @@
 
 %% API
 -export([start/0,
-        log/8, log_dest/9, log/3, log/4,
+        log/9, log_dest/10, log/3, log/4,
         trace_file/2, trace_file/3, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
-        safe_format/3, safe_format_chop/3,dispatch_log/8]).
+        safe_format/3, safe_format_chop/3,dispatch_log/9]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -45,23 +45,23 @@ start(App) ->
 
 start_ok(_App, ok) -> ok;
 start_ok(_App, {error, {already_started, _App}}) -> ok;
-start_ok(App, {error, {not_started, Dep}}) -> 
+start_ok(App, {error, {not_started, Dep}}) ->
     ok = start(Dep),
     start(App);
-start_ok(App, {error, Reason}) -> 
+start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
 
--spec dispatch_log(log_level(), atom(), atom(), pos_integer(), pid(), list(), string(), list()) ->
+-spec dispatch_log(log_level(), atom(), atom(), pos_integer(), pid(), list(), string(), list(), integer()) ->
     ok | {error, lager_not_running}.
 
-dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args) ->
+dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args, TruncSize) ->
     {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
     Result=
     case LevelThreshold >= lager_util:level_to_num(Severity) of
         true -> lager:log(Severity,Module,Function,Line,Pid,
                 lager_util:maybe_utc(lager_util:localtime_ms()),
-                Format,Args);
+                Format,Args,TruncSize);
         _ -> ok
     end,
     case TraceFilters of
@@ -73,30 +73,30 @@ dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args) ->
                     lager_util:level_to_num(Severity),
                     TraceFilters,
                     []),
-                Format,Args);
+                Format,Args,TruncSize);
         _ -> ok
     end.
 
 %% @private
--spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), string(), list()) ->
+-spec log(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), string(), list(), integer()) ->
     ok | {error, lager_not_running}.
-log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
+log(Level, Module, Function, Line, Pid, Time, Format, Args, TruncSize) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           safe_format_chop(Format, Args, 4096)],
+           safe_format_chop(Format, Args, TruncSize)],
     safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 %% @private
--spec log_dest(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list(), string(), list()) ->
+-spec log_dest(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list(), string(), list(), integer()) ->
     ok | {error, lager_not_running}.
-log_dest(_Level, _Module, _Function, _Line, _Pid, _Time, [], _Format, _Args) ->
+log_dest(_Level, _Module, _Function, _Line, _Pid, _Time, [], _Format, _Args, _TruncSize) ->
     ok;
-log_dest(Level, Module, Function, Line, Pid, Time, Dest, Format, Args) ->
+log_dest(Level, Module, Function, Line, Pid, Time, Dest, Format, Args, TruncSize) ->
     Timestamp = lager_util:format_time(Time),
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
-           safe_format_chop(Format, Args, 4096)],
+           safe_format_chop(Format, Args, TruncSize)],
     safe_notify({log, Dest, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 
