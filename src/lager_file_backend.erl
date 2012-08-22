@@ -100,7 +100,7 @@ handle_call({clear_loglevel, []}, State) ->
 handle_call({clear_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
     {ok, ok, State#state{ mod_levels = lists:keydelete(Module, 1, ModLvls) }};
 handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
-    Level = erlang:hd(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
+    Level = erlang:tl(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
     {ok, Level, State};
 handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
     case lists:keysearch(Module, 1, ModLvls) of
