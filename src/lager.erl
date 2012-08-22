@@ -25,7 +25,9 @@
         log/8, log_dest/9, log/3, log/4,
         trace_file/2, trace_file/3, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0,
-        get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
+        get_loglevel/1, get_mod_loglevel/2, get_loglevels/0,
+        set_loglevel/2, set_loglevel/3, set_mod_loglevel/3, set_mod_loglevel/4,
+        clear_mod_loglevel/2, clear_mod_loglevel/3,
         minimum_loglevel/1, posix_error/1,
         safe_format/3, safe_format_chop/3,dispatch_log/8]).
 
@@ -85,7 +87,7 @@ log(Level, Module, Function, Line, Pid, Time, Format, Args) ->
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
+    safe_notify({log, Module, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 %% @private
 -spec log_dest(log_level(), atom(), atom(), pos_integer(), pid(), tuple(), list(), string(), list()) ->
@@ -97,7 +99,7 @@ log_dest(Level, Module, Function, Line, Pid, Time, Dest, Format, Args) ->
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify({log, Dest, lager_util:level_to_num(Level), Timestamp, Msg}).
+    safe_notify({log, {Dest, Module}, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 
 %% @doc Manually log a message into lager without using the parse transform.
@@ -106,7 +108,7 @@ log(Level, Pid, Message) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
            safe_format_chop("~s", [Message], 4096)],
-    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
+    safe_notify({log, '_', lager_util:level_to_num(Level), Timestamp, Msg}).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid(), string(), list()) -> ok | {error, lager_not_running}.
@@ -114,7 +116,7 @@ log(Level, Pid, Format, Args) ->
     Timestamp = lager_util:format_time(),
     Msg = [["[", atom_to_list(Level), "] "], io_lib:format("~p ", [Pid]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify({log, lager_util:level_to_num(Level), Timestamp, Msg}).
+    safe_notify({log, '_', lager_util:level_to_num(Level), Timestamp, Msg}).
 
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug).
@@ -221,19 +223,45 @@ status() ->
     io:put_chars(Status).
 
 %% @doc Set the loglevel for a particular backend.
-set_loglevel(Handler, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
+set_loglevel(Handler, Level) ->
+    set_mod_loglevel(Handler, Level, '_').
+    
+set_loglevel(Handler, Ident, Level) ->
+    set_mod_loglevel(Handler, Ident, Level, '_').
+
+%% @doc Set the loglevel for a particular backend and module.
+set_mod_loglevel(Handler, Level, Module) when is_atom(Level) ->
+    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level, Module}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),
     lager_mochiglobal:put(loglevel, {MinLog, Traces}),
     Reply.
 
-%% @doc Set the loglevel for a particular backend that has multiple identifiers
+%% @doc Set the loglevel for a particular module and backend that has multiple identifiers
 %% (eg. the file backend).
-set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    io:format("handler: ~p~n", [{Handler, Ident}]),
-    Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
+set_mod_loglevel(Handler, Ident, Level, Module) when is_atom(Level) ->
+    Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level, Module}, infinity),
+    %% recalculate min log level
+    MinLog = minimum_loglevel(get_loglevels()),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    Reply.
+
+%% @doc Clear individual loglevel for certain module and backend. Use '_' for Module to
+%% clear all modules loglevels.
+clear_mod_loglevel(Handler, Module) ->
+    Reply = gen_event:call(lager_event, Handler, {clear_loglevel, Module}, infinity),
+    %% recalculate min log level
+    MinLog = minimum_loglevel(get_loglevels()),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
+    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    Reply.
+
+%% @doc Clear individual loglevel for certain module and backend that has multiple
+%% identifiers (eg. the file backend). Use '_' for Module to clear all modules loglevels.
+clear_mod_loglevel(Handler, Ident, Module) ->
+    Reply = gen_event:call(lager_event, {Handler, Ident}, {clear_loglevel, Module}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),
@@ -241,9 +269,18 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply.
 
 %% @doc Get the loglevel for a particular backend. In the case that the backend
-%% has multiple identifiers, the lowest is returned
+%% has multiple identifiers or per module loglevels, the lowest is returned
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
+        X when is_integer(X) ->
+            lager_util:num_to_level(X);
+        Y -> Y
+    end.
+
+%% @doc Get the loglevel for a particular backend and module. In the case that the backend
+%% has multiple identifiers, the lowest is returned
+get_mod_loglevel(Handler, Module) ->
+    case gen_event:call(lager_event, Handler, {get_mod_loglevel, Module}, infinity) of
         X when is_integer(X) ->
             lager_util:num_to_level(X);
         Y -> Y

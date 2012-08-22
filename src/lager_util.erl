@@ -18,7 +18,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
+-export([levels/0, level_to_num/1, num_to_level/1, check_loglevel/4, open_logfile/2,
         ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4]).
@@ -49,6 +49,14 @@ num_to_level(2) -> critical;
 num_to_level(1) -> alert;
 num_to_level(0) -> emergency;
 num_to_level(-1) -> none.
+
+check_loglevel(GenLevel, ModLvls, Module, Level) ->
+    case lists:keysearch(Module, 1, ModLvls) of
+        {value, {_, ModLvl}} ->
+            ModLvl >= Level;
+        false ->
+            GenLevel >= Level
+    end.
 
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of

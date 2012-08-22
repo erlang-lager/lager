@@ -44,6 +44,7 @@
 -record(state, {
         name :: string(),
         level :: integer(),
+        mod_levels :: list(),
         fd :: file:io_device(),
         inode :: integer(),
         flap=false :: boolean(),
@@ -60,12 +61,12 @@ init(LogFile) ->
             schedule_rotation(Name, Date),
             State = case lager_util:open_logfile(Name, true) of
                 {ok, {FD, Inode, _}} ->
-                    #state{name=Name, level=lager_util:level_to_num(Level),
+                    #state{name=Name, level=lager_util:level_to_num(Level), mod_levels = [],
                         fd=FD, inode=Inode, size=Size, date=Date, count=Count};
                 {error, Reason} ->
                     ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                         [Name, file:format_error(Reason)]),
-                    #state{name=Name, level=lager_util:level_to_num(Level),
+                    #state{name=Name, level=lager_util:level_to_num(Level), mod_levels = [],
                         flap=true, size=Size, date=Date, count=Count}
             end,
             {ok, State};
@@ -74,25 +75,57 @@ init(LogFile) ->
     end.
 
 %% @private
-handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
+handle_call({set_loglevel, Level, Module}, #state{name = Ident, mod_levels = ModLvls} = State) ->
     ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
-    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
-handle_call(get_loglevel, #state{level=Level} = State) ->
+    case lists:member(Level, ?LEVELS) of
+        true ->
+            case Module of
+                '_' ->
+                    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+                _ ->
+                    case lists:keymember(Module, 1, ModLvls) of
+                        true ->
+                            {ok, ok, State#state{mod_levels =
+                                lists:keyreplace(Module, 1, ModLvls,
+                                    {Module, lager_util:level_to_num(Level)})}};
+                        false ->
+                            {ok, ok, State#state{mod_levels = [{Module, lager_util:level_to_num(Level)}|ModLvls]}}
+                    end
+            end;
+        _ ->
+            {ok, {error, bad_log_level}, State}
+    end;
+handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
+    Level = erlang:hd(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
     {ok, Level, State};
+handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    case lists:keysearch(Module, 1, ModLvls) of
+        {value, {_, Level}} ->
+            {ok, Level, State};
+        false ->
+            {ok, false, State}
+    end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Dest, Level, {Date, Time}, Message},
-    #state{name=Name, level=L} = State) when Level > L ->
-    case lists:member({lager_file_backend, Name}, Dest) of
-        true ->
-            {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
-        false ->
-            {ok, State}
+handle_event({log, {Dest, Module}, Level, {Date, Time}, Message},
+    #state{name=Name, level=GenLevel, mod_levels=ModLvls} = State) ->
+    case lists:member({lager_file_backend, Name}, Dest)
+        andalso lager_util:check_loglevel(GenLevel, ModLvls, Module, Level)of
+            true ->
+                {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
+            false ->
+                {ok, State}
     end;
-handle_event({log, Level, {Date, Time}, Message}, #state{level=L} = State) when Level =< L->
-    NewState = write(State, Level, [Date, " ", Time, " ", Message, "\n"]),
+handle_event({log, Module, Level, {Date, Time}, Message},
+    #state{level=GenLevel, mod_levels=ModLvls} = State) ->
+    NewState = case lager_util:check_loglevel(GenLevel, ModLvls, Module, Level) of
+        true ->
+            write(State, Level, [Date, " ", Time, " ", Message, "\n"]);
+        false ->
+            State
+    end,
     {ok, NewState};
 handle_event(_Event, State) ->
     {ok, State}.

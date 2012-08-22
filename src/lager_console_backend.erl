@@ -24,7 +24,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, verbose}).
+-record(state, {level, verbose, mod_levels}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -37,54 +37,84 @@
 init(Level) when is_atom(Level) ->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
+            {ok, #state{level=lager_util:level_to_num(Level), verbose=false, mod_levels = []}};
         _ ->
             {error, bad_log_level}
     end;
 init([Level, Verbose]) ->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}};
+            {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose, mod_levels = []}};
         _ ->
             {error, bad_log_level}
     end.
 
 
 %% @private
-handle_call(get_loglevel, #state{level=Level} = State) ->
+handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
+    Level = erlang:hd(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
     {ok, Level, State};
-handle_call({set_loglevel, Level}, State) ->
+handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    case lists:keysearch(Module, 1, ModLvls) of
+        {value, {_, Level}} ->
+            {ok, Level, State};
+        false ->
+            {ok, false, State}
+    end;
+handle_call({set_loglevel, Level, Module}, #state{mod_levels = ModLvls} = State) ->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+            case Module of
+                '_' ->
+                    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+                _ ->
+                    case lists:keymember(Module, 1, ModLvls) of
+                        true ->
+                            {ok, ok, State#state{mod_levels =
+                                lists:keyreplace(Module, 1, ModLvls,
+                                    {Module, lager_util:level_to_num(Level)})}};
+                        false ->
+                            {ok, ok, State#state{mod_levels = [{Module, lager_util:level_to_num(Level)}|ModLvls]}}
+                    end
+            end;
         _ ->
             {ok, {error, bad_log_level}, State}
     end;
+handle_call({clear_loglevel, '_'}, State) ->
+    {ok, ok, State#state{ mod_levels = [] }};
+handle_call({clear_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    {ok, ok, State#state{ mod_levels = lists:keydelete(Module, 1, ModLvls) }};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
-    #state{level=L, verbose=Verbose} = State) when Level > L ->
-    case lists:member(lager_console_backend, Dest) of
+handle_event({log, {Dest, Module}, Level, {Date, Time}, [LevelStr, Location, Message]},
+    #state{level=GenLevel, verbose=Verbose, mod_levels = ModLvls} = State) ->
+    case lists:member(lager_console_backend, Dest)
+        andalso lager_util:check_loglevel(GenLevel, ModLvls, Module, Level) of
+            true ->
+                case Verbose of
+                    true ->
+                        io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
+                    _ ->
+                        io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
+                end,
+                {ok, State};
+            false ->
+                {ok, State}
+    end;
+handle_event({log, Module, Level, {Date, Time}, [LevelStr, Location, Message]},
+  #state{level=GenLevel, verbose=Verbose, mod_levels = ModLvls} = State) ->
+    case lager_util:check_loglevel(GenLevel, ModLvls, Module, Level) of
         true ->
             case Verbose of
                 true ->
                     io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
                 _ ->
                     io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
-            end,
-            {ok, State};
+            end;
         false ->
-            {ok, State}
-    end;
-handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
-  #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
-    case Verbose of
-        true ->
-            io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
-        _ ->
-            io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
+            ok
     end,
     {ok, State};
 handle_event(_Event, State) ->
