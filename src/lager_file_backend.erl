@@ -95,6 +95,10 @@ handle_call({set_loglevel, Level, Module}, #state{name = Ident, mod_levels = Mod
         _ ->
             {ok, {error, bad_log_level}, State}
     end;
+handle_call({clear_loglevel, []}, State) ->
+    {ok, ok, State#state{ mod_levels = [] }};
+handle_call({clear_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    {ok, ok, State#state{ mod_levels = lists:keydelete(Module, 1, ModLvls) }};
 handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
     Level = erlang:hd(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
     {ok, Level, State};
