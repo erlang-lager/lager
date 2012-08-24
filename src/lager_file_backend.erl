@@ -44,7 +44,7 @@
 -record(state, {
         name :: string(),
         level :: integer(),
-        mod_levels :: list(),
+        mod_levels = [],
         fd :: file:io_device(),
         inode :: integer(),
         flap=false :: boolean(),
@@ -100,7 +100,7 @@ handle_call({clear_loglevel, []}, State) ->
 handle_call({clear_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
     {ok, ok, State#state{ mod_levels = lists:keydelete(Module, 1, ModLvls) }};
 handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
-    Level = erlang:tl(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
+    Level = erlang:hd(lists:reverse(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]]))),
     {ok, Level, State};
 handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
     case lists:keysearch(Module, 1, ModLvls) of
@@ -113,14 +113,13 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, {Dest, Module}, Level, {Date, Time}, Message},
-    #state{name=Name, level=GenLevel, mod_levels=ModLvls} = State) ->
-    case lists:member({lager_file_backend, Name}, Dest)
-        andalso lager_util:check_loglevel(GenLevel, ModLvls, Module, Level)of
-            true ->
-                {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
-            false ->
-                {ok, State}
+handle_event({log_dest, Dest, Level, {Date, Time}, Message},
+    #state{name=Name, level=L} = State) when Level > L ->
+    case lists:member({lager_file_backend, Name}, Dest) of
+        true ->
+            {ok, write(State, Level, [Date, " ", Time, " ", Message, "\n"])};
+        false ->
+            {ok, State}
     end;
 handle_event({log, Module, Level, {Date, Time}, Message},
     #state{level=GenLevel, mod_levels=ModLvls} = State) ->

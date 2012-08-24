@@ -23,7 +23,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, buffer, ignored}).
+-record(state, {level, mod_levels, buffer, ignored}).
 -compile([{parse_transform, lager_transform}]).
 
 -ifdef(TEST).
@@ -32,7 +32,7 @@
 -endif.
 
 init(Level) ->
-    {ok, #state{level=lager_util:level_to_num(Level), buffer=[], ignored=[]}}.
+    {ok, #state{level=lager_util:level_to_num(Level), buffer=[], ignored=[], mod_levels=[]}}.
 
 handle_call(count, #state{buffer=Buffer} = State) ->
     {ok, length(Buffer), State};
@@ -47,20 +47,48 @@ handle_call(pop, #state{buffer=Buffer} = State) ->
         [H|T] ->
             {ok, H, State#state{buffer=T}}
     end;
-handle_call(get_loglevel, #state{level=Level} = State) ->
+handle_call(get_loglevel, #state{level=GenLevel, mod_levels=ModLvls} = State) ->
+    Level = erlang:hd(lists:reverse(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]]))),
     {ok, Level, State};
-handle_call({set_loglevel, Level}, State) ->
-    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
-handle_call(_Request, State) ->
+handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    case lists:keysearch(Module, 1, ModLvls) of
+        {value, {_, Level}} ->
+            {ok, Level, State};
+        false ->
+            {ok, false, State}
+    end;
+handle_call({set_loglevel, Level, Module}, #state{mod_levels = ModLvls} = State) ->
+    case Module of
+        '_' ->
+            {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+        _ ->
+            case lists:keymember(Module, 1, ModLvls) of
+                true ->
+                    {ok, ok, State#state{mod_levels =
+                        lists:keyreplace(Module, 1, ModLvls,
+                            {Module, lager_util:level_to_num(Level)})}};
+                false ->
+                    {ok, ok, State#state{mod_levels = [{Module, lager_util:level_to_num(Level)}|ModLvls]}}
+            end
+    end;    
+handle_call({clear_loglevel, '_'}, State) ->
+    {ok, ok, State#state{ mod_levels = [] }};
+handle_call({clear_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
+    {ok, ok, State#state{ mod_levels = lists:keydelete(Module, 1, ModLvls) }};
+handle_call(Request, State) ->
+    io:format("Request: ~p~n", [Request]),
     {ok, ok, State}.
 
-handle_event({log, [?MODULE], Level, Time, Message}, #state{buffer=Buffer} = State) ->
+handle_event({log_dest, [?MODULE], Level, Time, Message}, #state{buffer=Buffer} = State) ->
     {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
-handle_event({log, Level, Time, Message}, #state{level=LogLevel,
-        buffer=Buffer} = State) when Level =< LogLevel ->
-    {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
-handle_event({log, _Level, _Time, _Message}, #state{ignored=Ignored} = State) ->
-    {ok, State#state{ignored=Ignored ++ [ignored]}};
+handle_event({log, Module, Level, Time, Message}, #state{level=GenLevel, mod_levels=ModLvls,
+        buffer=Buffer, ignored=Ignored} = State) ->
+            case lager_util:check_loglevel(GenLevel, ModLvls, Module, Level) of
+                true ->
+                    {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
+                false ->
+                    {ok, State#state{ignored=Ignored ++ [ignored]}}
+            end;
 handle_event(_Event, State) ->
     {ok, State}.
 
@@ -220,6 +248,30 @@ lager_test_() ->
                         ?assertEqual(0, count()),
                         ok = lager:notice("hello world"),
                         ?assertEqual(1, count()),
+                        ok
+                end
+            },
+            {"per module loglevel works",
+                fun() ->
+                        lager:set_loglevel(?MODULE, info),
+                        ok = lager:info("Will be logged"),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(0, count_ignored()),
+                        ok = lager:debug("Won't be sent to backend"),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(0, count_ignored()),
+                        lager:set_mod_loglevel(?MODULE, error, ?MODULE),
+                        ok = lager:info("Will be ignored because of higher loglevel"),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(1, count_ignored()),
+                        lager:set_mod_loglevel(?MODULE, debug, ?MODULE),
+                        ok = lager:debug("Will be logged because of lower loglevel"),
+                        ?assertEqual(2, count()),
+                        ?assertEqual(1, count_ignored()),
+                        lager:clear_mod_loglevel(?MODULE, ?MODULE),
+                        ok = lager:debug("Won't be sent to backend"),
+                        ?assertEqual(2, count()),
+                        ?assertEqual(1, count_ignored()),
                         ok
                 end
             }

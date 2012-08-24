@@ -99,7 +99,7 @@ log_dest(Level, Module, Function, Line, Pid, Time, Dest, Format, Args) ->
     Msg = [["[", atom_to_list(Level), "] "],
            io_lib:format("~p@~p:~p:~p ", [Pid, Module, Function, Line]),
            safe_format_chop(Format, Args, 4096)],
-    safe_notify({log, {Dest, Module}, lager_util:level_to_num(Level), Timestamp, Msg}).
+    safe_notify({log_dest, Dest, lager_util:level_to_num(Level), Timestamp, Msg}).
 
 
 %% @doc Manually log a message into lager without using the parse transform.

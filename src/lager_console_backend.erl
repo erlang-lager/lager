@@ -24,7 +24,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, verbose, mod_levels}).
+-record(state, {level, verbose, mod_levels = []}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -52,7 +52,7 @@ init([Level, Verbose]) ->
 
 %% @private
 handle_call(get_loglevel, #state{level=GenLevel, mod_levels = ModLvls} = State) ->
-    Level = erlang:tl(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]])),
+    Level = erlang:hd(lists:reverse(lists:sort([GenLevel | [ ModLvl || {_, ModLvl} <- ModLvls ]]))),
     {ok, Level, State};
 handle_call({get_mod_loglevel, Module}, #state{mod_levels = ModLvls} = State) ->
     case lists:keysearch(Module, 1, ModLvls) of
@@ -88,20 +88,19 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, {Dest, Module}, Level, {Date, Time}, [LevelStr, Location, Message]},
-    #state{level=GenLevel, verbose=Verbose, mod_levels = ModLvls} = State) ->
-    case lists:member(lager_console_backend, Dest)
-        andalso lager_util:check_loglevel(GenLevel, ModLvls, Module, Level) of
-            true ->
-                case Verbose of
-                    true ->
-                        io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
-                    _ ->
-                        io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
-                end,
-                {ok, State};
-            false ->
-                {ok, State}
+handle_event({log_dest, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
+    #state{level=L, verbose=Verbose} = State) when Level > L ->
+    case lists:member(lager_console_backend, Dest) of
+        true ->
+            case Verbose of
+                true ->
+                    io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
+                _ ->
+                    io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
+            end,
+            {ok, State};
+        false ->
+            {ok, State}
     end;
 handle_event({log, Module, Level, {Date, Time}, [LevelStr, Location, Message]},
   #state{level=GenLevel, verbose=Verbose, mod_levels = ModLvls} = State) ->

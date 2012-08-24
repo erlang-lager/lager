@@ -55,7 +55,7 @@
     lager_util:level_to_num(Level) =< element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))).
 
 -define(NOTIFY(Level, Pid, Format, Args),
-    gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
+    gen_event:notify(lager_event, {log, '_', lager_util:level_to_num(Level),
             lager_util:format_time(), [io_lib:format("[~p] ", [Level]),
                 io_lib:format("~p ", [Pid]), io_lib:format(Format, Args)]})).
 
