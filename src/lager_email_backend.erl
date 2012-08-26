@@ -21,11 +21,12 @@
           password :: string(),
           level :: integer(),
           host  :: string(),
-          port  :: integer()
+          port  :: integer(),
+          counter :: integer()
          }).
 
 % Config is a prop list
-init([LogLevel, From, To, Username, Passwd, Host, Port]) ->
+init([LogLevel, From, To, Username, Passwd, Host]) ->
     case lists:member(LogLevel, ?LEVELS) of
         true ->
             {ok, #state{
@@ -35,7 +36,7 @@ init([LogLevel, From, To, Username, Passwd, Host, Port]) ->
                     username = Username,
                     password = Passwd,
                     host = Host,
-                    port = Port
+                    counter = 0
                    }};
         _ ->
             {error, bad_log_level}
@@ -56,22 +57,27 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
-  #state{level=LogLevel, from = From, to = To, host = Host, 
-     username = Username, password = Password} = State) when Level =< LogLevel ->
+    #state{level=LogLevel, from = From, to = To, host = Host,
+      username = Username, password = Password} = State) 
+  when Level =< LogLevel ->
+
     Hostname = net_adm:localhost(),
-    gen_smtp_client:send({"whatever@test.com", ["satyamshekhar@gmail.com"],
-                          "Subject: testing\r\nFrom: Andrew Thompson \r\nTo: Some Dude \r\n\r\nThis is the email body"},
-                         [{relay, Host}, 
-                          {username, Username}, 
-                          {password, Password}]),
-    %% gen_smtp_client:send({"noreply@lager.com", To,
-    %%   [[<<"Subject: ">>, <<"Report from ">>, Hostname,<<"\r\nFrom: ">>, 
-    %%     From, <<" \r\nTo: Satyam Shekhar \r\n\r\n">>], 
-    %%    [Date, " ", Time, " ", LevelStr, Location, Message]]},
-    %%   [{relay, Host}, 
-    %%    {username, Username}, 
-    %%    {password, Password},
-    %%    {no_mx_lookups, true}]),
+    Subject = [atom_to_list(?NUM2LEVEL(LogLevel)), " on ", Hostname],
+    Headers = [
+        header("from: ", From),
+        header("to: ", format_to(To)),
+        header("subject: ", Subject),
+        header("Content-Type: ", "text/plain; charset=utf-8"),
+        header("Content-Transfer-Encoding: ", "7bit"),
+        header("Content-Disposition: ", "inline"),
+        "\r\n"
+    ],
+    EmailBody = [Date, " ", Time, " ", LevelStr, Location, Message],
+    gen_smtp_client:send({From, To, [Headers, EmailBody]},
+        [{relay, Host},
+         {username, Username},
+         {password, Password},
+         {no_mx_lookups, true}]),
     {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
@@ -88,4 +94,18 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-    
+%% @private
+header(Key, Value) ->
+    [Key, Value, "\r\n"].
+
+%% @private
+format_to([]) ->
+    "";
+format_to([H|T]) ->
+    format_to2(T, [H]).
+
+%% @private
+format_to2([H|T], Acc) ->
+    format_to2(T, [[H, ","] | Acc]);
+format_to2([], Acc) ->
+    Acc.
