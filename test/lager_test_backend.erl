@@ -56,7 +56,7 @@ handle_call(_Request, State) ->
 
 handle_event(#lager_log_message{severity_as_int=Level,timestamp=Time, message=Message, metadata=Metadata}=Msg, 
         #state{level=LogLevel,buffer=Buffer,ignored=Ignored} = State) ->
-        case lager_backend_utils:is_loggable(Msg, LogLevel, ?MODULE) of
+        case lager_util:is_loggable(Msg, LogLevel, ?MODULE) of
             true ->   {ok, State#state{buffer=Buffer ++ [{Level, Time, Message, Metadata}]}};
             _ ->  {ok, State#state{ignored=Ignored ++ [ignored]}}
         end;

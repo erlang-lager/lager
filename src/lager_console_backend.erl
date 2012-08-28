@@ -69,7 +69,7 @@ handle_call(_Request, State) ->
 %% @private
 handle_event(#lager_log_message{}=Message,
     #state{level=L,formatter=Formatter,format_config=FormatConfig} = State) ->
-    case lager_backend_utils:is_loggable(Message, L, ?MODULE) of
+    case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->
             io:put_chars(user, Formatter:format(Message,FormatConfig)),
             {ok, State};
