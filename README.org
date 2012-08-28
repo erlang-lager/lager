@@ -101,7 +101,7 @@
     ["Foo"] -> "Foo", regardless of message content.
     [message] -> The content of the logged message, alone.
     [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
-    [date, " ", time," [",severity,"] ",pid, " ", message, "\n"] -> default formatting if none is provided
+    [{pid, ["My pid is ", pid], "Unknown Pid"}] -> if pid is in the metada print "My pid is <?.?.?>", otherwise print "Unknown Pid"
 #+END_EXAMPLE  
 
   Optionally, a tuple of {atom(),semi-iolist()}   

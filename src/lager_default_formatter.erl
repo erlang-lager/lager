@@ -37,16 +37,21 @@
 %% elements in the configuration are printed verbatim.  Atoms in the configuration are treated as metadata properties
 %% and extracted from the log message.  Optionally, a tuple of {atom(),semi-iolist()} can be used.  The atom will look
 %% up the property, but if not found it will use the semi-iolist() instead.  These fallbacks can be similarly nested
-%% or refer to other properties, if desired.
+%% or refer to other properties, if desired. You can also use a {atom, semi-iolist(), semi-iolist()} formatter, which
+%% acts like a ternary operator's true/false branches.
 %%
 %% The metadata properties date,time, message, and severity will always exist.  
 %% The properties pid, file, line, module, and function will always exist if the parser transform is used.
 %%
 %% Example:
-%%    ["Foo"] -> "Foo", regardless of message content.
-%%    [message] -> The content of the logged message, alone.
-%%    [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
-%%    [date, " ", time," [",severity,"] ",pid, " ", message, "\n"] -> default formatting if none is provided
+%%
+%%    `["Foo"]' -> "Foo", regardless of message content.
+%%
+%%    `[message]' -> The content of the logged message, alone.
+%%
+%%    `[{pid,"Unknown Pid"}]' -> "?.?.?" if pid is in the metadata, "Unknown Pid" if not.
+%%
+%%    `[{pid, ["My pid is ", pid], "Unknown Pid"}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
 %% @end
 -spec format(#lager_log_message{},list()) -> any().
 format(#lager_log_message{}=Msg,[]) ->
