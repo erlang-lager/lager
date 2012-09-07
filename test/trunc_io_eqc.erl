@@ -23,7 +23,7 @@
 
 -ifdef(TEST).
 -ifdef(EQC).
--export([test/0, test/1, check/0, prop_format/0]).
+-export([test/0, test/1, check/0, prop_format/0, prop_equivalence/0]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -36,9 +36,12 @@
 %%====================================================================
 
 eqc_test_() ->
-    {timeout, 300,
+    {timeout, 30,
      {spawn, 
-      [?_assertEqual(true, quickcheck(numtests(500, ?QC_OUT(prop_format()))))]
+      [
+                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_format()))))},
+                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_equivalence()))))}
+                ]
      }}.
 
 %%====================================================================
@@ -61,10 +64,10 @@ check() ->
 gen_fmt_args() ->
     list(oneof([gen_print_str(),
                 "~~",
-                {"~p", gen_any(5)},
+                {"~10000000.p", gen_any(5)},
                 {"~w", gen_any(5)},
-                {"~s", gen_print_str()},
-                {"~P", gen_any(5), 4},
+                {"~s", oneof([gen_print_str(), gen_atom(), gen_quoted_atom(), gen_print_bin()])},
+                {"~1000000.P", gen_any(5), 4},
                 {"~W", gen_any(5), 4},
                 {"~i", gen_any(5)},
                 {"~B", nat()},
@@ -74,7 +77,7 @@ gen_fmt_args() ->
                 {"~.10#", nat()},
                 {"~.10+", nat()},
                 {"~.36B", nat()},
-                {"~62P", gen_any(5), 4},
+                {"~1000000.62P", gen_any(5), 4},
                 {"~c", gen_char()},
                 {"~tc", gen_char()},
                 {"~f", real()},
@@ -90,12 +93,17 @@ gen_fmt_args() ->
 gen_print_str() ->
     ?LET(Xs, list(char()), [X || X <- Xs, io_lib:printable_list([X]), X /= $~]).
 
+gen_print_bin() ->
+    ?LET(Xs, gen_print_str(), list_to_binary(Xs)).
+
 gen_any(MaxDepth) ->
     oneof([largeint(),
            gen_atom(),
+           gen_quoted_atom(),
            nat(),
            %real(),
            binary(),
+           gen_bitstring(),
            gen_pid(),
            gen_port(),
            gen_ref(),
@@ -105,6 +113,12 @@ gen_any(MaxDepth) ->
           
 gen_atom() ->
     elements([abc, def, ghi]).
+
+gen_quoted_atom() ->
+    elements(['abc@bar', '@bar', '10gen']).
+
+gen_bitstring() ->
+    ?LET(XS, binary(), <<XS/binary, 1:7>>).
 
 gen_tuple(Gen) ->
     ?LET(Xs, list(Gen), list_to_tuple(Xs)). 
@@ -173,6 +187,23 @@ prop_format() ->
                         false
                 end
             end).
+
+%% Checks for equivalent formatting to io_lib
+prop_equivalence() ->
+    ?FORALL(FmtArgs, gen_fmt_args(),
+            begin
+            {FmtStr, Args} = build_fmt_args(FmtArgs),
+            Expected = lists:flatten(io_lib:format(FmtStr, Args)),
+            Actual = lists:flatten(lager_trunc_io:format(FmtStr, Args, 10485760)),
+            ?WHENFAIL(begin
+                io:format(user, "FmtStr:   ~p\n", [FmtStr]),
+                io:format(user, "Args:     ~p\n", [Args]),
+                io:format(user, "Expected: ~p\n", [Expected]),
+                io:format(user, "Actual:   ~p\n", [Actual])
+            end,
+                      Expected == Actual)
+        end).
+
 
 %%====================================================================
 %% Internal helpers 
