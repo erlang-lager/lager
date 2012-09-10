@@ -113,9 +113,6 @@ print(Term, _Max, #print_options{force_strings=true}) when not is_list(Term), no
 print(_, Max, _Options) when Max < 0 -> {"...", 3};
 print(_, _, #print_options{depth=0}) -> {"...", 3};
 
-print(Tuple, Max, Options) when is_tuple(Tuple) -> 
-    {TC, Len} = tuple_contents(Tuple, Max-2, Options),
-    {[${, TC, $}], Len + 2};
 
 %% @doc We assume atoms, floats, funs, integers, PIDs, ports and refs never need 
 %% to be truncated. This isn't strictly true, someone could make an 
@@ -130,24 +127,73 @@ print(Atom, _Max, #print_options{force_strings=NoQuote}) when is_atom(Atom) ->
     end,
     {R, length(R)};
 
-print(<<>>, _Max, _Options) ->
-    {"<<>>", 4};
+print(Bin, _Max, O = #print_options{depth=1}) when is_binary(Bin) ->
+    case O#print_options.lists_as_strings of
+        true when Bin == <<>>  ->
+            {"<<>>", 4};
+        _ ->
+            {"<<...>>", 7}
+    end;
+print(<<>>, _Max, Options) ->
+    case Options#print_options.force_strings of
+        true ->
+            {"", 0};
+        false ->
+            {"<<>>", 4}
+    end;
 
 print(Binary, 0, _Options) when is_bitstring(Binary) ->
     {"<<..>>", 6};
 
+print(Bin, Max, _Options) when is_binary(Bin), Max < 2 ->
+    {"<<...>>", 7};
 print(Binary, Max, Options) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, byte_size(Binary)])),
     {L, Len} = case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
         true ->
-            alist_start(B, Max-4, Options);
+            Depth = Options#print_options.depth,
+            MaxSize = (Depth - 1) * 4,
+            %% check if we need to truncate based on depth
+            In = case Depth > -1 andalso MaxSize < length(B) andalso
+                not Options#print_options.force_strings of
+                true ->
+                    string:substr(B, 1, MaxSize);
+                false -> B
+            end,
+            try alist(In, Max -1, Options) of
+                {L0, Len0} ->
+                    case Options#print_options.force_strings of
+                        false ->
+                            case B /= In of
+                                true ->
+                                    {[$", L0, "..."], Len0+4};
+                                false ->
+                                    {[$"|L0], Len0+1}
+                            end;
+                        true ->
+                            {L0, Len0}
+                    end
+            catch
+                throw:{unprintable, C} ->
+                    Index = string:chr(In, C),
+                    case Index > 1 andalso Options#print_options.depth =< Index andalso
+                        Options#print_options.depth > -1 andalso
+                          not Options#print_options.force_strings of
+                        true ->
+                            %% print first Index-1 characters followed by ...
+                            {L0, Len0} = alist_start(string:substr(In, 1, Index - 1), Max - 1, Options),
+                            {L0++"...", Len0+3};
+                        false ->
+                            list_body(In, Max-4, dec_depth(Options), true)
+                    end
+            end;
         _ ->
-            list_body(B, Max-4, Options, false)
+            list_body(B, Max-4, dec_depth(Options), true)
     end,
     {Res, Length} = case L of
         [91, X, 93] ->
-            {X, Len - 2};
+            {X, Len-2};
         X ->
             {X, Len}
     end,
@@ -163,14 +209,24 @@ print(Binary, Max, Options) when is_binary(Binary) ->
 %% some magic for dealing with the output of bitstring_to_list, which returns
 %% a list of integers (as expected) but with a trailing binary that represents
 %% the remaining bits.
+print({inline_bitstring, B}, _Max, _Options) when is_bitstring(B) ->
+    Size = bit_size(B),
+    <<Value:Size>> = B,
+    ValueStr = integer_to_list(Value),
+    SizeStr = integer_to_list(Size),
+    {[ValueStr, $:, SizeStr], length(ValueStr) + length(SizeStr) +1};
 print(BitString, Max, Options) when is_bitstring(BitString) ->
     case byte_size(BitString) > Max of
         true ->
             BL = binary_to_list(BitString, 1, Max);
         _ ->
-            BL = erlang:bitstring_to_list(BitString)
+            R = erlang:bitstring_to_list(BitString),
+            {Bytes, [Bits]} = lists:splitwith(fun erlang:is_integer/1, R),
+            %% tag the trailing bits with a special tuple we catch when
+            %% list_body calls print again
+            BL = Bytes ++ [{inline_bitstring, Bits}]
     end,
-    {X, Len0} = list_body(BL, Max - 4, Options, false),
+    {X, Len0} = list_body(BL, Max - 4, dec_depth(Options), true),
     {["<<", X, ">>"], Len0 + 4};
 
 print(Float, _Max, _Options) when is_float(Float) ->
@@ -206,6 +262,10 @@ print(Port, _Max, _Options) when is_port(Port) ->
     L = erlang:port_to_list(Port),
     {L, length(L)};
 
+print(Tuple, Max, Options) when is_tuple(Tuple) -> 
+    {TC, Len} = tuple_contents(Tuple, Max-2, Options),
+    {[${, TC, $}], Len + 2};
+
 print(List, Max, Options) when is_list(List) ->
     case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
@@ -226,12 +286,15 @@ tuple_contents(Tuple, Max, Options) ->
 list_body([], _Max, _Options, _Tuple) -> {[], 0};
 list_body(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
 list_body(_, _Max, #print_options{depth=0}, _Tuple) -> {"...", 3};
-list_body([B], _Max, _Options, _Tuple) when is_bitstring(B), not is_binary(B) ->
-    Size = bit_size(B),
-    <<Value:Size>> = B,
-    ValueStr = integer_to_list(Value),
-    SizeStr = integer_to_list(Size),
-    {[ValueStr, $:, SizeStr], length(ValueStr) + length(SizeStr) +1};
+list_body([H], Max, Options=#print_options{depth=1}, _Tuple) ->
+    print(H, Max, Options);
+list_body([H|_], Max, Options=#print_options{depth=1}, Tuple) ->
+    {List, Len} = print(H, Max-4, Options),
+    Sep = case Tuple of
+        true -> $,;
+        false -> $|
+    end,
+    {[List ++ [Sep | "..."]], Len + 4};
 list_body([H|T], Max, Options, Tuple) -> 
     {List, Len} = print(H, Max, Options),
     {Final, FLen} = list_bodyc(T, Max - Len, Options, Tuple),
@@ -242,15 +305,11 @@ list_body(X, Max, Options, _Tuple) ->  %% improper list
 
 list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
 list_bodyc(_, Max, _Options, _Tuple) when Max < 5 -> {",...", 4};
-list_bodyc([B], _Max, _Options, _Tuple) when is_bitstring(B), not is_binary(B) ->
-    Size = bit_size(B),
-    <<Value:Size>> = B,
-    ValueStr = integer_to_list(Value),
-    SizeStr = integer_to_list(Size),
-    {[$, , ValueStr, $:, SizeStr], length(ValueStr) + length(SizeStr) +2};
+list_bodyc(_, _Max, #print_options{depth=1}, true) -> {",...", 4};
+list_bodyc(_, _Max, #print_options{depth=1}, false) -> {"|...", 4};
 list_bodyc([H|T], Max, #print_options{depth=Depth} = Options, Tuple) -> 
     {List, Len} = print(H, Max, dec_depth(Options)),
-    {Final, FLen} = list_bodyc(T, Max - Len - 1, Options, Tuple),
+    {Final, FLen} = list_bodyc(T, Max - Len - 1, dec_depth(Options), Tuple),
     Sep = case Depth == 1 andalso not Tuple of
         true -> $|;
         _ -> $,
@@ -273,12 +332,22 @@ alist_start(_, Max, _Options) when Max < 4 -> {"...", 3};
 alist_start(_, _Max, #print_options{depth=0}) -> {"[...]", 5};
 alist_start(L, Max, #print_options{force_strings=true} = Options) ->
     alist(L, Max, Options);
+%alist_start([H|_T], _Max, #print_options{depth=1}) when is_integer(H) -> {[$[, H, $|, $., $., $., $]], 7};
 alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  % definitely printable
     try alist([H|T], Max -1, Options) of
         {L, Len} ->
             {[$"|L], Len + 1}
     catch
-        throw:unprintable ->
+        throw:{unprintable, _} ->
+            {R, Len} = list_body([H|T], Max-2, Options, false),
+            {[$[, R, $]], Len + 2}
+    end;
+alist_start([H|T], Max, Options) when is_integer(H), H >= 16#a0, H =< 16#ff ->  % definitely printable
+    try alist([H|T], Max -1, Options) of
+        {L, Len} ->
+            {[$"|L], Len + 1}
+    catch
+        throw:{unprintable, _} ->
             {R, Len} = list_body([H|T], Max-2, Options, false),
             {[$[, R, $]], Len + 2}
     end;
@@ -287,7 +356,7 @@ alist_start([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v
         {L, Len} ->
             {[$"|L], Len + 1}
     catch
-        throw:unprintable ->
+        throw:{unprintable, _} ->
             {R, Len} = list_body([H|T], Max-2, Options, false),
             {[$[, R, $]], Len + 2}
     end;
@@ -306,6 +375,9 @@ alist([H|T], Max, Options = #print_options{force_strings=false,lists_as_strings=
 alist([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->     % definitely printable
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
+alist([H|T], Max, Options) when is_integer(H), H >= 16#a0, H =< 16#ff ->     % definitely printable
+    {L, Len} = alist(T, Max-1, Options),
+    {[H|L], Len + 1};
 alist([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:= $\e; H=:= $\f; H=:= $\b ->
     {L, Len} = alist(T, Max-1, Options),
     case Options#print_options.force_strings of
@@ -319,8 +391,8 @@ alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(
     {[H|L], Len + 1};
 alist(_, _, #print_options{force_strings=true}) ->
     erlang:error(badarg);
-alist(_L, _Max, _Options) ->
-    throw(unprintable).
+alist([H|_L], _Max, _Options) ->
+    throw({unprintable, H}).
 
 %% is the first character in the atom alphabetic & lowercase?
 atom_needs_quoting_start([H|T]) when H >= $a, H =< $z ->
@@ -473,6 +545,7 @@ quote_strip_test() ->
 
 binary_printing_test() ->
     ?assertEqual("<<>>", lists:flatten(format("~p", [<<>>], 50))),
+    ?assertEqual("", lists:flatten(format("~s", [<<>>], 50))),
     ?assertEqual("<<..>>", lists:flatten(format("~p", [<<"hi">>], 0))),
     ?assertEqual("<<...>>", lists:flatten(format("~p", [<<"hi">>], 1))),
     ?assertEqual("<<\"hello\">>", lists:flatten(format("~p", [<<$h, $e, $l, $l, $o>>], 50))),
@@ -512,6 +585,7 @@ bitstring_printing_test() ->
     ?assertEqual("<<...>>", lists:flatten(format("~p", [<<1:7>>], 1))),
     ?assertEqual("[<<1>>,<<2>>]", lists:flatten(format("~p", [[<<1>>, <<2>>]],
                 100))),
+    ?assertEqual("{<<1:7>>}", lists:flatten(format("~p", [{<<1:7>>}], 50))),
     ok.
 
 list_printing_test() ->
@@ -545,6 +619,9 @@ list_printing_test() ->
         lists:flatten(format("~p", [
                     [22835963083295358096932575511191922182123945984,
                         22835963083295358096932575511191922182123945984]], 53))),
+    %%improper list
+    ?assertEqual("[1,2,3|4]", lists:flatten(format("~P", [[1|[2|[3|4]]], 5], 50))),
+    ?assertEqual("[1|1]", lists:flatten(format("~P", [[1|1], 5], 50))),
     ok.
 
 tuple_printing_test() ->
@@ -600,6 +677,44 @@ depth_limit_test() ->
     ?assertEqual("{\"a\",[...]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 3], 50))),
     ?assertEqual("{\"a\",[\"b\",[[...]|...]]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 6], 50))),
     ?assertEqual("{\"a\",[\"b\",[\"c\",[\"d\"]]]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 9], 50))),
+
+    ?assertEqual("[...]", lists:flatten(format("~P", [[1, 2, 3], 1], 50))),
+    ?assertEqual("[1|...]", lists:flatten(format("~P", [[1, 2, 3], 2], 50))),
+    ?assertEqual("[1,2|...]", lists:flatten(format("~P", [[1, 2, 3], 3], 50))),
+    ?assertEqual("[1,2,3]", lists:flatten(format("~P", [[1, 2, 3], 4], 50))),
+    
+    ?assertEqual("{1,...}", lists:flatten(format("~P", [{1, 2, 3}, 2], 50))),
+    ?assertEqual("{1,2,...}", lists:flatten(format("~P", [{1, 2, 3}, 3], 50))),
+    ?assertEqual("{1,2,3}", lists:flatten(format("~P", [{1, 2, 3}, 4], 50))),
+
+    ?assertEqual("{1,...}", lists:flatten(format("~P", [{1, 2, 3}, 2], 50))),
+    ?assertEqual("[1,2|...]", lists:flatten(format("~P", [[1, 2, <<3>>], 3], 50))),
+    ?assertEqual("[1,2,<<...>>]", lists:flatten(format("~P", [[1, 2, <<3>>], 4], 50))),
+    ?assertEqual("[1,2,<<3>>]", lists:flatten(format("~P", [[1, 2, <<3>>], 5], 50))),
+    
+    ?assertEqual("<<...>>", lists:flatten(format("~P", [<<0, 0, 0, 0>>, 1], 50))),
+    ?assertEqual("<<0,...>>", lists:flatten(format("~P", [<<0, 0, 0, 0>>, 2], 50))),
+    ?assertEqual("<<0,0,...>>", lists:flatten(format("~P", [<<0, 0, 0, 0>>, 3], 50))),
+    ?assertEqual("<<0,0,0,...>>", lists:flatten(format("~P", [<<0, 0, 0, 0>>, 4], 50))),
+    ?assertEqual("<<0,0,0,0>>", lists:flatten(format("~P", [<<0, 0, 0, 0>>, 5], 50))),
+    
+    %% this is a seriously weird edge case
+    ?assertEqual("<<\"   \"...>>", lists:flatten(format("~P", [<<32, 32, 32, 0>>, 2], 50))),
+    ?assertEqual("<<\"   \"...>>", lists:flatten(format("~P", [<<32, 32, 32, 0>>, 3], 50))),
+    ?assertEqual("<<\"   \"...>>", lists:flatten(format("~P", [<<32, 32, 32, 0>>, 4], 50))),
+    ?assertEqual("<<32,32,32,0>>", lists:flatten(format("~P", [<<32, 32, 32, 0>>, 5], 50))),
+    ?assertEqual("<<32,32,32,0>>", lists:flatten(format("~p", [<<32, 32, 32, 0>>], 50))),
+
+    %% depth limiting for some reason works in 4 byte chunks on printable binaries?
+    ?assertEqual("<<\"hell\"...>>", lists:flatten(format("~P", [<<"hello world">>, 2], 50))),
+    ?assertEqual("<<\"abcd\"...>>", lists:flatten(format("~P", [<<$a, $b, $c, $d, $e, 0>>, 2], 50))),
+
+    %% I don't even know...
+    ?assertEqual("<<>>", lists:flatten(format("~P", [<<>>, 1], 50))),
+    ?assertEqual("<<...>>", lists:flatten(format("~W", [<<>>, 1], 50))),
+
+    ?assertEqual("{abc,<<\"abc\\\"\">>}", lists:flatten(format("~P", [{abc,<<"abc\"">>}, 4], 50))),
+
     ok.
 
 -endif.
