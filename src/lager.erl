@@ -87,16 +87,16 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) when is_pid(Pid) ->
-    dispatch_log(Level, [{pid,Pid}], Message, [], 4096);
+    dispatch_log(Level, [{pid,Pid}], Message, [], ?DEFAULT_TRUNCATION);
 log(Level, Metadata, Message) when is_list(Metadata) ->
-    dispatch_log(Level, Metadata, Message, [], 4096).
+    dispatch_log(Level, Metadata, Message, [], ?DEFAULT_TRUNCATION).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Format, Args) when is_pid(Pid) ->
-    dispatch_log(Level, [{pid,Pid}], Format, Args, 4096);
+    dispatch_log(Level, [{pid,Pid}], Format, Args, ?DEFAULT_TRUNCATION);
 log(Level, Metadata, Format, Args) when is_list(Metadata) ->
-    dispatch_log(Level, Metadata, Format, Args, 4096).
+    dispatch_log(Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
 
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug).
@@ -239,7 +239,7 @@ posix_error(Error) when is_atom(Error) ->
         Message -> Message
     end;
 posix_error(Error) ->
-    safe_format_chop("~p", [Error], 4096).
+    safe_format_chop("~p", [Error], ?DEFAULT_TRUNCATION).
 
 %% @private
 get_loglevels() ->

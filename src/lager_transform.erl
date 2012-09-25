@@ -29,7 +29,7 @@
 
 %% @private
 parse_transform(AST, Options) ->
-    TruncSize = proplists:get_value(lager_truncation_size, Options, 4096),
+    TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     put(truncation_size, TruncSize),
     walk_ast([], AST).
 

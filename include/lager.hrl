@@ -22,6 +22,7 @@
         message
     }).
 
+-define(DEFAULT_TRUNCATION, 4096).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).

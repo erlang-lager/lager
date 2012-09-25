@@ -88,7 +88,7 @@ handle_event(Event, State) ->
                         [ID, Name, format_reason(Reason)]);
                 _ ->
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, lager:safe_format(Fmt, Args, 4096))
+                    ?LOG(error, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION))
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
             ?CRASH_LOG(Event),
@@ -108,11 +108,11 @@ handle_event(Event, State) ->
             ?CRASH_LOG(Event),
             ?LOG(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(warning, Pid, lager:safe_format(Fmt, Args, 4096));
+            ?LOG(warning, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
         {warning_report, _GL, {Pid, std_warning, Report}} ->
             ?LOG(warning, Pid, print_silly_list(Report));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(info, Pid, lager:safe_format(Fmt, Args, 4096));
+            ?LOG(info, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
         {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
@@ -292,17 +292,17 @@ format_args([H|T], FmtAcc, ArgsAcc) ->
 print_silly_list(L) when is_list(L) ->
     case lager_stdlib:string_p(L) of
         true ->
-            lager_trunc_io:format("~s", [L], 4096);
+            lager_trunc_io:format("~s", [L], ?DEFAULT_TRUNCATION);
         _ ->
             print_silly_list(L, [], [])
     end;
 print_silly_list(L) ->
-    {Str, _} = lager_trunc_io:print(L, 4096),
+    {Str, _} = lager_trunc_io:print(L, ?DEFAULT_TRUNCATION),
     Str.
 
 print_silly_list([], Fmt, Acc) ->
     lager_trunc_io:format(string:join(lists:reverse(Fmt), ", "),
-        lists:reverse(Acc), 4096);
+        lists:reverse(Acc), ?DEFAULT_TRUNCATION);
 print_silly_list([{K,V}|T], Fmt, Acc) ->
     print_silly_list(T, ["~p: ~p" | Fmt], [V, K | Acc]);
 print_silly_list([H|T], Fmt, Acc) ->
