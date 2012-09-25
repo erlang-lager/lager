@@ -173,6 +173,12 @@
   under the [[https://github.com/jbrisbin/lager_amqp_backend][lager_amqp_backend]]
   project on github.
 
+* Loggly Support
+  The team at [[https://www.kivra.com][KIVRA]] has written a lager backend to send
+  lager messages into [[http://www.loggly.com][Loggly]]. You can find it
+  under the [[https://github.com/kivra/lager_loggly][lager_loggly]]
+  project on github.
+
 * Tracing
   Lager supports basic support for redirecting log messages based on log message
   attributes. Lager automatically captures the pid, module, function and line at the
