@@ -67,7 +67,7 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event(Message,
+handle_event({log, Message},
     #state{level=L,formatter=Formatter,format_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->

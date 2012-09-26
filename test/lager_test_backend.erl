@@ -54,7 +54,7 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event(Msg, 
+handle_event({log, Msg},
         #state{level=LogLevel,buffer=Buffer,ignored=Ignored} = State) ->
         case lager_util:is_loggable(Msg, LogLevel, ?MODULE) of
             true ->   {ok, State#state{buffer=Buffer ++

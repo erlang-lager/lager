@@ -91,7 +91,7 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event(Message,
+handle_event({log, Message},
     #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
