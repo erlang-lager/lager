@@ -53,10 +53,10 @@
 %%
 %%    `[{pid, ["My pid is ", pid], "Unknown Pid"}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
 %% @end
--spec format(#lager_log_message{},list()) -> any().
-format(#lager_log_message{}=Msg,[]) ->
+-spec format(lager_msg:lager_msg(),list()) -> any().
+format(Msg,[]) ->
     format(Msg, [{eol, "\n"}]);
-format(#lager_log_message{}=Msg,[{eol, EOL}]) ->
+format(Msg,[{eol, EOL}]) ->
     format(Msg,
         [date, " ", time, " [", severity, "] ",
             {pid, ""},
@@ -70,23 +70,30 @@ format(Message,Config) ->
     [ output(V,Message) || V <- Config ].
 
 
--spec output(term(),#lager_log_message{}) -> iolist().
-output(message,#lager_log_message{message=M}) -> M;
-output(date,#lager_log_message{timestamp={D,_T}}) -> D;
-output(time,#lager_log_message{timestamp={_D,T}}) -> T;
-output(severity,#lager_log_message{severity_as_int=S}) ->
-    atom_to_list(lager_util:num_to_level(S));
-output(Prop,#lager_log_message{metadata=Metadata}) when is_atom(Prop) ->
+-spec output(term(),lager_msg:lager_msg()) -> iolist().
+output(message,Msg) -> lager_msg:message(Msg);
+output(date,Msg) ->
+    {D, _T} = lager_msg:timestamp(Msg),
+    D;
+output(time,Msg) ->
+    {_D, T} = lager_msg:timestamp(Msg),
+    T;
+output(severity,Msg) ->
+    atom_to_list(lager_msg:severity(Msg));
+output(Prop,Msg) when is_atom(Prop) ->
+    Metadata = lager_msg:metadata(Msg),
     make_printable(get_metadata(Prop,Metadata,<<"Undefined">>));
-output({Prop,Default},#lager_log_message{metadata=Metadata}=L) when is_atom(Prop) ->
-    make_printable(get_metadata(Prop,Metadata,output(Default,L)));
-output({Prop, Present, Absent}, #lager_log_message{metadata=Metadata}=L) when is_atom(Prop) ->
+output({Prop,Default},Msg) when is_atom(Prop) ->
+    Metadata = lager_msg:metadata(Msg),
+    make_printable(get_metadata(Prop,Metadata,output(Default,Msg)));
+output({Prop, Present, Absent}, Msg) when is_atom(Prop) ->
     %% sort of like a poor man's ternary operator
+    Metadata = lager_msg:metadata(Msg),
     case get_metadata(Prop, Metadata) of
         undefined ->
-            [ output(V, L) || V <- Absent];
+            [ output(V, Msg) || V <- Absent];
         _ ->
-            [ output(V, L) || V <- Present]
+            [ output(V, Msg) || V <- Present]
     end;
 output(Other,_) -> make_printable(Other).
 
@@ -111,44 +118,49 @@ get_metadata(Key, Metadata, Default) ->
 basic_test_() ->
     [{"Default formatting test",
             ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
-                iolist_to_binary(format(#lager_log_message{timestamp={"Day","Time"},
-                            message="Message",
-                            severity_as_int=lager_util:level_to_num(error),
-                            metadata=[{pid,self()}]},
+                iolist_to_binary(format(lager_msg:new("Message",
+                            {"Day", "Time"},
+                            error,
+                            [{pid, self()}],
+                            []),
                         [])))
         },
         {"Basic Formatting",
             ?_assertEqual(<<"Simplist Format">>,
-                iolist_to_binary(format(#lager_log_message{timestamp={"Day","Time"},
-                            message="Message",
-                            severity_as_int=lager_util:level_to_num(error),
-                            metadata=[{pid,self()}]},
+                iolist_to_binary(format(lager_msg:new("Message",
+                            {"Day", "Time"},
+                            error,
+                            [{pid, self()}],
+                            []),
                         ["Simplist Format"])))
         },
         {"Default equivalent formatting test",
             ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
-                iolist_to_binary(format(#lager_log_message{timestamp={"Day","Time"},
-                            message="Message",
-                            severity_as_int=lager_util:level_to_num(error),
-                            metadata=[{pid,self()}]},
+                iolist_to_binary(format(lager_msg:new("Message",
+                            {"Day", "Time"},
+                            error,
+                            [{pid, self()}],
+                            []),
                         [date, " ", time," [",severity,"] ",pid, " ", message, "\n"]
                     )))
         },
         {"Non existant metadata can default to string",
             ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
-                iolist_to_binary(format(#lager_log_message{timestamp={"Day","Time"},
-                            message="Message",
-                            severity_as_int=lager_util:level_to_num(error),
-                            metadata=[]},
+                iolist_to_binary(format(lager_msg:new("Message",
+                            {"Day", "Time"},
+                            error,
+                            [{pid, self()}],
+                            []),
                         [date, " ", time," [",severity,"] ",{does_not_exist,"Fallback"}, " ", message, "\n"]
                     )))
         },
         {"Non existant metadata can default to other metadata",
             ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
-                iolist_to_binary(format(#lager_log_message{timestamp={"Day","Time"},
-                            message="Message",
-                            severity_as_int=lager_util:level_to_num(error),
-                            metadata=[{pid,"Fallback"}]},
+                iolist_to_binary(format(lager_msg:new("Message",
+                            {"Day", "Time"},
+                            error,
+                            [{pid, "Fallback"}],
+                            []),
                         [date, " ", time," [",severity,"] ",{does_not_exist,pid}, " ", message, "\n"]
                     )))
         }

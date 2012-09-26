@@ -74,11 +74,8 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                         A when is_list(A) ->safe_format_chop(Format,Args,Size);
                         _ -> Format
                     end,
-                    gen_event:sync_notify(Pid, #lager_log_message{destinations=Destinations, 
-                            metadata=Metadata, 
-                            severity_as_int=SeverityAsInt, 
-                            timestamp=Timestamp, 
-                            message=Msg});
+                    gen_event:sync_notify(Pid, lager_msg:new(Msg, Timestamp,
+                            Severity, Metadata, Destinations));
                 _ -> 
                     ok
             end

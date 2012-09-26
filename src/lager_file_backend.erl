@@ -95,7 +95,7 @@ handle_event(Message,
     #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-            {ok,write(State, Message#lager_log_message.severity_as_int, Formatter:format(Message,FormatConfig)) };
+            {ok,write(State, lager_msg:severity_as_int(Message), Formatter:format(Message,FormatConfig)) };
         false ->
             {ok, State}
     end;

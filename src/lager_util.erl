@@ -329,9 +329,10 @@ check_trace_iter(Attrs, [{Key, Match}|T]) ->
             false
     end.
 
--spec is_loggable(#lager_log_message{},integer(),term()) -> boolean().
-is_loggable(#lager_log_message{severity_as_int=Severity,destinations=Destinations},SeverityThreshold,MyName) ->
-    Severity =< SeverityThreshold orelse lists:member(MyName, Destinations).
+-spec is_loggable(lager_msg:lager_msg(),integer(),term()) -> boolean().
+is_loggable(Msg ,SeverityThreshold,MyName) ->
+    lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
+    lists:member(MyName, lager_msg:destinations(Msg)).
 
 -ifdef(TEST).
 
@@ -462,11 +463,11 @@ check_trace_test() ->
 
 is_loggable_test_() ->
     [
-        {"Loggable by severity only", ?_assert(is_loggable(#lager_log_message{severity_as_int=1,destinations=[]},2,me))},
-        {"Not loggable by severity only", ?_assertNot(is_loggable(#lager_log_message{severity_as_int=2,destinations=[]},1,me))},
-        {"Loggable by severity with destination", ?_assert(is_loggable(#lager_log_message{severity_as_int=1,destinations=[you]},2,me))},
-        {"Not loggable by severity with destination", ?_assertNot(is_loggable(#lager_log_message{severity_as_int=2,destinations=[you]},1,me))},
-        {"Loggable by destination overriding severity", ?_assert(is_loggable(#lager_log_message{severity_as_int=2,destinations=[me]},1,me))}
+        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], []),2,me))},
+        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], []),1,me))},
+        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], [you]),2,me))},
+        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], [you]),1,me))},
+        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("",{"",""}, critical, [], [me]),1,me))}
     ].
 
 -endif.

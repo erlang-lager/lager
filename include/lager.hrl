@@ -14,13 +14,6 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
--record(lager_log_message,{
-        destinations,
-        metadata,
-        severity_as_int,
-        timestamp,
-        message
-    }).
 
 -define(DEFAULT_TRUNCATION, 4096).
 
@@ -65,12 +58,12 @@
     lager_util:level_to_num(Level) =< element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))).
 
 -define(NOTIFY(Level, Pid, Format, Args),
-    gen_event:notify(lager_event,#lager_log_message{destinations=[],
-            message=io_lib:format(Format,Args),
-            metadata=[{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
-            timestamp=lager_util:format_time(),
-            severity_as_int=lager_util:level_to_num(Level)
-        })). 
+    gen_event:notify(lager_event,lager_msg:new(io_lib:format(Format, Args),
+            lager_util:format_time(),
+            Level,
+            [{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
+            [])
+        )). 
 
 %% FOR INTERNAL USE ONLY
 %% internal non-blocking logging call
