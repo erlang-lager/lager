@@ -249,5 +249,5 @@
   You can also pass it to erlc, if you prefer:
 
 #+BEGIN_EXAMPLE
-  erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 64}' file.erl
-l+END_EXAMPLE
+  erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
+#+END_EXAMPLE
