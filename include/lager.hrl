@@ -1,4 +1,4 @@
-%% Copyright (c) 2011 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -13,6 +13,9 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
+
+
+-define(DEFAULT_TRUNCATION, 4096).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
@@ -55,9 +58,12 @@
     lager_util:level_to_num(Level) =< element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))).
 
 -define(NOTIFY(Level, Pid, Format, Args),
-    gen_event:notify(lager_event, {log, lager_util:level_to_num(Level),
-            lager_util:format_time(), [io_lib:format("[~p] ", [Level]),
-                io_lib:format("~p ", [Pid]), io_lib:format(Format, Args)]})).
+    gen_event:notify(lager_event, {log, lager_msg:new(io_lib:format(Format, Args),
+            lager_util:format_time(),
+            Level,
+            [{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
+            [])}
+        )). 
 
 %% FOR INTERNAL USE ONLY
 %% internal non-blocking logging call
@@ -93,3 +99,4 @@
             end
     end)).
 -endif.
+
