@@ -42,8 +42,8 @@
 -endif.
 
 -type option() :: {'depth', integer()}
-		| {'lists_as_strings', boolean()}
-		| {'force_strings', boolean()}.
+    | {'lists_as_strings', boolean()}
+    | {'force_strings', boolean()}.
 -type options() :: [option()].
 
 -record(print_options, {
@@ -92,9 +92,9 @@ fprint(T, Max, Options) ->
 -spec safe(term(), pos_integer()) -> {string(), pos_integer()} | {string()}.
 safe(What, Len) ->
     case catch print(What, Len) of
-	{L, Used} when is_list(L) -> {L, Used};
-	_ -> {"unable to print" ++ io_lib:write(What, 99)}
-    end.	     
+        {L, Used} when is_list(L) -> {L, Used};
+        _ -> {"unable to print" ++ io_lib:write(What, 99)}
+    end.
 
 %% @doc Returns {List, Length}
 -spec print(term(), pos_integer()) -> {iolist(), pos_integer()}.
@@ -443,29 +443,29 @@ test() ->
 -spec test(atom(), atom()) -> ok.
 test(Mod, Func) ->
     Simple_items = [atom, 1234, 1234.0, {tuple}, [], [list], "string", self(),
-		    <<1,2,3>>, make_ref(), fun() -> ok end],
+        <<1,2,3>>, make_ref(), fun() -> ok end],
     F = fun(A) ->
-		Mod:Func(A, 100),
-		Mod:Func(A, 2),
-		Mod:Func(A, 20)
-	end,
+            Mod:Func(A, 100),
+            Mod:Func(A, 2),
+            Mod:Func(A, 20)
+    end,
 
     G = fun(A) ->
-		case catch F(A) of
-		    {'EXIT', _} -> exit({failed, A});
-		    _ -> ok
-		end
-	end,
-    
+            case catch F(A) of
+                {'EXIT', _} -> exit({failed, A});
+                _ -> ok
+            end
+    end,
+
     lists:foreach(G, Simple_items),
-    
+
     Tuples = [ {1,2,3,a,b,c}, {"abc", def, 1234},
-	       {{{{a},b,c,{d},e}},f}],
-    
+        {{{{a},b,c,{d},e}},f}],
+
     Lists = [ [1,2,3,4,5,6,7], lists:seq(1,1000),
-	      [{a}, {a,b}, {a, [b,c]}, "def"], [a|b], [$a|$b] ],
-    
-    
+        [{a}, {a,b}, {a, [b,c]}, "def"], [a|b], [$a|$b] ],
+
+
     lists:foreach(G, Tuples),
     lists:foreach(G, Lists).
 
