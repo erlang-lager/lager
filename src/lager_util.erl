@@ -477,9 +477,14 @@ is_loggable_test_() ->
 
 format_time_test_() ->
     [
-        ?_assertEqual("2012-10-04 11:16:23.892",
+        ?_assertEqual("2012-10-04 11:16:23.002",
             begin
-                {D, T} = format_time({{2012,10,04},{11,16,23,892}}),
+                {D, T} = format_time({{2012,10,04},{11,16,23,2}}),
+                lists:flatten([D,$ ,T])
+            end),
+        ?_assertEqual("2012-10-04 11:16:23.999",
+            begin
+                {D, T} = format_time({{2012,10,04},{11,16,23,999}}),
                 lists:flatten([D,$ ,T])
             end),
         ?_assertEqual("2012-10-04 11:16:23",
@@ -487,9 +492,9 @@ format_time_test_() ->
                 {D, T} = format_time({{2012,10,04},{11,16,23}}),
                 lists:flatten([D,$ ,T])
             end),
-        ?_assertEqual("2012-10-04 11:16:23.892 UTC",
+        ?_assertEqual("2012-10-04 00:16:23.092 UTC",
             begin
-                {D, T} = format_time({utc, {{2012,10,04},{11,16,23,892}}}),
+                {D, T} = format_time({utc, {{2012,10,04},{0,16,23,92}}}),
                 lists:flatten([D,$ ,T])
             end),
         ?_assertEqual("2012-10-04 11:16:23 UTC",
