@@ -95,7 +95,7 @@
   as configuration.  Any iolist allowed elements in the configuration are printed verbatim.  Atoms in the configuration 
   are treated as metadata properties and extracted from the log message.  
   The metadata properties date,time, message, and severity will always exist.  
-  The properties pid, file, line, module, and function will always exist if the parser transform is used.
+  The properties pid, file, line, module, function, and node will always exist if the parser transform is used.
 
 #+BEGIN_EXAMPLE
     ["Foo"] -> "Foo", regardless of message content.
