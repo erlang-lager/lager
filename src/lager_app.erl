@@ -52,6 +52,17 @@ start(_StartType, _StartArgs) ->
     {_, Traces} = lager_mochiglobal:get(loglevel),
     lager_mochiglobal:put(loglevel, {MinLog, Traces}),
 
+    Treshold = case application:get_env(lager, duplicate_treshold) of
+        {ok, TresV} -> TresV;
+        _ -> 0
+    end,
+    lager_mochiglobal:put(duplicate_treshold, Treshold),
+    DumpDelay = case application:get_env(lager, duplicate_dump) of
+        {ok, DupDumpDelay} -> DupDumpDelay;
+        _ -> 1000
+    end,
+    lager_mochiglobal:put(duplicate_dump, DumpDelay),
+
     SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->
             [];
@@ -65,6 +76,7 @@ start(_StartType, _StartArgs) ->
                 []
             end
     end,
+
 
     {ok, Pid, SavedHandlers}.
 

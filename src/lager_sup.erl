@@ -74,7 +74,14 @@ init([]) ->
         _ ->
             []
     end,
+    Deduper = case application:get_env(lager, duplicate_treshold) of
+        {ok, N} when N > 0 ->
+            [{lager_deduper, {lager_deduper, start_link, []},
+                permanent, 5000, worker, [lager_deduper]}];
+        _ ->
+            []
+    end,
 
     {ok, {{one_for_one, 10, 60},
-            Children ++ Crash
+            Children ++ Crash ++ Deduper
             }}.

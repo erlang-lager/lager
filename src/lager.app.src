@@ -3,13 +3,14 @@
 {application, lager,
  [
   {description, "Erlang logging framework"},
-  {vsn, "1.2.0"},
+  {vsn, "1.3.0"},
   {modules, []},
   {applications, [
                   kernel,
                   stdlib,
                   compiler,
-                  syntax_tools
+                  syntax_tools,
+                  simhash
                  ]},
   {registered, []},
   {mod, {lager_app, []}},
@@ -36,6 +37,11 @@
             %% current one - default is 0
             {crash_log_count, 5},
             %% Whether to redirect error_logger messages into lager - defaults to true
-            {error_logger_redirect, true}
+            {error_logger_redirect, true},
+            %% How sensitive lager should be to near-duplicates. 0 means no
+            %% special handling is done
+            {duplicate_treshold, 0},
+            %% How frequently lager should dump its duplicate entries, in milliseconds
+            {duplicate_dump, 1000}
         ]}
  ]}.
