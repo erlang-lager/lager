@@ -392,6 +392,9 @@ alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(
 alist(_, _, #print_options{force_strings=true}) ->
     erlang:error(badarg);
 alist([H|_L], _Max, _Options) ->
+    throw({unprintable, H});
+alist(H, _Max, _Options) ->
+    %% improper list
     throw({unprintable, H}).
 
 %% is the first character in the atom alphabetic & lowercase?
@@ -622,6 +625,7 @@ list_printing_test() ->
     %%improper list
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~P", [[1|[2|[3|4]]], 5], 50))),
     ?assertEqual("[1|1]", lists:flatten(format("~P", [[1|1], 5], 50))),
+    ?assertEqual("[9|9]", lists:flatten(format("~p", [[9|9]], 50))),
     ok.
 
 tuple_printing_test() ->
