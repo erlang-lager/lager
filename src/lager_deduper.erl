@@ -37,8 +37,8 @@ handle_call({seen, Key}, _From, S = #state{db=DB}) ->
         {ok, _} ->
             {reply, yes, S#state{db=increment(Key, DB)}};
         undefined ->
-            case {closest(Key, DB), treshold()} of
-                {{Dist, MatchKey}, Treshold} when Dist =< Treshold ->
+            case close_enough(Key, DB, treshold()) of
+                {_Dist, MatchKey} ->
                     {reply, yes, S#state{db=increment(MatchKey, DB)}};
                 _ ->
                     {reply, no, S#state{db=store(Key, undefined, DB)}}
@@ -61,56 +61,72 @@ terminate(_, _) -> ok.
 delay() -> lager_mochiglobal:get(duplicate_dump, ?DEFAULT_TIMEOUT).
 treshold() -> lager_mochiglobal:get(duplicate_treshold, 1).
 
-%empty() -> [].
-empty() -> dict:new().
+empty() -> ets:new(?MODULE, [private]).
 
-lookup(Key, Dict) ->
-    case dict:find(Key, Dict) of
-        error -> undefined;
-        X -> X
+lookup(Key, Tab) ->
+    case ets:lookup(Tab, Key) of
+        [] -> undefined;
+        [{_,Ct,Val}] -> {ok,{Ct,Val}}
     end.
 
 %% assumes the key is present
-increment(Key, Dict) ->
-    dict:update(Key, fun({Ct, Val}) -> {Ct+1, Val} end, Dict).
+increment(Key, Tab) ->
+    ets:update_counter(Tab, Key, 1),
+    Tab.
 
-store(Key, Val, Dict) ->
-    dict:update(Key, fun({Ct, _}) -> {Ct, Val} end, {1, Val}, Dict).
+store(Key, Val, Tab) ->
+    case ets:update_element(Tab, Key, {3,Val}) of
+        false -> ets:insert(Tab, {Key, 1, Val});
+        true -> ok
+    end,
+    Tab.
 
-closest({Lvl, Hash}, Dict) ->
-    dict:fold(
-        fun({Level, H}, _Val, undefined) when Level =:= Lvl ->
-            {simhash:distance(Hash, H), {Level, H}};
-           ({Level, H}, _Val, Best) when Level =:= Lvl ->
-            min({simhash:distance(Hash, H), {Level,H}}, Best);
-           (_Key, _Val, Best) ->
-            Best
-        end,
-        undefined,
-        Dict).
+close_enough(Key, Tab, Limit) ->
+    close_enough(Key, Tab, Limit, ets:first(Tab)).
 
+close_enough({Level, Hash}, Tab, Limit, Current = {Level, H}) ->
+    case simhash:distance(Hash, H) of
+        X when X =< Limit ->
+            {X, {Level, H}};
+        _ ->
+            close_enough({Level, Hash}, Tab, Limit, ets:next(Tab, Current))
+    end;
+close_enough(_, _, _, '$end_of_table') ->
+    undefined;
+close_enough(Key, Tab, Limit, Current) ->
+    close_enough(Key, Tab, Limit, ets:next(Tab, Current)).
 
-dump(Dict) ->
-    dict:fold(
-        fun(Key, Val = {_, undefined}, D) ->
-            %% race condition between hash seen and log, hash
-            %% likely incoming
-            dict:store(Key, Val, D);
-           (_K, {1, Log = {log, _Lvl, _Ts, _Msg}}, D) ->
+dump(Tab) ->
+    dump(Tab, ets:first(Tab)).
+
+dump(Tab, '$end_of_table') ->
+    Tab;
+dump(Tab, Current) ->
+    case ets:lookup(Tab, Current) of
+        [{_,_,undefined}] -> % may occur between hash set and log
+            dump(Tab, ets:next(Tab, Current));
+        [{Key, 1, Log = {log, _Lvl, _Ts, _Msg}}] ->
             safe_notify(Log),
-            D;
-           (_K, {Ct, {log, Lvl, Ts, [LvlStr, Loc, Msg]}}, D) ->
+            Next = ets:next(Tab, Current),
+            ets:delete(Tab,Key),
+            dump(Tab, Next);
+        [{Key, 1, Log = {log, _Dest, _Lvl, _Ts, _Msg}}] ->
+            safe_notify(Log),
+            Next = ets:next(Tab, Current),
+            ets:delete(Tab,Key),
+            dump(Tab, Next);
+        [{Key, Ct, {log, Lvl, Ts, [LvlStr, Loc, Msg] }}] ->
             safe_notify({log, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times)", [Ct])]]}),
-            D;
-           (_K, {1, Log = {log, _Dest, _Lvl, _Ts, _Msg}}, D) ->
-            safe_notify(Log),
-            D;
-           (_K, {Ct, {log, Dest, Lvl, Ts, [LvlStr, Loc, Msg]}}, D) ->
+            Next = ets:next(Tab, Current),
+            ets:delete(Tab,Key),
+            dump(Tab, Next);
+        [{Key, Ct, {log, Dest, Lvl, Ts, [LvlStr, Loc, Msg]}}] ->
             safe_notify({log, Dest, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times)", [Ct])]]}),
-            D
-        end,
-        dict:new(),
-        Dict).
+            Next = ets:next(Tab, Current),
+            ets:delete(Tab,Key),
+            dump(Tab, Next)
+    end.
+
 
 safe_notify(Event) ->
     case whereis(lager_event) of
