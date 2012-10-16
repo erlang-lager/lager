@@ -17,7 +17,7 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 dedup_notify(Dest, Level, Timestamp, Msg) ->
-    Hash = simhash:hash(iolist_to_binary(Msg)),
+    Hash = hash(Msg),
     Key = {Level, Hash},
     case gen_server:call(?SERVER, {seen, Key}) of
         yes ->
@@ -27,6 +27,30 @@ dedup_notify(Dest, Level, Timestamp, Msg) ->
         no ->
             gen_server:cast(?SERVER, {set, Key, {log, Dest, lager_util:level_to_num(Level), Timestamp, Msg}})
     end.
+
+hash([_LvlStr, Loc, Msg]) ->
+    %% The location can be important, but not always -- depends on
+    %% where error logging takes place. We give it a weight equivalent
+    %% to 25% of the total hash, which seemed to strike a fair balance.
+    Res = shingle(Msg),
+    case re:split(Loc, "@") of
+        [_|[MFA]] ->
+            Weight = round(length(Res) * 0.25),
+            simhash:hash([{Weight, MFA} | Res]);
+        _ ->
+            simhash:hash(Res)
+    end.
+
+shingle(IoList) ->
+    %% Equivalent to "\s|,|\\.", or \s|,|\. as a non-escaped regex
+    Pattern = {re_pattern,0,0,
+               <<69,82,67,80,67,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,48,0,
+                 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,93,0,5,27,32,
+                 83,0,5,27,44,83,0,5,27,46,84,0,15,0>>},
+    [{1, X} || X <- re:split(IoList, Pattern), X =/= <<>>].
+
+%hash(Msg) ->
+%    simhash:hash(iolist_to_binary(Msg)).
 
 init([]) ->
     Ref = erlang:start_timer(delay(), self(), dump),

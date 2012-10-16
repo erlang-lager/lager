@@ -8,7 +8,7 @@
 init_regular() ->
     error_logger:tty(false),
     application:load(lager),
-    application:set_env(lager, handlers, [{lager_console_backend, info}]),
+    application:set_env(lager, handlers, [{lager_console_backend, [info,true]}]),
     application:set_env(lager, error_logger_redirect, false),
     application:start(crypto),
     ok=application:start(simhash),
@@ -22,14 +22,14 @@ init_regular() ->
 init_dedup() ->
     error_logger:tty(false),
     application:load(lager),
-    application:set_env(lager, handlers, [{lager_console_backend, info}]),
+    application:set_env(lager, handlers, [{lager_console_backend, [info,true]}]),
     application:set_env(lager, error_logger_redirect, false),
     application:start(crypto),
     application:load(simhash),
     application:start(simhash),
     application:start(compiler),
     application:start(syntax_tools),
-    application:set_env(lager, duplicate_treshold, 4),
+    application:set_env(lager, duplicate_treshold, 3),
     application:set_env(lager, duplicate_dump, 1000),
     ok=application:start(lager).
 
