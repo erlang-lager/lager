@@ -5,6 +5,7 @@
          code_change/3, terminate/2]).
 
 -define(SERVER, ?MODULE).
+-define(TABLE, ?MODULE).
 -define(DEFAULT_TIMEOUT, 1000).
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -19,6 +20,21 @@ start_link() ->
 dedup_notify(Dest, Level, Timestamp, Msg) ->
     Hash = hash(Msg),
     Key = {Level, Hash},
+    case limit() of
+        undefined -> ask_seen(Dest, Level, Timestamp, Msg, Key);
+        0 -> ask_seen(Dest, Level, Timestamp, Msg, Key);
+        Limit ->
+            case ets:lookup(?TABLE, Key) of
+                [] -> % not seen
+                    ask_seen(Dest, Level, Timestamp, Msg, Key);
+                [{_,X,_}] when X < Limit -> % seen, but not too often
+                    ask_seen(Dest, Level, Timestamp, Msg, Key);
+                [_] ->  % seen too many times
+                    ok
+            end
+    end.
+
+ask_seen(Dest, Level, Timestamp, Msg, Key) ->
     case gen_server:call(?SERVER, {seen, Key}) of
         yes ->
             ok;
@@ -84,8 +100,9 @@ terminate(_, _) -> ok.
 
 delay() -> lager_mochiglobal:get(duplicate_dump, ?DEFAULT_TIMEOUT).
 treshold() -> lager_mochiglobal:get(duplicate_treshold, 1).
+limit() -> lager_mochiglobal:get(duplicate_limit, undefined).
 
-empty() -> ets:new(?MODULE, [private]).
+empty() -> ets:new(?TABLE, [protected,named_table]).
 
 lookup(Key, Tab) ->
     case ets:lookup(Tab, Key) of
@@ -140,17 +157,23 @@ dump(Tab, Current) ->
             ets:delete(Tab,Key),
             dump(Tab, Next);
         [{Key, Ct, {log, Lvl, Ts, [LvlStr, Loc, Msg] }}] ->
-            safe_notify({log, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times)", [Ct])]]}),
+            safe_notify({log, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times~s)", [Ct,plus(Ct)])]]}),
             Next = ets:next(Tab, Current),
             ets:delete(Tab,Key),
             dump(Tab, Next);
         [{Key, Ct, {log, Dest, Lvl, Ts, [LvlStr, Loc, Msg]}}] ->
-            safe_notify({log, Dest, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times)", [Ct])]]}),
+            safe_notify({log, Dest, Lvl, Ts, [LvlStr, Loc, [Msg, io_lib:format(" (~b times~s)", [Ct,plus(Ct)])]]}),
             Next = ets:next(Tab, Current),
             ets:delete(Tab,Key),
             dump(Tab, Next)
     end.
 
+%% helper to display log count
+plus(Ct) ->
+    Limit = limit(),
+    if Limit =/= undefined, Limit > 0, Ct >= Limit -> "+";
+       true -> ""
+    end.
 
 safe_notify(Event) ->
     case whereis(lager_event) of

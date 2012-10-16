@@ -62,6 +62,11 @@ start(_StartType, _StartArgs) ->
         _ -> 1000
     end,
     lager_mochiglobal:put(duplicate_dump, DumpDelay),
+    DupLimit = case application:get_env(lager, duplicate_limit) of
+        {ok, DupLim} -> DupLim;
+        _ -> undefined
+    end,
+    lager_mochiglobal:put(duplicate_limit, DupLimit),
 
     SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->
