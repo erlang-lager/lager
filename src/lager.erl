@@ -82,15 +82,15 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     end.
 
 %% @doc Manually log a message into lager without using the parse transform.
--spec log(log_level(), pid() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
-log(Level, Pid, Message) when is_pid(Pid) ->
+-spec log(log_level(), pid() | atom() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
+log(Level, Pid, Message) when is_pid(Pid); is_atom(Pid) ->
     dispatch_log(Level, [{pid,Pid}], Message, [], ?DEFAULT_TRUNCATION);
 log(Level, Metadata, Message) when is_list(Metadata) ->
     dispatch_log(Level, Metadata, Message, [], ?DEFAULT_TRUNCATION).
 
 %% @doc Manually log a message into lager without using the parse transform.
--spec log(log_level(), pid() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
-log(Level, Pid, Format, Args) when is_pid(Pid) ->
+-spec log(log_level(), pid() | atom() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
+log(Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
     dispatch_log(Level, [{pid,Pid}], Format, Args, ?DEFAULT_TRUNCATION);
 log(Level, Metadata, Format, Args) when is_list(Metadata) ->
     dispatch_log(Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
