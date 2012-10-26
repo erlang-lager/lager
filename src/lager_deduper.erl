@@ -1,6 +1,6 @@
 -module(lager_deduper).
 -behaviour(gen_server).
--export([start_link/0, dedup_notify/4]).
+-export([start_link/0, dedup_notify/1, dedup_notify/4]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          code_change/3, terminate/2]).
 
@@ -16,6 +16,11 @@
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+dedup_notify({log, Dest, Lvl, Ts, Msg}) ->
+    dedup_notify(Dest, Lvl, Ts, Msg);
+dedup_notify({log, Lvl, Ts, Msg}) ->
+    dedup_notify([], Lvl, Ts, Msg).
 
 dedup_notify(Dest, Level, Timestamp, Msg) ->
     Hash = hash(Msg),
@@ -39,9 +44,9 @@ ask_seen(Dest, Level, Timestamp, Msg, Key) ->
         yes ->
             ok;
         no when Dest =:= [] ->
-            gen_server:cast(?SERVER, {set, Key, {log, lager_util:level_to_num(Level), Timestamp, Msg}});
+            gen_server:cast(?SERVER, {set, Key, {log, Level, Timestamp, Msg}});
         no ->
-            gen_server:cast(?SERVER, {set, Key, {log, Dest, lager_util:level_to_num(Level), Timestamp, Msg}})
+            gen_server:cast(?SERVER, {set, Key, {log, Dest, Level, Timestamp, Msg}})
     end.
 
 hash([_LvlStr, Loc, Msg]) ->
@@ -52,9 +57,9 @@ hash([_LvlStr, Loc, Msg]) ->
     case re:split(Loc, "@") of
         [_|[MFA]] ->
             Weight = round(length(Res) * 0.25),
-            simhash:hash([{Weight, MFA} | Res]);
+            simhash:hash([{Weight, MFA} | Res], fun erlang:md5/1, 128);
         _ ->
-            simhash:hash(Res)
+            simhash:hash(Res, fun erlang:md5/1, 128)
     end.
 
 shingle(IoList) ->
@@ -83,7 +88,13 @@ handle_call({seen, Key}, _From, S = #state{db=DB}) ->
                 _ ->
                     {reply, no, S#state{db=store(Key, undefined, DB)}}
             end
-    end.
+    end;
+%% hidden call, mostly useful for tests where we need to
+%% synchronously dump the messages.
+handle_call(dump, _From, S=#state{timer=Ref}) ->
+    erlang:cancel_timer(Ref),
+    {noreply, NewState} = handle_info({timeout, Ref, dump}, S),
+    {reply, ok, NewState}.
 
 handle_cast({set, Key, Val}, S=#state{db=DB}) ->
     {noreply, S#state{db=store(Key, Val, DB)}}.

@@ -56,14 +56,6 @@ start_ok(App, {error, Reason}) ->
     ok | {error, lager_not_running}.
 
 dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args, TruncSize) ->
-    case lager_mochiglobal:get(duplicate_treshold, 0) of
-        0 ->
-            dispatch_log1(Severity, Module, Function, Line, Pid, Traces, Format, Args, TruncSize);
-        N when N > 0 ->
-            lager_dedup:dispatch_log(Severity, Module, Function, Line, Pid, Traces, Format, Args, TruncSize)
-    end.
-
-dispatch_log1(Severity, Module, Function, Line, Pid, Traces, Format, Args, TruncSize) ->
     {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
     Result=
     case LevelThreshold >= lager_util:level_to_num(Severity) of
@@ -279,6 +271,14 @@ minimum_loglevel(Levels) ->
     erlang:hd(lists:reverse(lists:sort(Levels))).
 
 safe_notify(Event) ->
+    case lager_mochiglobal:get(duplicate_treshold, 0) of
+        0 ->
+            do_safe_notify(Event);
+        N when N > 0 ->
+            lager_deduper:dedup_notify(Event)
+    end.
+
+do_safe_notify(Event) ->
     case whereis(lager_event) of
         undefined ->
             %% lager isn't running

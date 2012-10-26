@@ -15,7 +15,8 @@ distclean: clean
 	./rebar delete-deps
 
 test:
-	./rebar compile eunit
+	./rebar compile
+	./rebar eunit skip_deps=true
 
 ##
 ## Doc targets
