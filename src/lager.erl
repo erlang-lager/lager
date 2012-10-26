@@ -271,7 +271,7 @@ minimum_loglevel(Levels) ->
     erlang:hd(lists:reverse(lists:sort(Levels))).
 
 safe_notify(Event) ->
-    case lager_mochiglobal:get(duplicate_treshold, 0) of
+    case lager_mochiglobal:get(duplicate_threshold, 0) of
         0 ->
             do_safe_notify(Event);
         N when N > 0 ->

@@ -82,7 +82,7 @@ handle_call({seen, Key}, _From, S = #state{db=DB}) ->
         {ok, _} ->
             {reply, yes, S#state{db=increment(Key, DB)}};
         undefined ->
-            case close_enough(Key, DB, treshold()) of
+            case close_enough(Key, DB, threshold()) of
                 {_Dist, MatchKey} ->
                     {reply, yes, S#state{db=increment(MatchKey, DB)}};
                 _ ->
@@ -110,7 +110,7 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(_, _) -> ok.
 
 delay() -> lager_mochiglobal:get(duplicate_dump, ?DEFAULT_TIMEOUT).
-treshold() -> lager_mochiglobal:get(duplicate_treshold, 1).
+threshold() -> lager_mochiglobal:get(duplicate_threshold, 1).
 limit() -> lager_mochiglobal:get(duplicate_limit, undefined).
 
 empty() -> ets:new(?TABLE, [protected,named_table]).
@@ -197,8 +197,8 @@ safe_notify(Event) ->
 
 
 -ifdef(TEST).
-setup(Treshold, Timer) ->
-    lager_mochiglobal:put(duplicate_treshold, Treshold),
+setup(Threshold, Timer) ->
+    lager_mochiglobal:put(duplicate_threshold, Threshold),
     lager_mochiglobal:put(duplicate_dump, Timer),
     application:start(simhash),
     {ok, DedupPid} = start_link(),
@@ -208,8 +208,8 @@ setup(Treshold, Timer) ->
 cleanup(Pid) ->
     exit(Pid, shutdown).
 
-low_treshold_test_() ->
-    {"Check that with low treshold, all messages are handled individually",
+low_threshold_test_() ->
+    {"Check that with low threshold, all messages are handled individually",
      {foreach,
       fun() -> setup(1, 100000) end,
       fun cleanup/1,
@@ -220,9 +220,9 @@ low_treshold_test_() ->
                 {warning, <<"hella mr bond, how are you today?">>}])
        end]}}.
 
-high_treshold_test_() ->
-    {"Check that with high treshold, all messages are handled according to "
-     "similarity. Super-high tresholds mean all messages get merged.",
+high_threshold_test_() ->
+    {"Check that with high threshold, all messages are handled according to "
+     "similarity. Super-high thresholds mean all messages get merged.",
      {foreach,
       fun() -> setup(100000, 100000) end,
       fun cleanup/1,
@@ -234,7 +234,7 @@ high_treshold_test_() ->
                 {warning, "my cat is blue."}])
        end,
        fun(Pid) ->
-           %% different levels won't mix, even with high tresholds.
+           %% different levels won't mix, even with high thresholds.
            warning_counter(
                Pid, 2,
                [{warning, "hello mr bond, how are you today?"},

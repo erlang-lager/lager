@@ -40,9 +40,9 @@
             {error_logger_redirect, true},
             %% How sensitive lager should be to near-duplicates. 0 means no
             %% special handling is done
-            {duplicate_treshold, 0},
+            {duplicate_threshold, 0},
             %% How frequently lager should dump its duplicate entries, in milliseconds.
-            %% only used if duplicate_treshold > 0
+            %% only used if duplicate_threshold > 0
             {duplicate_dump, 1000},
             %% How many similar messages can be logged per dump. If 150 log
             %% messages are identical but this limit is set to 5, the log handler

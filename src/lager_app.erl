@@ -52,11 +52,11 @@ start(_StartType, _StartArgs) ->
     {_, Traces} = lager_mochiglobal:get(loglevel),
     lager_mochiglobal:put(loglevel, {MinLog, Traces}),
 
-    Treshold = case application:get_env(lager, duplicate_treshold) of
-        {ok, TresV} -> TresV;
+    Threshold = case application:get_env(lager, duplicate_threshold) of
+        {ok, ThresV} -> ThresV;
         _ -> 0
     end,
-    lager_mochiglobal:put(duplicate_treshold, Treshold),
+    lager_mochiglobal:put(duplicate_threshold, Threshold),
     DumpDelay = case application:get_env(lager, duplicate_dump) of
         {ok, DupDumpDelay} -> DupDumpDelay;
         _ -> 1000

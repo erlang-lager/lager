@@ -74,7 +74,7 @@ init([]) ->
         _ ->
             []
     end,
-    Deduper = case application:get_env(lager, duplicate_treshold) of
+    Deduper = case application:get_env(lager, duplicate_threshold) of
         {ok, N} when N > 0 ->
             [{lager_deduper, {lager_deduper, start_link, []},
                 permanent, 5000, worker, [lager_deduper]}];

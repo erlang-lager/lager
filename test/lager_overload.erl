@@ -14,7 +14,7 @@ init_regular() ->
     ok=application:start(simhash),
     application:start(compiler),
     application:start(syntax_tools),
-    application:set_env(lager, duplicate_treshold, 0),
+    application:set_env(lager, duplicate_threshold, 0),
     application:set_env(lager, duplicate_dump, infinity),
     ok=application:start(lager).
 
@@ -29,7 +29,7 @@ init_dedup() ->
     application:start(simhash),
     application:start(compiler),
     application:start(syntax_tools),
-    application:set_env(lager, duplicate_treshold, 3),
+    application:set_env(lager, duplicate_threshold, 3),
     application:set_env(lager, duplicate_dump, 1000),
     ok=application:start(lager).
 
