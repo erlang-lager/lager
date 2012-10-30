@@ -261,6 +261,176 @@ cleanup(_) ->
     application:stop(lager),
     error_logger:tty(true).
 
+lager_quick_notify_test_() ->
+    {foreach,
+        fun quick_notify_setup/0,
+        fun quick_notify_cleanup/1,
+        [
+            {"observe that there is nothing up my sleeve",
+                fun() ->
+                        ?assertEqual(undefined, pop()),
+                        ?assertEqual(0, count())
+                end
+            },
+            {"logging works",
+                fun() ->
+                        lager:warning("test message"),
+                        ?assertEqual(1, count()),
+                        {Level, _Time, Message}  = pop(),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("[warning]", LevelStr),
+                        ?assertEqual("test message", MsgStr),
+                        ok
+                end
+            },
+            {"logging with arguments works",
+                fun() ->
+                        lager:warning("test message ~p", [self()]),
+                        ?assertEqual(1, count()),
+                        {Level, _Time, Message}  = pop(),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("[warning]", LevelStr),
+                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), MsgStr),
+                        ok
+                end
+            },
+            {"logging works from inside a begin/end block",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        begin
+                                lager:warning("test message 2")
+                        end,
+                        ?assertEqual(1, count()),
+                        ok
+                end
+            },
+            {"logging works from inside a list comprehension",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        [lager:warning("test message") || _N <- lists:seq(1, 10)],
+                        ?assertEqual(2, count()),
+                        {Level, _Time1, Message1}  = pop(),
+                        [LevelStr, LocStr, MsgStr1] = re:split(Message1, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("[warning]", LevelStr),
+                        ?assertEqual("test message", MsgStr1),
+                        {Level, _Time2, Message2}  = pop(),
+                        [LevelStr, LocStr, MsgStr2] = re:split(Message2, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("test message (9 times)", MsgStr2),
+                        ok
+                end
+            },
+            {"logging works from a begin/end block inside a list comprehension",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        [ begin lager:warning("test message") end || _N <- lists:seq(1, 10)],
+                        ?assertEqual(2, count()),
+                        {Level, _Time1, Message1}  = pop(),
+                        [LevelStr, LocStr, MsgStr1] = re:split(Message1, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("[warning]", LevelStr),
+                        ?assertEqual("test message", MsgStr1),
+                        {Level, _Time2, Message2}  = pop(),
+                        [LevelStr, LocStr, MsgStr2] = re:split(Message2, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("test message (9 times)", MsgStr2),
+                        ok
+                end
+            },
+            {"logging works from a nested list comprehension",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        [ [lager:warning("test message") || _N <- lists:seq(1, 10)] ||
+                            _I <- lists:seq(1, 10)],
+                        ?assertEqual(2, count()),
+                        {Level, _Time, Message1}  = pop(),
+                        [LevelStr, LocStr, MsgStr1] = re:split(Message1, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("[warning]", LevelStr),
+                        ?assertEqual("test message", MsgStr1),
+                        {Level, _Time, Message2}  = pop(),
+                        [LevelStr, LocStr, MsgStr2] = re:split(Message2, " ", [{return, list}, {parts, 3}]),
+                        ?assertEqual("test message (99 times)", MsgStr2),
+                        ok
+                end
+            },
+            {"log messages below the threshold are ignored",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        lager:debug("this message will be ignored"),
+                        ?assertEqual(0, count()),
+                        ?assertEqual(0, count_ignored()),
+                        lager_mochiglobal:put(loglevel, {?DEBUG, []}),
+                        lager:debug("this message should be ignored"),
+                        ?assertEqual(0, count()),
+                        ?assertEqual(1, count_ignored()),
+                        lager:set_loglevel(?MODULE, debug),
+                        lager:debug("this message should be logged"),
+                        ?assertEqual(1, count()),
+                        ?assertEqual(1, count_ignored()),
+                        ?assertEqual(debug, lager:get_loglevel(?MODULE)),
+                        ok
+                end
+            },
+            {"tracing works",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, []}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(0, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR, [{[{module,
+                                                ?MODULE}], ?DEBUG, ?MODULE}]}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(1, count()),
+                        ok
+                end
+            },
+            {"tracing works with custom attributes",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, []}),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(0, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR,
+                                [{[{requestid, 6}], ?DEBUG, ?MODULE}]}),
+                        lager:info([{requestid, 6}, {foo, bar}], "hello world"),
+                        ?assertEqual(1, count()),
+                        lager_mochiglobal:put(loglevel, {?ERROR,
+                                [{[{requestid, '*'}], ?DEBUG, ?MODULE}]}),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(2, count()),
+                        ok
+                end
+            },
+            {"tracing honors loglevel",
+                fun() ->
+                        lager_mochiglobal:put(loglevel, {?ERROR, [{[{module,
+                                                ?MODULE}], ?NOTICE, ?MODULE}]}),
+                        ok = lager:info("hello world"),
+                        ?assertEqual(0, count()),
+                        ok = lager:notice("hello world"),
+                        ?assertEqual(1, count()),
+                        ok
+                end
+            }
+        ]
+    }.
+
+quick_notify_setup() ->
+    error_logger:tty(false),
+    application:load(lager),
+    application:set_env(lager, handlers, [{?MODULE, info}]),
+    application:set_env(lager, error_logger_redirect, false),
+    application:set_env(lager, duplicate_threshold, 1),
+    application:set_env(lager, duplicate_dump, 100000),
+    application:set_env(lager, duplicate_quick_notification, true),
+    application:start(crypto),
+    application:start(simhash),
+    application:start(compiler),
+    application:start(syntax_tools),
+    application:start(lager),
+    gen_server:call(lager_deduper, dump),
+    gen_event:call(lager_event, ?MODULE, flush).
+
+quick_notify_cleanup(_) ->
+    application:stop(lager),
+    error_logger:tty(true).
 
 crash(Type) ->
     spawn(fun() -> gen_server:call(crash, Type) end),
@@ -277,6 +447,24 @@ test_body(Expected, Actual) ->
             ?assertEqual(" line ", string:substr(FileLine, 1, 6));
         false ->
             ?assertEqual(Expected, Actual)
+    end.
+
+%% only one of the messages is valid!
+test_multi_body(Expected, Received) ->
+    case has_line_numbers() of
+        true ->
+            Data = [{string:substr(Actual, length(Expected)+1),
+                     string:substr(Actual, 1, length(Expected))}
+                    || Actual <- Received],
+            Res =
+            [begin
+              ?assertEqual(Expected, Body),
+              ?assertEqual(" line ", string:substr(FileLine, 1, 6))
+             end || {FileLine, Body} <- Data,
+                    Body =:= Expected],
+            ?assertNotEqual([], Res);
+        false ->
+            ?assert(lists:member(Expected, Received))
     end.
 
 
@@ -329,150 +517,176 @@ error_logger_redirect_crash_test_() ->
                         %% We need to pop twice, because the buffering imposed
                         %% by the deduper swaps messages that the
                         %% lager_test_backend suite receives in reverse.
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: {tuple,{tuple,\"string\"}}", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        ?assert(lists:member(Expected, Received))
                 end
             },
            {"bad return value uncaught throw",
                 fun() ->
                         Pid = whereis(crash),
                         crash(throw),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: a_ball", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        ?assert(lists:member(Expected, Received))
                 end
             },
             {"case clause",
                 fun() ->
                         Pid = whereis(crash),
                         crash(case_clause),
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"case clause string",
                 fun() ->
                         Pid = whereis(crash),
                         crash(case_clause_string),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"function clause",
                 fun() ->
                         Pid = whereis(crash),
                         crash(function_clause),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no function clause matching crash:function({})", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"if clause",
                 fun() ->
                         Pid = whereis(crash),
                         crash(if_clause),
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"try clause",
                 fun() ->
                         Pid = whereis(crash),
                         crash(try_clause),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"undefined function",
                 fun() ->
                         Pid = whereis(crash),
                         crash(undef),
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad math",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badarith),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad match",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badmatch),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad arity",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badarity),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad arg1",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badarg1),
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad arg2",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badarg2),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"bad record",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badrecord),
-                        {_, _, _} = pop(),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad record state in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             },
             {"noproc",
                 fun() ->
                         Pid = whereis(crash),
                         crash(noproc),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no such process or port in call to gen_event:call(foo, bar, baz)", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        ?assert(lists:member(Expected, Received))
                 end
             },
             {"badfun",
                 fun() ->
                         Pid = whereis(crash),
                         crash(badfun),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg1} = pop(),
+                        {_, _, Msg2} = pop(),
+                        Received = [lists:flatten(Msg) || Msg <- [Msg1, Msg2]],
                         Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad function booger in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
+                        test_multi_body(Expected, Received)
                 end
             }
 

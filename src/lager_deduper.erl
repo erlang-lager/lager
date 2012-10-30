@@ -97,6 +97,10 @@ handle_call(dump, _From, S=#state{timer=Ref}) ->
     {reply, ok, NewState}.
 
 handle_cast({set, Key, Val}, S=#state{db=DB}) ->
+    case quick() of
+        true -> safe_notify(Val);
+        false -> ok
+    end,
     {noreply, S#state{db=store(Key, Val, DB)}}.
 
 handle_info({timeout, _Ref, dump}, S=#state{db=DB}) ->
@@ -112,6 +116,7 @@ terminate(_, _) -> ok.
 delay() -> lager_mochiglobal:get(duplicate_dump, ?DEFAULT_TIMEOUT).
 threshold() -> lager_mochiglobal:get(duplicate_threshold, 1).
 limit() -> lager_mochiglobal:get(duplicate_limit, undefined).
+quick() -> lager_mochiglobal:get(duplicate_quick_notification, false).
 
 empty() -> ets:new(?TABLE, [protected,named_table]).
 
@@ -128,7 +133,13 @@ increment(Key, Tab) ->
 
 store(Key, Val, Tab) ->
     case ets:update_element(Tab, Key, {3,Val}) of
-        false -> ets:insert(Tab, {Key, 1, Val});
+        false ->
+            case quick() of
+                false ->
+                    ets:insert(Tab, {Key, 1, Val});
+                true ->
+                    ets:insert(Tab, {Key, 0, Val})
+            end;
         true -> ok
     end,
     Tab.
@@ -157,6 +168,10 @@ dump(Tab, Current) ->
     case ets:lookup(Tab, Current) of
         [{_,_,undefined}] -> % may occur between hash set and log
             dump(Tab, ets:next(Tab, Current));
+        [{Key, 0, _Log}] -> % handled with quick notification, discard
+            Next = ets:next(Tab, Current),
+            ets:delete(Tab, Key),
+            dump(Tab, Next);
         [{Key, 1, Log = {log, _Lvl, _Ts, _Msg}}] ->
             safe_notify(Log),
             Next = ets:next(Tab, Current),

@@ -48,6 +48,13 @@
             %% messages are identical but this limit is set to 5, the log handler
             %% will only receive 5 of them and show (5 times+) instead of (N times).
             %% a value of 0 or 'undefined' disables limits.
-            {duplicate_limit, undefined}
+            {duplicate_limit, undefined},
+            %% Duplicate detection, by default, will eat up all the messages in a given
+            %% time period before dumping them. If the waiting time is set high (say a
+            %% minute or so), it means reaction time is much higher. Setting
+            %% 'duplicate_quick_notification' to 'true' makes the first message of a
+            %% given error go through, while accumulating the later ones to make sure
+            %% you get both quick reporting and deduplication of messages.
+            {duplicate_quick_notification, false}
         ]}
  ]}.

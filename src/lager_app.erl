@@ -67,6 +67,11 @@ start(_StartType, _StartArgs) ->
         _ -> undefined
     end,
     lager_mochiglobal:put(duplicate_limit, DupLimit),
+    DupQuick = case application:get_env(lager, duplicate_quick_notification) of
+        {ok, QuickDup} -> QuickDup;
+        _ -> false
+    end,
+    lager_mochiglobal:put(duplicate_quick_notification, DupQuick),
 
     SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->
