@@ -40,7 +40,7 @@ dedup_notify(Dest, Level, Timestamp, Msg) ->
     end.
 
 ask_seen(Dest, Level, Timestamp, Msg, Key) ->
-    case gen_server:call(?SERVER, {seen, Key}) of
+    case gen_server:call(?SERVER, {seen, Key}, infinity) of
         yes ->
             ok;
         no when Dest =:= [] ->
