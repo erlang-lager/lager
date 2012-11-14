@@ -116,8 +116,6 @@ console_log_test_() ->
                 application:load(lager),
                 application:set_env(lager, handlers, []),
                 application:set_env(lager, error_logger_redirect, false),
-                application:start(compiler),
-                application:start(syntax_tools),
                 application:start(lager),
                 whereis(user)
         end,
@@ -135,7 +133,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager_config:set(loglevel, {?INFO, []}),
                         lager:log(info, self(), "Test message"),
                         receive
                             {io_request, From, ReplyAs, {put_chars, unicode, Msg}} ->
@@ -154,7 +152,7 @@ console_log_test_() ->
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         gen_event:add_handler(lager_event, lager_console_backend, [info, true]),
-                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager_config:set(loglevel, {?INFO, []}),
                         lager:info("Test message"),
                         lager:info("Test message"),
                         PidStr = pid_to_list(self()),
@@ -174,7 +172,7 @@ console_log_test_() ->
                         register(user, Pid),
                         gen_event:add_handler(lager_event, lager_console_backend, info),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager_config:set(loglevel, {?INFO, []}),
                         lager:debug("Test message"),
                         receive
                             {io_request, From, ReplyAs, {put_chars, unicode, _Msg}} ->
@@ -202,7 +200,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         gen_event:add_handler(lager_event, lager_console_backend, info),
-                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager_config:set(loglevel, {?INFO, []}),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager:debug("Test message"),
                         receive
