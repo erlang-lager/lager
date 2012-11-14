@@ -420,6 +420,7 @@ quick_notify_setup() ->
     gen_event:call(lager_event, ?MODULE, flush).
 
 quick_notify_cleanup(_) ->
+    application:set_env(lager, duplicate_threshold, 0),
     application:stop(lager),
     error_logger:tty(true).
 
@@ -495,6 +496,7 @@ error_logger_redirect_crash_test_() ->
         end,
 
         fun(_) ->
+                application:set_env(lager, duplicate_threshold, 0),
                 application:stop(lager),
                 case whereis(crash) of
                     undefined -> ok;
@@ -736,6 +738,7 @@ error_logger_redirect_test_() ->
         end,
 
         fun(_) ->
+                application:set_env(lager, duplicate_threshold, 0),
                 application:stop(lager),
                 error_logger:tty(true)
         end,
