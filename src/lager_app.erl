@@ -52,6 +52,27 @@ start(_StartType, _StartArgs) ->
     {_, Traces} = lager_config:get(loglevel),
     lager_config:set(loglevel, {MinLog, Traces}),
 
+    Threshold = case application:get_env(lager, duplicate_threshold) of
+        {ok, ThresV} when ThresV > 0 -> ThresV;
+        _ -> 0
+    end,
+    lager_config:set(duplicate_threshold, Threshold),
+    DumpDelay = case application:get_env(lager, duplicate_dump) of
+        {ok, DupDumpDelay} -> DupDumpDelay;
+        _ -> 1000
+    end,
+    lager_config:set(duplicate_dump, DumpDelay),
+    DupLimit = case application:get_env(lager, duplicate_limit) of
+        {ok, DupLim} -> DupLim;
+        _ -> undefined
+    end,
+    lager_config:set(duplicate_limit, DupLimit),
+    DupQuick = case application:get_env(lager, duplicate_quick_notification) of
+        {ok, QuickDup} -> QuickDup;
+        _ -> false
+    end,
+    lager_config:set(duplicate_quick_notification, DupQuick),
+
     SavedHandlers = case application:get_env(lager, error_logger_redirect) of
         {ok, false} ->
             [];
