@@ -89,7 +89,7 @@ to_config({Name,Severity}) ->
 to_config({Name,_Severity,_Size,_Rotation,_Count}=Config) ->
     {{lager_file_backend, Name}, Config};
 to_config({Name,Severity,Size,Rotation,Count,Format}) ->
-    {{lager_file_backend, Name}, {Name,Severity,Size,Rotation,Count},Format}.
+    {{lager_file_backend, Name}, [{Name,Severity,Size,Rotation,Count},Format]}.
 
 
 
@@ -109,8 +109,8 @@ application_config_mangling_test_() ->
                 ))},
         {"Explode with formatter info",
             ?_assertMatch(
-                [{{lager_file_backend,"test.log"},  {"test.log", debug, 10485760, "$D0", 5},{lager_default_formatter,["[",severity,"] ", message, "\n"]}},
-                    {{lager_file_backend,"test2.log"}, {"test2.log",debug, 10485760, "$D0", 5},{lager_default_formatter,["2>[",severity,"] ", message, "\n"]}}],
+                [{{lager_file_backend,"test.log"},  [{"test.log", debug, 10485760, "$D0", 5},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]},
+                    {{lager_file_backend,"test2.log"}, [{"test2.log",debug, 10485760, "$D0", 5},{lager_default_formatter,["2>[",severity,"] ", message, "\n"]}]}],
                 expand_handlers([{lager_file_backend, [
                                 {"test.log", debug, 10485760, "$D0", 5,{lager_default_formatter,["[",severity,"] ", message, "\n"]}},
                                 {"test2.log",debug, 10485760, "$D0", 5,{lager_default_formatter,["2>[",severity,"] ",message, "\n"]}}
