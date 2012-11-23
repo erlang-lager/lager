@@ -89,7 +89,7 @@ to_config({Name,Severity}) ->
 to_config({Name,_Severity,_Size,_Rotation,_Count}=Config) ->
     {{lager_file_backend, Name}, Config};
 to_config({Name,Severity,Size,Rotation,Count,Format}) ->
-    {{lager_file_backend, Name}, {Name,Severity,Size,Rotation,Count},Format}.
+    {{lager_file_backend, Name}, [{Name,Severity,Size,Rotation,Count}, Format}].
 
 
 
