@@ -18,7 +18,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
+-export([levels/0, level_to_num/1, num_to_level/1, config_to_level/1, open_logfile/2,
         ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
@@ -51,6 +51,54 @@ num_to_level(2) -> critical;
 num_to_level(1) -> alert;
 num_to_level(0) -> emergency;
 num_to_level(-1) -> none.
+
+%% TODO, try writing it all out by hand and EQC check it against this code
+%config_to_level(X) when X == '>=debug'; X == 'debug' ->
+    %[debug, info, notice, warning, error, critical, alert, emergency];
+%config_to_level(X) when X == '>=info'; X == 'info'; X == '!=debug' ->
+    %[info, notice, warning, error, critical, alert, emergency];
+config_to_level(Conf) when is_atom(Conf) ->
+    config_to_level(atom_to_list(Conf));
+config_to_level([$! | Rest]) ->
+    levels() -- config_to_level(Rest);
+config_to_level([$=, $< | Rest]) ->
+    [_|Levels] = config_to_level(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_level([$<, $= | Rest]) ->
+    [_|Levels] = config_to_level(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_level([$>, $= | Rest]) ->
+    Levels = config_to_level(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_level([$=, $> | Rest]) ->
+    Levels = config_to_level(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_level([$= | Rest]) ->
+    [level_to_atom(Rest)];
+config_to_level([$< | Rest]) ->
+    Levels = config_to_level(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_level([$> | Rest]) ->
+    [_|Levels] = config_to_level(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_level(Conf) ->
+    Level = level_to_atom(Conf),
+    lists:dropwhile(fun(E) -> E /= Level end, levels()).
+
+level_to_atom(String) ->
+    Levels = levels(),
+    try list_to_existing_atom(String) of
+        Atom ->
+            case lists:member(Atom, Levels) of
+                true ->
+                    Atom;
+                false ->
+                    erlang:error(badarg)
+            end
+    catch
+        _:_ ->
+            erlang:error(badarg)
+    end.
 
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
