@@ -78,6 +78,8 @@ output(date,Msg) ->
 output(time,Msg) ->
     {_D, T} = lager_msg:timestamp(Msg),
     T;
+output(node,Msg) ->
+    atom_to_list(node());
 output(severity,Msg) ->
     atom_to_list(lager_msg:severity(Msg));
 output(Prop,Msg) when is_atom(Prop) ->
