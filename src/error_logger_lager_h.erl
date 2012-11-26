@@ -32,7 +32,7 @@
 
 -export([format_reason/1]).
 
--define(LOG(Level, Pid, Msg),
+-define(LOGM(Level, Pid, Msg),
     case ?SHOULD_LOG(Level) of
         true ->
             _ =lager:log(Level, Pid, Msg),
@@ -40,7 +40,7 @@
         _ -> ok
     end).
 
--define(LOG(Level, Pid, Fmt, Args),
+-define(LOGF(Level, Pid, Fmt, Args),
     case ?SHOULD_LOG(Level) of
         true ->
             _ = lager:log(Level, Pid, Fmt, Args),
@@ -72,74 +72,74 @@ handle_event(Event, State) ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, "gen_server ~w terminated with reason: ~s",
+                    ?LOGF(error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
                 "** State machine "++_ ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
+                    ?LOGF(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
                 "** gen_event handler"++_ ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
+                    ?LOGF(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
                 _ ->
                     ?CRASH_LOG(Event),
-                    ?LOG(error, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION))
+                    ?LOGM(error, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION))
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
             ?CRASH_LOG(Event),
-            ?LOG(error, Pid, print_silly_list(D));
+            ?LOGM(error, Pid, print_silly_list(D));
         {error_report, _GL, {Pid, supervisor_report, D}} ->
             ?CRASH_LOG(Event),
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    ?LOG(error, Pid,
+                    ?LOGF(error, Pid,
                         "Supervisor ~w had child ~s exit with reason ~s in context ~w",
                         [element(2, Name), Offender, format_reason(Reason), Ctx]);
                 _ ->
-                    ?LOG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
+                    ?LOGM(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
             ?CRASH_LOG(Event),
-            ?LOG(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
+            ?LOGM(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(warning, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
+            ?LOGM(warning, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
         {warning_report, _GL, {Pid, std_warning, Report}} ->
-            ?LOG(warning, Pid, print_silly_list(Report));
+            ?LOGM(warning, Pid, print_silly_list(Report));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOG(info, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
+            ?LOGM(info, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
         {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    ?LOG(info, Pid, "Application ~w exited with reason: ~s",
+                    ?LOGF(info, Pid, "Application ~w exited with reason: ~s",
                         [App, format_reason(Reason)]);
                 _ ->
-                    ?LOG(info, Pid, print_silly_list(D))
+                    ?LOGM(info, Pid, print_silly_list(D))
             end;
         {info_report, _GL, {Pid, std_info, D}} ->
-            ?LOG(info, Pid, "~w", [D]);
+            ?LOGF(info, Pid, "~w", [D]);
         {info_report, _GL, {P, progress, D}} ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {started_at, Node}] ->
-                    ?LOG(info, P, "Application ~w started on node ~w",
+                    ?LOGF(info, P, "Application ~w started on node ~w",
                         [App, Node]);
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
-                    ?LOG(debug, P, "Supervisor ~w started ~s at pid ~w",
+                    ?LOGF(debug, P, "Supervisor ~w started ~s at pid ~w",
                         [element(2, Name), MFA, Pid]);
                 _ ->
-                    ?LOG(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
+                    ?LOGM(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;
         _ ->
-            ?LOG(warning, self(), "Unexpected error_logger event ~w", [Event])
+            ?LOGF(warning, self(), "Unexpected error_logger event ~w", [Event])
     end,
     {ok, State}.
 
