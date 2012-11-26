@@ -1,4 +1,4 @@
-%% Copyright (c) 2011 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -24,7 +24,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, verbose}).
+-record(state, {level, formatter,format_config}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -33,18 +33,21 @@
 
 -include("lager.hrl").
 
+-define(TERSE_FORMAT,[time, " [", severity,"] ", message, "\r\n"]).
+
 %% @private
 init(Level) when is_atom(Level) ->
+    init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
+init([Level, true]) -> % for backwards compatibility
+    init([Level,{lager_default_formatter,[{eol, "\r\n"}]}]);
+init([Level,false]) -> % for backwards compatibility
+    init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
+init([Level,{Formatter,FormatterConfig}])  when is_atom(Level), is_atom(Formatter)->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
-        _ ->
-            {error, bad_log_level}
-    end;
-init([Level, Verbose]) ->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}};
+            {ok, #state{level=lager_util:level_to_num(Level), 
+                    formatter=Formatter, 
+                    format_config=FormatterConfig}};
         _ ->
             {error, bad_log_level}
     end.
@@ -64,29 +67,15 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
-handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]},
-    #state{level=L, verbose=Verbose} = State) when Level > L ->
-    case lists:member(lager_console_backend, Dest) of
+handle_event({log, Message},
+    #state{level=L,formatter=Formatter,format_config=FormatConfig} = State) ->
+    case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->
-            case Verbose of
-                true ->
-                    io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
-                _ ->
-                    io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
-            end,
+            io:put_chars(user, Formatter:format(Message,FormatConfig)),
             {ok, State};
         false ->
             {ok, State}
     end;
-handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]},
-  #state{level=LogLevel, verbose=Verbose} = State) when Level =< LogLevel ->
-    case Verbose of
-        true ->
-            io:put_chars(user, [Date, " ", Time, " ", LevelStr, Location, Message, "\r\n"]);
-        _ ->
-            io:put_chars(user, [Time, " ", LevelStr, Message, "\r\n"])
-    end,
-    {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
 
@@ -146,6 +135,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
                         lager:log(info, self(), "Test message"),
                         receive
                             {io_request, From, ReplyAs, {put_chars, unicode, Msg}} ->
@@ -164,12 +154,13 @@ console_log_test_() ->
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         gen_event:add_handler(lager_event, lager_console_backend, [info, true]),
-                        lager:log(info, self(), "Test message"),
-                        lager:log(info, self(), "Test message"),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager:info("Test message"),
+                        lager:info("Test message"),
                         PidStr = pid_to_list(self()),
                         receive
                             {io_request, _, _, {put_chars, unicode, Msg}} ->
-                                ?assertMatch([_, _, "[info]", PidStr, "Test message\r\n"], re:split(Msg, " ", [{return, list}, {parts, 5}]))
+                                ?assertMatch([_, _, "[info]", PidStr, _,"Test message\r\n"], re:split(Msg, "[ @]", [{return, list}, {parts, 6}]))
                         after
                             500 ->
                                 ?assert(false)

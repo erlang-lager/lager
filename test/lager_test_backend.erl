@@ -1,4 +1,4 @@
-%% Copyright (c) 2011 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -54,13 +54,15 @@ handle_call({set_loglevel, Level}, State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, [?MODULE], Level, Time, Message}, #state{buffer=Buffer} = State) ->
-    {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
-handle_event({log, Level, Time, Message}, #state{level=LogLevel,
-        buffer=Buffer} = State) when Level =< LogLevel ->
-    {ok, State#state{buffer=Buffer ++ [{Level, Time, Message}]}};
-handle_event({log, _Level, _Time, _Message}, #state{ignored=Ignored} = State) ->
-    {ok, State#state{ignored=Ignored ++ [ignored]}};
+handle_event({log, Msg},
+        #state{level=LogLevel,buffer=Buffer,ignored=Ignored} = State) ->
+        case lager_util:is_loggable(Msg, LogLevel, ?MODULE) of
+            true ->   {ok, State#state{buffer=Buffer ++
+                        [{lager_msg:severity_as_int(Msg),
+                                lager_msg:timestamp(Msg),
+                                lager_msg:message(Msg), lager_msg:metadata(Msg)}]}};
+            _ ->  {ok, State#state{ignored=Ignored ++ [ignored]}}
+        end;
 handle_event(_Event, State) ->
     {ok, State}.
 
@@ -88,10 +90,10 @@ flush() ->
     gen_event:call(lager_event, ?MODULE, flush).
 
 has_line_numbers() ->
-	%% are we R15 or greater
-	Rel = erlang:system_info(otp_release),
-	{match, [Major]} = re:run(Rel, "^R(\\d+)[A|B](|0(\\d))$", [{capture, [1], list}]),
-	list_to_integer(Major) >= 15.
+    %% are we R15 or greater
+    Rel = erlang:system_info(otp_release),
+    {match, [Major]} = re:run(Rel, "^R(\\d+)[A|B](|0(\\d))$", [{capture, [1], list}]),
+    list_to_integer(Major) >= 15.
 
 not_running_test() ->
     ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).
@@ -111,11 +113,9 @@ lager_test_() ->
                 fun() ->
                         lager:warning("test message"),
                         ?assertEqual(1, count()),
-                        {Level, _Time, Message}  = pop(),
+                        {Level, _Time, Message, _Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
-                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
-                        ?assertEqual("[warning]", LevelStr),
-                        ?assertEqual("test message", MsgStr),
+                        ?assertEqual("test message", Message),
                         ok
                 end
             },
@@ -123,11 +123,9 @@ lager_test_() ->
                 fun() ->
                         lager:warning("test message ~p", [self()]),
                         ?assertEqual(1, count()),
-                        {Level, _Time, Message}  = pop(),
+                        {Level, _Time, Message,_Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
-                        [LevelStr, _LocStr, MsgStr] = re:split(Message, " ", [{return, list}, {parts, 3}]),
-                        ?assertEqual("[warning]", LevelStr),
-                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), MsgStr),
+                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), lists:flatten(Message)),
                         ok
                 end
             },
@@ -253,13 +251,33 @@ test_body(Expected, Actual) ->
             FileLine = string:substr(Actual, length(Expected)+1),
             Body = string:substr(Actual, 1, length(Expected)),
             ?assertEqual(Expected, Body),
-            ?assertEqual(" line ", string:substr(FileLine, 1, 6));
+            case string:substr(FileLine, 1, 6) of
+                [] ->
+                    %% sometimes there's no line information...
+                    ?assert(true);
+                " line " ->
+                    ?assert(true);
+                Other ->
+                    ?debugFmt("unexpected trailing data ~p", [Other]),
+                    ?assert(false)
+            end;
         false ->
             ?assertEqual(Expected, Actual)
     end.
 
 
 error_logger_redirect_crash_test_() ->
+    TestBody=fun(Name,CrashReason,Expected) -> {Name,
+                fun() ->
+                        Pid = whereis(crash),
+                        crash(CrashReason),
+                        {Level, _, Msg,Metadata} = pop(),
+                        test_body(Expected, lists:flatten(Msg)),
+                        ?assertEqual(Pid,proplists:get_value(pid,Metadata)),
+                        ?assertEqual(lager_util:level_to_num(error),Level)
+                end
+            } 
+    end,
     {foreach,
         fun() ->
                 error_logger:tty(false),
@@ -287,160 +305,24 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(0, count())
                 end
             },
-            {"bad return value",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(bad_return),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: bleh", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad return value with string",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(bad_return_string),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: {tuple,{tuple,\"string\"}}", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
-                end
-            },
-           {"bad return value uncaught throw",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(throw),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad return value: a_ball", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
-                end
-            },
-            {"case clause",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(case_clause),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"case clause string",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(case_clause_string),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"function clause",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(function_clause),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no function clause matching crash:function({})", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"if clause",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(if_clause),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"try clause",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(try_clause),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"undefined function",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(undef),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad math",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badarith),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad match",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badmatch),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad arity",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badarity),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad arg1",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badarg1),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad arg2",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badarg2),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"bad record",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badrecord),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad record state in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            },
-            {"noproc",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(noproc),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: no such process or port in call to gen_event:call(foo, bar, baz)", [Pid])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
-                end
-            },
-            {"badfun",
-                fun() ->
-                        Pid = whereis(crash),
-                        crash(badfun),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w gen_server crash terminated with reason: bad function booger in crash:handle_call/3", [Pid])),
-                        test_body(Expected, lists:flatten(Msg))
-                end
-            }
 
+            TestBody("bad return value",bad_return,"gen_server crash terminated with reason: bad return value: bleh"),
+            TestBody("bad return value with string",bad_return_string,"gen_server crash terminated with reason: bad return value: {tuple,{tuple,\"string\"}}"),
+            TestBody("bad return uncaught throw",throw,"gen_server crash terminated with reason: bad return value: a_ball"),
+            TestBody("case clause",case_clause,"gen_server crash terminated with reason: no case clause matching {} in crash:handle_call/3"),
+            TestBody("case clause string",case_clause_string,"gen_server crash terminated with reason: no case clause matching \"crash\" in crash:handle_call/3"),
+            TestBody("function clause",function_clause,"gen_server crash terminated with reason: no function clause matching crash:function({})"),
+            TestBody("if clause",if_clause,"gen_server crash terminated with reason: no true branch found while evaluating if expression in crash:handle_call/3"),
+            TestBody("try clause",try_clause,"gen_server crash terminated with reason: no try clause matching [] in crash:handle_call/3"),
+            TestBody("undefined function",undef,"gen_server crash terminated with reason: call to undefined function crash:booger/0 from crash:handle_call/3"),
+            TestBody("bad math",badarith,"gen_server crash terminated with reason: bad arithmetic expression in crash:handle_call/3"),
+            TestBody("bad match",badmatch,"gen_server crash terminated with reason: no match of right hand value {} in crash:handle_call/3"),
+            TestBody("bad arity",badarity,"gen_server crash terminated with reason: fun called with wrong arity of 1 instead of 3 in crash:handle_call/3"),
+            TestBody("bad arg1",badarg1,"gen_server crash terminated with reason: bad argument in crash:handle_call/3"),
+            TestBody("bad arg2",badarg2,"gen_server crash terminated with reason: bad argument in call to erlang:iolist_to_binary([\"foo\",bar]) in crash:handle_call/3"),
+            TestBody("bad record",badrecord,"gen_server crash terminated with reason: bad record state in crash:handle_call/3"),
+            TestBody("noproc",noproc,"gen_server crash terminated with reason: no such process or port in call to gen_event:call(foo, bar, baz)"),
+            TestBody("badfun",badfun,"gen_server crash terminated with reason: bad function booger in crash:handle_call/3")
         ]
     }.
 
@@ -466,17 +348,22 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report([{this, is}, a, {silly, format}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w this: is, a, silly: format", [self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = "this: is, a, silly: format",
                         ?assertEqual(Expected, lists:flatten(Msg))
+
                 end
             },
             {"string error reports are printed",
                 fun() ->
                         sync_error_logger:error_report("this is less silly"),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w this is less silly", [self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = "this is less silly",
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -484,8 +371,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_msg("doom, doom has come upon you all"),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w doom, doom has come upon you all", [self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = "doom, doom has come upon you all",
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -493,7 +382,7 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
+                        {_, _, Msg,_Metadata} = pop(),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
@@ -501,8 +390,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:info_report([{this, is}, a, {silly, format}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w this: is, a, silly: format", [self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = "this: is, a, silly: format",
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -510,7 +401,9 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:info_report([[{this, is}, a, {silly, format}] || _ <- lists:seq(0, 600)]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assert(length(lists:flatten(Msg)) < 5000)
                 end
             },
@@ -518,34 +411,39 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:info_report({foolish, bees}),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w {foolish,bees}", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("{foolish,bees}", lists:flatten(Msg))
                 end
             },
             {"single term error reports are printed",
                 fun() ->
                         sync_error_logger:error_report({foolish, bees}),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w {foolish,bees}", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("{foolish,bees}", lists:flatten(Msg))
                 end
             },
             {"string info reports are printed",
                 fun() ->
                         sync_error_logger:info_report("this is less silly"),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w this is less silly", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("this is less silly", lists:flatten(Msg))
                 end
             },
             {"string info reports are truncated at 4096 characters",
                 fun() ->
                         sync_error_logger:info_report(string:copies("this is less silly", 1000)),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
@@ -553,25 +451,29 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:info_report(["this is less silly", {than, "this"}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w \"this is less silly\", than: \"this\"", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("\"this is less silly\", than: \"this\"", lists:flatten(Msg))
                 end
             },
             {"info messages are printed",
                 fun() ->
                         sync_error_logger:info_msg("doom, doom has come upon you all"),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w doom, doom has come upon you all", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("doom, doom has come upon you all", lists:flatten(Msg))
                 end
             },
             {"info messages are truncated at 4096 characters",
                 fun() ->
                         sync_error_logger:info_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
@@ -581,9 +483,10 @@ error_logger_redirect_test_() ->
                         sync_error_logger:warning_msg("doom, doom has come upon you all"),
                         Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[~w] ~w doom, doom has come upon you all", [Map, self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("doom, doom has come upon you all", lists:flatten(Msg))
                 end
             },
             {"warning reports are printed at the correct level",
@@ -591,9 +494,10 @@ error_logger_redirect_test_() ->
                         sync_error_logger:warning_report([{i, like}, pie]),
                         Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[~w] ~w i: like, pie", [Map, self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("i: like, pie", lists:flatten(Msg))
                 end
             },
             {"single term warning reports are printed at the correct level",
@@ -601,36 +505,40 @@ error_logger_redirect_test_() ->
                         sync_error_logger:warning_report({foolish, bees}),
                         Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[~w] ~w {foolish,bees}", [Map, self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("{foolish,bees}", lists:flatten(Msg))
                 end
             },
             {"application stop reports",
                 fun() ->
                         sync_error_logger:info_report([{application, foo}, {exited, quittin_time}, {type, lazy}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w Application foo exited with reason: quittin_time", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Application foo exited with reason: quittin_time", lists:flatten(Msg))
                 end
             },
             {"supervisor reports",
                 fun() ->
                         sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason fired in context france", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason fired in context france", lists:flatten(Msg))
                 end
             },
             {"supervisor reports with real error",
                 fun() ->
                         sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, {function_clause,[{crash,handle_info,[foo]}]}}, {supervisor, {local, steve}}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason no function clause matching crash:handle_info(foo) in context france", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor steve had child mini_steve started with a:b(c) at bleh exit with reason no function clause matching crash:handle_info(foo) in context france", lists:flatten(Msg))
                 end
             },
 
@@ -638,17 +546,20 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{mod, mini_steve}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w Supervisor steve had child at module mini_steve at bleh exit with reason fired in context france", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor steve had child at module mini_steve at bleh exit with reason fired in context france", lists:flatten(Msg))
                 end
             },
             {"application progress report",
                 fun() ->
                         sync_error_logger:info_report(progress, [{application, foo}, {started_at, node()}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[info] ~w Application foo started on node ~w", [self(), node()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("Application foo started on node ~w", [node()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -657,17 +568,20 @@ error_logger_redirect_test_() ->
                         lager:set_loglevel(?MODULE, debug),
                         sync_error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[debug] ~w Supervisor foo started foo:bar/1 at pid baz", [self()])),
-                        ?assertEqual(Expected, lists:flatten(Msg))
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(debug),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor foo started foo:bar/1 at pid baz", lists:flatten(Msg))
                 end
             },
             {"crash report for emfile",
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, emfile, [{stack, trace, 1}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: maximum number of file descriptors exhausted, check ulimit -n", [self(), self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: maximum number of file descriptors exhausted, check ulimit -n", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -675,8 +589,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, system_limit, [{erlang, spawn, 1}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -684,8 +600,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, system_limit, [{erlang, spawn_opt, 1}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self(), self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of processes exceeded", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -693,8 +611,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, system_limit, [{erlang, open_port, 1}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ports exceeded", [self(), self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ports exceeded", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -702,8 +622,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, []}, {error_info, {error, system_limit, [{erlang, list_to_atom, 1}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: tried to create an atom larger than 255, or maximum atom count exceeded", [self(), self()])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: tried to create an atom larger than 255, or maximum atom count exceeded", [self()])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -711,8 +633,10 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {registered_name, test}, {error_info, {error, system_limit, [{ets,new,[segment_offsets,[ordered_set,public]]},{mi_segment,open_write,1},{mi_buffer_converter,handle_cast,2},{gen_server,handle_msg,5},{proc_lib,init_p_do_apply,3}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~w CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [self(), test])),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~w with 0 neighbours crashed with reason: system limit: maximum number of ETS tables exceeded", [test])),
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
@@ -720,9 +644,9 @@ error_logger_redirect_test_() ->
                 fun() ->
                         sync_error_logger:error_report(crash_report, [[{pid, self()}, {error_info, {error, system_limit, [{wtf,boom,[string:copies("aaaa", 4096)]}]}}], []]),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        ?assert(length(lists:flatten(Msg)) > 600),
-                        ?assert(length(lists:flatten(Msg)) < 650)
+                        {_, _, Msg,_Metadata} = pop(),
+                        ?assert(length(lists:flatten(Msg)) > 550),
+                        ?assert(length(lists:flatten(Msg)) < 600)
                 end
             },
             {"crash reports for 'special processes' should be handled right - function_clause", 
@@ -732,9 +656,9 @@ error_logger_redirect_test_() ->
                         Pid ! function_clause,
                         timer:sleep(500),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours crashed with reason: no function clause matching special_process:foo(bar)",
-                                [Pid, Pid])),
+                        {_, _, Msg, _Metadata} = pop(),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~p with 0 neighbours crashed with reason: no function clause matching special_process:foo(bar)",
+                                [Pid])),
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
@@ -745,9 +669,9 @@ error_logger_redirect_test_() ->
                         Pid ! {case_clause, wtf},
                         timer:sleep(500),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours crashed with reason: no case clause matching wtf in special_process:loop/0",
-                                [Pid, Pid])),
+                        {_, _, Msg, _Metadata} = pop(),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~p with 0 neighbours crashed with reason: no case clause matching wtf in special_process:loop/0",
+                                [Pid])),
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
@@ -758,9 +682,9 @@ error_logger_redirect_test_() ->
                         Pid ! exit,
                         timer:sleep(500),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours exited with reason: byebye in special_process:loop/0",
-                                [Pid, Pid])),
+                        {_, _, Msg, _Metadata} = pop(),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~p with 0 neighbours exited with reason: byebye in special_process:loop/0",
+                                [Pid])),
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
@@ -771,9 +695,9 @@ error_logger_redirect_test_() ->
                         Pid ! error,
                         timer:sleep(500),
                         _ = gen_event:which_handlers(error_logger),
-                        {_, _, Msg} = pop(),
-                        Expected = lists:flatten(io_lib:format("[error] ~p CRASH REPORT Process ~p with 0 neighbours crashed with reason: mybad in special_process:loop/0",
-                                [Pid, Pid])),
+                        {_, _, Msg, _Metadata} = pop(),
+                        Expected = lists:flatten(io_lib:format("CRASH REPORT Process ~p with 0 neighbours crashed with reason: mybad in special_process:loop/0",
+                                [Pid])),
                         test_body(Expected, lists:flatten(Msg))
                 end
             },

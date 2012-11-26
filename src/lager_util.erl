@@ -1,4 +1,4 @@
-%% Copyright (c) 2011 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -21,11 +21,13 @@
 -export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
         ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1, validate_trace/1, check_traces/4]).
+        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
+
+-include("lager.hrl").
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
@@ -133,17 +135,17 @@ format_time() ->
     format_time(maybe_utc(localtime_ms())).
 
 format_time({utc, {{Y, M, D}, {H, Mi, S, Ms}}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
-        io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b UTC", [H, Mi, S, Ms])};
+    {[integer_to_list(Y), $-, i2l(M), $-, i2l(D)],
+     [i2l(H), $:, i2l(Mi), $:, i2l(S), $., i3l(Ms), $ , $U, $T, $C]};
 format_time({{Y, M, D}, {H, Mi, S, Ms}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
-        io_lib:format("~2..0b:~2..0b:~2..0b.~3..0b", [H, Mi, S, Ms])};
+    {[integer_to_list(Y), $-, i2l(M), $-, i2l(D)],
+     [i2l(H), $:, i2l(Mi), $:, i2l(S), $., i3l(Ms)]};
 format_time({utc, {{Y, M, D}, {H, Mi, S}}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
-        io_lib:format("~2..0b:~2..0b:~2..0b UTC", [H, Mi, S])};
+    {[integer_to_list(Y), $-, i2l(M), $-, i2l(D)],
+     [i2l(H), $:, i2l(Mi), $:, i2l(S), $ , $U, $T, $C]};
 format_time({{Y, M, D}, {H, Mi, S}}) ->
-    {io_lib:format("~b-~2..0b-~2..0b", [Y, M, D]),
-        io_lib:format("~2..0b:~2..0b:~2..0b", [H, Mi, S])}.
+    {[integer_to_list(Y), $-, i2l(M), $-, i2l(D)],
+     [i2l(H), $:, i2l(Mi), $:, i2l(S)]}.
 
 parse_rotation_day_spec([], Res) ->
     {ok, Res ++ [{hour, 0}]};
@@ -327,6 +329,16 @@ check_trace_iter(Attrs, [{Key, Match}|T]) ->
             false
     end.
 
+-spec is_loggable(lager_msg:lager_msg(),integer(),term()) -> boolean().
+is_loggable(Msg ,SeverityThreshold,MyName) ->
+    lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
+    lists:member(MyName, lager_msg:destinations(Msg)).
+
+i2l(I) when I < 10  -> [$0, $0+I];
+i2l(I)              -> integer_to_list(I).
+i3l(I) when I < 100 -> [$0 | i2l(I)];
+i3l(I)              -> integer_to_list(I).
+
 -ifdef(TEST).
 
 parse_test() ->
@@ -453,5 +465,43 @@ check_trace_test() ->
                         {foo, '*'}], 7, foo},
                 {[{module, '*'}], 0, bar}], [])),
     ok.
+
+is_loggable_test_() ->
+    [
+        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], []),2,me))},
+        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], []),1,me))},
+        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], [you]),2,me))},
+        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], [you]),1,me))},
+        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("",{"",""}, critical, [], [me]),1,me))}
+    ].
+
+format_time_test_() ->
+    [
+        ?_assertEqual("2012-10-04 11:16:23.002",
+            begin
+                {D, T} = format_time({{2012,10,04},{11,16,23,2}}),
+                lists:flatten([D,$ ,T])
+            end),
+        ?_assertEqual("2012-10-04 11:16:23.999",
+            begin
+                {D, T} = format_time({{2012,10,04},{11,16,23,999}}),
+                lists:flatten([D,$ ,T])
+            end),
+        ?_assertEqual("2012-10-04 11:16:23",
+            begin
+                {D, T} = format_time({{2012,10,04},{11,16,23}}),
+                lists:flatten([D,$ ,T])
+            end),
+        ?_assertEqual("2012-10-04 00:16:23.092 UTC",
+            begin
+                {D, T} = format_time({utc, {{2012,10,04},{0,16,23,92}}}),
+                lists:flatten([D,$ ,T])
+            end),
+        ?_assertEqual("2012-10-04 11:16:23 UTC",
+            begin
+                {D, T} = format_time({utc, {{2012,10,04},{11,16,23}}}),
+                lists:flatten([D,$ ,T])
+            end)
+    ].
 
 -endif.
