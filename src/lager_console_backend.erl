@@ -43,24 +43,26 @@ init([Level, true]) -> % for backwards compatibility
 init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
 init([Level,{Formatter,FormatterConfig}])  when is_atom(Level), is_atom(Formatter)->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            {ok, #state{level=lager_util:level_to_num(Level), 
+   try lager_util:config_to_level(Level) of
+        Levels ->
+            {ok, #state{level=Levels,
                     formatter=Formatter, 
-                    format_config=FormatterConfig}};
-        _ ->
+                    format_config=FormatterConfig}}
+    catch
+        _:_ ->
             {error, bad_log_level}
     end.
 
 
 %% @private
-handle_call(get_loglevel, #state{level=Level} = State) ->
-    {ok, Level, State};
+handle_call(get_loglevel, #state{level=[Level|_]} = State) ->
+    {ok, lager_util:level_to_num(Level), State};
 handle_call({set_loglevel, Level}, State) ->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
-        _ ->
+   try lager_util:config_to_level(Level) of
+        Levels ->
+            {ok, ok, State#state{level=Levels}}
+    catch
+        _:_ ->
             {ok, {error, bad_log_level}, State}
     end;
 handle_call(_Request, State) ->
@@ -233,8 +235,67 @@ console_log_test_() ->
                                 ?assert(true)
                         end
                 end
+            },
+            {"blacklisting a loglevel works",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
+                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager:set_loglevel(lager_console_backend, '!=info'),
+                        erlang:group_leader(Pid, whereis(lager_event)),
+                        lager:debug("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                ?assertMatch([_, "[debug]", "Test message\r\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            1000 ->
+                                ?assert(false)
+                        end,
+                        %% info is blacklisted
+                        lager:info("Test message"),
+                        receive
+                            {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
+                                From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
+            },
+            {"whitelisting a loglevel works",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
+                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager:set_loglevel(lager_console_backend, '=debug'),
+                        erlang:group_leader(Pid, whereis(lager_event)),
+                        lager:debug("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                ?assertMatch([_, "[debug]", "Test message\r\n"], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            1000 ->
+                                ?assert(false)
+                        end,
+                        %% info is blacklisted
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
+                                From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
             }
-
         ]
     }.
 
@@ -256,7 +317,12 @@ set_loglevel_test_() ->
                 fun() ->
                         ?assertEqual(info, lager:get_loglevel(lager_console_backend)),
                         lager:set_loglevel(lager_console_backend, debug),
-                        ?assertEqual(debug, lager:get_loglevel(lager_console_backend))
+                        ?assertEqual(debug, lager:get_loglevel(lager_console_backend)),
+                        lager:set_loglevel(lager_console_backend, '!=debug'),
+                        ?assertEqual(info, lager:get_loglevel(lager_console_backend)),
+                        lager:set_loglevel(lager_console_backend, '!=info'),
+                        ?assertEqual(debug, lager:get_loglevel(lager_console_backend)),
+                        ok
                 end
             },
             {"Get/set invalid loglevel test",

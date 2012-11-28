@@ -377,7 +377,11 @@ check_trace_iter(Attrs, [{Key, Match}|T]) ->
             false
     end.
 
--spec is_loggable(lager_msg:lager_msg(),integer(),term()) -> boolean().
+-spec is_loggable(lager_msg:lager_msg(),integer()|list(),term()) -> boolean().
+is_loggable(Msg, SeverityList, MyName) when is_list(SeverityList) ->
+    %% using syslog style comparison flags
+    lists:member(lager_msg:severity(Msg), SeverityList) orelse
+    lists:member(MyName, lager_msg:destinations(Msg));
 is_loggable(Msg ,SeverityThreshold,MyName) ->
     lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
     lists:member(MyName, lager_msg:destinations(Msg)).
