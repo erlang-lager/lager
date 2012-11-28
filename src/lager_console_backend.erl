@@ -167,6 +167,30 @@ console_log_test_() ->
                         end
                 end
             },
+            {"custom format console logging",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        unregister(user),
+                        register(user, Pid),
+                        erlang:group_leader(Pid, whereis(lager_event)),
+                        gen_event:add_handler(lager_event, lager_console_backend, 
+                          [info, {lager_default_formatter, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
+                                                            module,"#",function,"#",file,"#",line,"#",message,"\r\n"]}]),
+                        lager_mochiglobal:put(loglevel, {?INFO, []}),
+                        lager:info("Test message"),
+                        PidStr = pid_to_list(self()),
+                        NodeStr = atom_to_list(node()),
+                        ModuleStr = atom_to_list(?MODULE),
+                        receive
+                            {io_request, _, _, {put_chars, unicode, Msg}} ->
+                                ?assertMatch([_, _, "info", NodeStr, PidStr, ModuleStr, _, _, _, "Test message\r\n"], 
+                                             re:split(Msg, "#", [{return, list}, {parts, 10}]))
+                        after
+                            500 ->
+                                ?assert(false)
+                        end
+                end
+            },
             {"tracing should work",
                 fun() ->
                         Pid = spawn(F(self())),
