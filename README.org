@@ -218,6 +218,12 @@
   under the [[https://github.com/kivra/lager_loggly][lager_loggly]]
   project on github.
 
+* SMTP Support
+  Ivan Blinkov has written a lager backend to send lager messages to email via SMTP,
+  so you can get informed about critical errors in production immediately. You can
+  find it under the [[https://github.com/blinkov/lager_smtp][lager_smtp]] project
+  on github.
+
 * Tracing
   Lager supports basic support for redirecting log messages based on log message
   attributes. Lager automatically captures the pid, module, function and line at the
