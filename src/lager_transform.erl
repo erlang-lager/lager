@@ -74,7 +74,10 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                                     {atom, Line, pid},
                                     {call, Line, {atom, Line, pid_to_list}, [
                                             {call, Line, {atom, Line ,self}, []}]}]},
-                            {nil, Line}}}}},
+                        {cons, Line, {tuple, Line, [
+                                    {atom, Line, node},
+                                    {call, Line, {atom, Line, node}, []}]},
+                         {nil, Line}}}}}},
             {Traces, Message, Arguments} = case Arguments0 of
                 [Format] ->
                     {DefaultAttrs, Format, {atom, Line, none}};
