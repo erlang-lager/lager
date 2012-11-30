@@ -74,15 +74,11 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                         A when is_list(A) ->safe_format_chop(Format,Args,Size);
                         _ -> Format
                     end,
-                    SyncMode =
-                        case application:get_env(lager, sync_dispatch_log) of
-                            {ok, true} -> true;
-                            _ -> false
-                        end,
-                    if SyncMode ->
+                    case is_sync_dispatch_log() of
+                        true ->
                             gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
                                                                            Severity, Metadata, Destinations)});
-                       true ->
+                        _ ->
                             gen_event:notify(Pid, {log, lager_msg:new(Msg, Timestamp,
                                                                       Severity, Metadata, Destinations)})
                     end;
@@ -275,3 +271,16 @@ safe_format(Fmt, Args, Limit, Options) ->
 %% @private
 safe_format_chop(Fmt, Args, Limit) ->
     safe_format(Fmt, Args, Limit, [{chomp, true}]).
+
+%% private
+is_sync_dispatch_log() ->
+    case erlang:get(sync_dispatch_log) of
+        undefined ->
+            Env = case application:get_env(lager, sync_dispatch_log) of
+                      {ok, true} -> true;
+                      _ -> false
+                  end,
+            erlang:put(sync_dispatch_log, Env),
+            Env;
+        V -> V
+    end.
