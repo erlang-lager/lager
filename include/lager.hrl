@@ -20,15 +20,15 @@
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
 
--define(DEBUG, 7).
--define(INFO, 6).
--define(NOTICE, 5).
--define(WARNING, 4).
--define(ERROR, 3).
--define(CRITICAL, 2).
--define(ALERT, 1).
--define(EMERGENCY, 0).
--define(LOG_NONE, -1).
+-define(DEBUG, 128).
+-define(INFO, 64).
+-define(NOTICE, 32).
+-define(WARNING, 16).
+-define(ERROR, 8).
+-define(CRITICAL, 4).
+-define(ALERT, 2).
+-define(EMERGENCY, 1).
+-define(LOG_NONE, 0).
 
 -define(LEVEL2NUM(Level),
     case Level of
@@ -55,7 +55,7 @@
     end).
 
 -define(SHOULD_LOG(Level),
-    lager_util:level_to_num(Level) =< element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))).
+    (lager_util:level_to_num(Level) band element(1, lager_mochiglobal:get(loglevel, {?LOG_NONE, []}))) /= 0).
 
 -define(NOTIFY(Level, Pid, Format, Args),
     gen_event:notify(lager_event, {log, lager_msg:new(io_lib:format(Format, Args),

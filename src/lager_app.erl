@@ -34,7 +34,7 @@ start() ->
 
 start(_StartType, _StartArgs) ->
     %% until lager is completely started, allow all messages to go through
-    lager_mochiglobal:put(loglevel, {?DEBUG, []}),
+    lager_mochiglobal:put(loglevel, {element(2, lager_util:config_to_mask(debug)), []}),
     {ok, Pid} = lager_sup:start_link(),
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
