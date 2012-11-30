@@ -74,8 +74,18 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                         A when is_list(A) ->safe_format_chop(Format,Args,Size);
                         _ -> Format
                     end,
-                    gen_event:notify(Pid, {log, lager_msg:new(Msg, Timestamp,
-                                Severity, Metadata, Destinations)});
+                    SyncMode =
+                        case application:get_env(lager, sync_dispatch_log) of
+                            {ok, true} -> true;
+                            _ -> false
+                        end,
+                    if SyncMode ->
+                            gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
+                                                                           Severity, Metadata, Destinations)});
+                       true ->
+                            gen_event:notify(Pid, {log, lager_msg:new(Msg, Timestamp,
+                                                                      Severity, Metadata, Destinations)})
+                    end;
                 _ -> 
                     ok
             end
