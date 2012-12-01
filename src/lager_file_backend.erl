@@ -383,17 +383,36 @@ filesystem_test_() ->
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
             },
-            {"tracing to a dedicated file should work",
-                fun() ->
-                        file:delete("foo.log"),
-                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}]),
-                        lager:error("Test message"),
-                        {ok, Bin3} = file:read_file("foo.log"),
-                        ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
-                end
-            }
+	    {"tracing to a dedicated file should work, second try",
+	     fun() ->
+		     File = "foo.log",
+		     file:delete(File),
+		     {ok, _} = lager:trace_file(File, [{module, ?MODULE}]),
+		     CheckerFun = filesize_checker(File),
+		     lager:error("Test message"),
+		     ok = wait:wait(CheckerFun, 5000, 100),
+		     {ok, Bin3} = file:read_file(File),
+		     ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+	     end
+	    }
         ]
     }.
+
+%% @doc Return a zero arity lambda function which checks File size
+%% growth to the time when this lambda was created.
+-spec filesize_checker(File :: file:name()) -> CheckerFun when
+      CheckerFun :: fun(() -> true | false).
+filesize_checker(File) ->
+    Fun =
+	fun () ->
+		{ok, FileInfo} =
+		    file:read_file_info(File),
+		FileInfo#file_info.size
+	end,
+    CurSize = Fun(),
+    fun () ->
+	    CurSize < Fun()
+    end.
 
 formatting_test_() ->
     {foreach,
