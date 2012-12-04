@@ -31,6 +31,8 @@
 parse_transform(AST, Options) ->
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     put(truncation_size, TruncSize),
+    %% .app file should either be in the outdir, or the same dir as the source file
+    guess_application(proplists:get_value(outdir, Options), hd(AST)),
     walk_ast([], AST).
 
 walk_ast(Acc, []) ->
@@ -63,7 +65,7 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
             {atom, _Line3, Severity}}, Arguments0} = Stmt) ->
     case lists:member(Severity, ?LEVELS) of
         true ->
-            DefaultAttrs = {cons, Line, {tuple, Line, [
+            DefaultAttrs0 = {cons, Line, {tuple, Line, [
                         {atom, Line, module}, {atom, Line, get(module)}]},
                     {cons, Line, {tuple, Line, [
                                 {atom, Line, function}, {atom, Line, get(function)}]},
@@ -78,6 +80,16 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                                     {atom, Line, node},
                                     {call, Line, {atom, Line, node}, []}]},
                          {nil, Line}}}}}},
+            DefaultAttrs = case erlang:get(application) of
+                undefined ->
+                    DefaultAttrs0;
+                App ->
+                    %% stick the application in the attribute list
+                    concat_lists({cons, Line, {tuple, Line, [
+                                    {atom, Line, application},
+                                    {atom, Line, App}]},
+                            {nil, Line}}, DefaultAttrs0)
+            end,
             {Traces, Message, Arguments} = case Arguments0 of
                 [Format] ->
                     {DefaultAttrs, Format, {atom, Line, none}};
@@ -129,3 +141,33 @@ concat_lists({nil, _Line}, B) ->
     B;
 concat_lists({cons, Line, Element, Tail}, B) ->
     {cons, Line, Element, concat_lists(Tail, B)}.
+
+guess_application(Dirname, Attr) when Dirname /= undefined ->
+    case find_app_file(Dirname) of
+        no_idea ->
+            %% try it based on source file directory (app.src most likely)
+            guess_application(undefined, Attr);
+        _ ->
+            ok
+    end;
+guess_application(undefined, {attribute, _, file, {Filename, _}}) ->
+    Dir = filename:dirname(Filename),
+    find_app_file(Dir);
+guess_application(_, _) ->
+    ok.
+
+find_app_file(Dir) ->
+    case filelib:wildcard(Dir++"/*.{app,app.src}") of
+        [] ->
+            no_idea;
+        [File] ->
+            case file:consult(File) of
+                {ok, [{application, Appname, _Attributes}|_]} ->
+                    erlang:put(application, Appname);
+                _ ->
+                    no_idea
+            end;
+        _ ->
+            %% multiple files, uh oh
+            no_idea
+    end.
