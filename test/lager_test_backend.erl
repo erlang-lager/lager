@@ -28,7 +28,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--export([pop/0, count/0, count_ignored/0, flush/0]).
+-export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
 init(Level) ->
@@ -51,6 +51,10 @@ handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loglevel, Level}, State) ->
     {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+handle_call(print_state, State) ->
+    spawn(fun() -> lager:info("State ~p", [lager:pr(State, ?MODULE)]) end),
+    timer:sleep(100),
+    {ok, ok, State};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
@@ -88,6 +92,9 @@ count_ignored() ->
 
 flush() ->
     gen_event:call(lager_event, ?MODULE, flush).
+
+print_state() ->
+    gen_event:call(lager_event, ?MODULE, print_state).
 
 has_line_numbers() ->
     %% are we R15 or greater
@@ -218,6 +225,15 @@ lager_test_() ->
                         ?assertEqual(0, count()),
                         ok = lager:notice("hello world"),
                         ?assertEqual(1, count()),
+                        ok
+                end
+            },
+            {"record printing works",
+                fun() ->
+                        print_state(),
+                        {Level, _Time, Message, _Metadata}  = pop(),
+                        ?assertMatch(Level, lager_util:level_to_num(info)),
+                        ?assertEqual("State #state{level=6,buffer=[],ignored=[]}", lists:flatten(Message)),
                         ok
                 end
             }

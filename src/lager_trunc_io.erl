@@ -262,6 +262,11 @@ print(Port, _Max, _Options) when is_port(Port) ->
     L = erlang:port_to_list(Port),
     {L, length(L)};
 
+print({'$lager_record', Name, Fields}, Max, Options) ->
+    Leader = "#" ++ atom_to_list(Name) ++ "{",
+    {RC, Len} = record_fields(Fields, Max - length(Leader) + 1, dec_depth(Options)),
+    {[Leader, RC, "}"], Len + length(Leader) + 1};
+
 print(Tuple, Max, Options) when is_tuple(Tuple) -> 
     {TC, Len} = tuple_contents(Tuple, Max-2, Options),
     {[${, TC, $}], Len + 2};
@@ -435,6 +440,23 @@ escape($\e) -> "\\e";
 escape($\f) -> "\\f";
 escape($\b) -> "\\b";
 escape($\v) -> "\\v".
+
+record_fields([], _, _) ->
+    {"", 0};
+record_fields(_, Max, #print_options{depth=D}) when Max < 4; D == 0 ->
+    {"...", 3};
+record_fields([{Field, Value}|T], Max, Options) ->
+    {ExtraChars, Terminator} = case T of
+        [] ->
+            {1, []};
+        _ ->
+            {2, ","}
+    end,
+    {FieldStr, FieldLen} = print(Field, Max - ExtraChars, Options),
+    {ValueStr, ValueLen} = print(Value, Max - (FieldLen + ExtraChars), Options),
+    {Final, FLen} = record_fields(T, Max - (FieldLen + ValueLen + ExtraChars), dec_depth(Options)),
+    {[FieldStr++"="++ValueStr++Terminator|Final], FLen + FieldLen + ValueLen + ExtraChars}.
+
 
 -ifdef(TEST).
 %%--------------------
