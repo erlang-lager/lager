@@ -41,6 +41,8 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
+-export([config_to_id/1]).
+
 -record(state, {
         name :: string(),
         level :: integer(),
@@ -120,6 +122,15 @@ terminate(_Reason, #state{fd=FD}) ->
 %% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%% convert the config into a gen_event handler ID
+config_to_id({Name,_Severity}) ->
+    {?MODULE, Name};
+config_to_id({Name,_Severity,_Size,_Rotation,_Count}) ->
+    {?MODULE, Name};
+config_to_id([{Name,_Severity,_Size,_Rotation,_Count}, _Format]) ->
+    {?MODULE, Name}.
+
 
 write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
         count=Count} = State, Level, Msg) ->
