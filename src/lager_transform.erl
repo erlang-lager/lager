@@ -31,10 +31,11 @@
 parse_transform(AST, Options) ->
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     put(truncation_size, TruncSize),
+    erlang:put(records, []),
     walk_ast([], AST).
 
 walk_ast(Acc, []) ->
-    lists:reverse(Acc);
+    insert_record_attribute(Acc);
 walk_ast(Acc, [{attribute, _, module, {Module, _PmodArgs}}=H|T]) ->
     %% A wild parameterized module appears!
     put(module, Module),
@@ -46,6 +47,14 @@ walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     put(function, Name),
     walk_ast([{function, Line, Name, Arity,
                 walk_clauses([], Clauses)}|Acc], T);
+walk_ast(Acc, [{attribute, _, record, {Name, Fields}}=H|T]) ->
+    FieldNames = lists:map(fun({record_field, _, {atom, _, FieldName}}) ->
+                FieldName;
+            ({record_field, _, {atom, _, FieldName}, _Default}) ->
+                FieldName
+        end, Fields),
+    stash_record({Name, FieldNames}),
+    walk_ast([H|Acc], T);
 walk_ast(Acc, [H|T]) ->
     walk_ast([H|Acc], T).
 
@@ -129,3 +138,19 @@ concat_lists({nil, _Line}, B) ->
     B;
 concat_lists({cons, Line, Element, Tail}, B) ->
     {cons, Line, Element, concat_lists(Tail, B)}.
+
+stash_record(Record) ->
+    Records = case erlang:get(records) of
+        undefined ->
+            [];
+        R ->
+            R
+    end,
+    erlang:put(records, [Record|Records]).
+
+insert_record_attribute(AST) ->
+    lists:foldl(fun({attribute, Line, module, _}=E, Acc) ->
+                [E, {attribute, Line, lager_records, erlang:get(records)}|Acc];
+            (E, Acc) ->
+                [E|Acc]
+        end, [], AST).
