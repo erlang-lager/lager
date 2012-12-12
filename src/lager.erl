@@ -28,7 +28,7 @@
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
-        safe_format/3, safe_format_chop/3,dispatch_log/5]).
+        safe_format/3, safe_format_chop/3,dispatch_log/5, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -265,3 +265,33 @@ safe_format(Fmt, Args, Limit, Options) ->
 %% @private
 safe_format_chop(Fmt, Args, Limit) ->
     safe_format(Fmt, Args, Limit, [{chomp, true}]).
+
+%% @doc Print a record lager found during parse transform
+pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
+    try Module:module_info(attributes) of
+        Attrs ->
+            case lists:keyfind(lager_records, 1, Attrs) of
+                false ->
+                    Record;
+                {lager_records, Records} ->
+                    RecordName = element(1, Record),
+                    RecordSize = tuple_size(Record) - 1,
+                    case lists:filter(fun({Name, Fields}) when Name == RecordName,
+                                length(Fields) == RecordSize ->
+                                    true;
+                                (_) ->
+                                    false
+                            end, Records) of
+                        [] ->
+                            Record;
+                        [{RecordName, RecordFields}|_] ->
+                            {'$lager_record', RecordName,
+                                lists:zip(RecordFields, tl(tuple_to_list(Record)))}
+                    end
+            end
+    catch
+        error:undef ->
+            Record
+    end;
+pr(Record, _) ->
+    Record.
