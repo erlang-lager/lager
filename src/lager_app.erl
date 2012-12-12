@@ -79,17 +79,21 @@ stop(Handlers) ->
 expand_handlers([]) ->
     [];
 expand_handlers([{lager_file_backend, Configs}|T]) ->
-    [ to_config(Config) || Config <- Configs] ++
+    [ {lager_file_backend:config_to_id(Config), Config} || Config <- Configs] ++
       expand_handlers(T);
+expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
+    %% allow the backend to generate a gen_event handler id, if it wants to
+    code:load_file(Mod),
+    Res = case erlang:function_exported(Mod, config_to_id, 1) of
+        true ->
+            {Mod:config_to_id(Config), Config};
+        false ->
+            {Mod, Config}
+    end,
+    [Res | expand_handlers(T)];
 expand_handlers([H|T]) ->
     [H | expand_handlers(T)].
 
-to_config({Name,Severity}) ->
-    {{lager_file_backend, Name}, {Name, Severity}};
-to_config({Name,_Severity,_Size,_Rotation,_Count}=Config) ->
-    {{lager_file_backend, Name}, Config};
-to_config([{Name,_Severity,_Size,_Rotation,_Count}, _Format] = Config) ->
-    {{lager_file_backend, Name}, Config}.
 
 
 
