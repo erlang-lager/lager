@@ -18,7 +18,7 @@
 %% This parse transform rewrites functions calls to lager:Severity/1,2 into
 %% a more complicated function that captures module, function, line, pid and
 %% time as well. The entire function call is then wrapped in a case that
-%% checks the mochiglobal 'loglevel' value, so the code isn't executed if
+%% checks the lager_config 'loglevel' value, so the code isn't executed if
 %% nothing wishes to consume the message.
 
 -module(lager_transform).

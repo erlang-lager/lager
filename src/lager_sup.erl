@@ -32,6 +32,8 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
+    %% set up the config, is safe even during relups
+    lager_config:new(),
     Children = [
         {lager, {gen_event, start_link, [{local, lager_event}]},
             permanent, 5000, worker, [dynamic]},

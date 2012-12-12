@@ -19,7 +19,6 @@
 -module(lager).
 
 -include("lager.hrl").
--include_lib("eunit/include/eunit.hrl").
 
 %% API
 -export([start/0,
@@ -60,7 +59,7 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
             %% lager isn't running
             {error, lager_not_running};
         Pid ->
-            {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
+            {LevelThreshold,TraceFilters} = lager_config:get(loglevel,{?LOG_NONE,[]}),
             SeverityAsInt=lager_util:level_to_num(Severity),
             Destinations = case TraceFilters of 
                 [] -> [];
@@ -115,10 +114,10 @@ trace_file(File, Filter, Level) ->
             case Res of
               {ok, _} ->
                 %% install the trace.
-                {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+                {MinLevel, Traces} = lager_config:get(loglevel),
                 case lists:member(Trace, Traces) of
                   false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                    lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
                   _ ->
                     ok
                 end,
@@ -137,10 +136,10 @@ trace_console(Filter, Level) ->
     Trace0 = {Filter, Level, lager_console_backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
-            {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+            {MinLevel, Traces} = lager_config:get(loglevel),
             case lists:member(Trace, Traces) of
                 false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                    lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
                 _ -> ok
             end,
             {ok, Trace};
@@ -149,9 +148,9 @@ trace_console(Filter, Level) ->
     end.
 
 stop_trace({_Filter, _Level, Target} = Trace) ->
-    {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+    {MinLevel, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
-    lager_mochiglobal:put(loglevel, {MinLevel, NewTraces}),
+    lager_config:set(loglevel, {MinLevel, NewTraces}),
     case get_loglevel(Target) of
         none ->
             %% check no other traces point here
@@ -167,8 +166,8 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
     ok.
 
 clear_all_traces() ->
-    {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLevel, []}),
+    {MinLevel, _Traces} = lager_config:get(loglevel),
+    lager_config:set(loglevel, {MinLevel, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
             none ->
@@ -196,7 +195,7 @@ status() ->
         [begin
                     io_lib:format("Tracing messages matching ~p at level ~p to ~p\n",
                         [Filter, lager_util:num_to_level(Level), Destination])
-            end || {Filter, Level, Destination} <- element(2, lager_mochiglobal:get(loglevel))]],
+            end || {Filter, Level, Destination} <- element(2, lager_config:get(loglevel))]],
     io:put_chars(Status).
 
 %% @doc Set the loglevel for a particular backend.
@@ -204,8 +203,8 @@ set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
-    {_, Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    {_, Traces} = lager_config:get(loglevel),
+    lager_config:set(loglevel, {MinLog, Traces}),
     Reply.
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
@@ -214,8 +213,8 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
     %% recalculate min log level
     MinLog = minimum_loglevel(get_loglevels()),
-    {_, Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    {_, Traces} = lager_config:get(loglevel),
+    lager_config:set(loglevel, {MinLog, Traces}),
     Reply.
 
 %% @doc Get the loglevel for a particular backend. In the case that the backend
