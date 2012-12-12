@@ -282,7 +282,7 @@ pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
                                 (_) ->
                                     false
                             end, Records) of
-                        false ->
+                        [] ->
                             Record;
                         [{RecordName, RecordFields}|_] ->
                             {'$lager_record', RecordName,
