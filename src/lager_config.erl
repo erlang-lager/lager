@@ -49,11 +49,14 @@ get(Key) ->
     end.
 
 get(Key, Default) ->
-    case ?MODULE:get(Key) of
+    try ?MODULE:get(Key) of
         undefined ->
             Default;
         Res ->
             Res
+    catch
+        _:_ ->
+            Default
     end.
 
 set(Key, Value) ->
