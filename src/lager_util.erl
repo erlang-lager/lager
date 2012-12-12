@@ -18,8 +18,8 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
-        ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
+-export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
+        open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
 
@@ -32,25 +32,93 @@
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency].
 
-level_to_num(debug)     -> 7;
-level_to_num(info)      -> 6;
-level_to_num(notice)    -> 5;
-level_to_num(warning)   -> 4;
-level_to_num(error)     -> 3;
-level_to_num(critical)  -> 2;
-level_to_num(alert)     -> 1;
-level_to_num(emergency) -> 0;
-level_to_num(none)      -> -1.
+level_to_num(debug)     -> ?DEBUG;
+level_to_num(info)      -> ?INFO;
+level_to_num(notice)    -> ?NOTICE;
+level_to_num(warning)   -> ?WARNING;
+level_to_num(error)     -> ?ERROR;
+level_to_num(critical)  -> ?CRITICAL;
+level_to_num(alert)     -> ?ALERT;
+level_to_num(emergency) -> ?EMERGENCY;
+level_to_num(none)      -> ?LOG_NONE.
 
-num_to_level(7) -> debug;
-num_to_level(6) -> info;
-num_to_level(5) -> notice;
-num_to_level(4) -> warning;
-num_to_level(3) -> error;
-num_to_level(2) -> critical;
-num_to_level(1) -> alert;
-num_to_level(0) -> emergency;
-num_to_level(-1) -> none.
+num_to_level(?DEBUG) -> debug;
+num_to_level(?INFO) -> info;
+num_to_level(?NOTICE) -> notice;
+num_to_level(?WARNING) -> warning;
+num_to_level(?ERROR) -> error;
+num_to_level(?CRITICAL) -> critical;
+num_to_level(?ALERT) -> alert;
+num_to_level(?EMERGENCY) -> emergency;
+num_to_level(?LOG_NONE) -> none.
+
+config_to_mask(Conf) ->
+    Levels = config_to_levels(Conf),
+    {mask, lists:foldl(fun(Level, Acc) ->
+                level_to_num(Level) bor Acc
+            end, 0, Levels)}.
+
+mask_to_levels(Mask) ->
+    mask_to_levels(Mask, levels(), []).
+
+mask_to_levels(_Mask, [], Acc) ->
+    lists:reverse(Acc);
+mask_to_levels(Mask, [Level|Levels], Acc) ->
+    NewAcc = case (level_to_num(Level) band Mask) /= 0 of
+        true ->
+            [Level|Acc];
+        false ->
+            Acc
+    end,
+    mask_to_levels(Mask, Levels, NewAcc).
+
+%% TODO, try writing it all out by hand and EQC check it against this code
+%config_to_levels(X) when X == '>=debug'; X == 'debug' ->
+    %[debug, info, notice, warning, error, critical, alert, emergency];
+%config_to_levels(X) when X == '>=info'; X == 'info'; X == '!=debug' ->
+    %[info, notice, warning, error, critical, alert, emergency];
+config_to_levels(Conf) when is_atom(Conf) ->
+    config_to_levels(atom_to_list(Conf));
+config_to_levels([$! | Rest]) ->
+    levels() -- config_to_levels(Rest);
+config_to_levels([$=, $< | Rest]) ->
+    [_|Levels] = config_to_levels(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$<, $= | Rest]) ->
+    [_|Levels] = config_to_levels(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$>, $= | Rest]) ->
+    Levels = config_to_levels(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_levels([$=, $> | Rest]) ->
+    Levels = config_to_levels(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_levels([$= | Rest]) ->
+    [level_to_atom(Rest)];
+config_to_levels([$< | Rest]) ->
+    Levels = config_to_levels(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$> | Rest]) ->
+    [_|Levels] = config_to_levels(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_levels(Conf) ->
+    Level = level_to_atom(Conf),
+    lists:dropwhile(fun(E) -> E /= Level end, levels()).
+
+level_to_atom(String) ->
+    Levels = levels(),
+    try list_to_existing_atom(String) of
+        Atom ->
+            case lists:member(Atom, Levels) of
+                true ->
+                    Atom;
+                false ->
+                    erlang:error(badarg)
+            end
+    catch
+        _:_ ->
+            erlang:error(badarg)
+    end.
 
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
@@ -283,7 +351,7 @@ validate_trace({Filter, Level, {Destination, ID}}) when is_list(Filter), is_atom
             Error
     end;
 validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
-    try level_to_num(Level) of
+    try config_to_mask(Level) of
         L ->
             case lists:all(fun({Key, _Value}) when is_atom(Key) -> true; (_) ->
                             false end, Filter) of
@@ -302,7 +370,7 @@ validate_trace(_) ->
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
-check_traces(Attrs, Level, [{_, FilterLevel, _}|Flows], Acc) when Level > FilterLevel ->
+check_traces(Attrs, Level, [{_, {mask, FilterLevel}, _}|Flows], Acc) when (Level band FilterLevel) == 0 ->
     check_traces(Attrs, Level, Flows, Acc);
 check_traces(Attrs, Level, [{Filter, _, _}|Flows], Acc) when length(Attrs) < length(Filter) ->
     check_traces(Attrs, Level, Flows, Acc);
@@ -329,7 +397,13 @@ check_trace_iter(Attrs, [{Key, Match}|T]) ->
             false
     end.
 
--spec is_loggable(lager_msg:lager_msg(),integer(),term()) -> boolean().
+-spec is_loggable(lager_msg:lager_msg(),integer()|list(),term()) -> boolean().
+is_loggable(Msg, {mask, Mask}, MyName) ->
+    %% using syslog style comparison flags
+    %S = lager_msg:severity_as_int(Msg),
+    %?debugFmt("comparing masks ~.2B and ~.2B -> ~p~n", [S, Mask, S band Mask]),
+    (lager_msg:severity_as_int(Msg) band Mask) /= 0 orelse
+    lists:member(MyName, lager_msg:destinations(Msg));
 is_loggable(Msg ,SeverityThreshold,MyName) ->
     lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
     lists:member(MyName, lager_msg:destinations(Msg)).
@@ -440,30 +514,46 @@ rotate_file_test() ->
     end || N <- lists:seq(0, 20)].
 
 check_trace_test() ->
-    ?assertEqual([foo], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE}],
-                    0, foo},
-                {[{module, test}], 0, bar}], [])),
-    ?assertEqual([], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
-                        {foo, bar}], 0, foo},
-                {[{module, test}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
-                        {foo, bar}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
-                        {foo, bar}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar, foo], check_traces([{module, ?MODULE}, {foo, bar}], 0, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([foo], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
-                        {foo, '*'}], 7, foo},
-                {[{module, '*'}], 0, bar}], [])),
+    %% match by module
+    ?assertEqual([foo], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}], config_to_mask(emergency), foo},
+                {[{module, test}], config_to_mask(emergency), bar}], [])),
+    %% match by module, but other unsatisfyable attribute
+    ?assertEqual([], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, test}], config_to_mask(emergency), bar}], [])),
+    %% match by wildcard module
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcard module, one trace with unsatisfyable attribute
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcard but not present custom trace attribute
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcarding a custom attribute works when it is present
+    ?assertEqual([bar, foo], check_traces([{module, ?MODULE}, {foo, bar}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% denied by level
+    ?assertEqual([], check_traces([{module, ?MODULE}, {foo, bar}], ?INFO, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% allowed by level
+    ?assertEqual([foo], check_traces([{module, ?MODULE}, {foo, bar}], ?INFO, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(debug), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    ?assertEqual([anythingbutnotice, infoandbelow, infoonly], check_traces([{module, ?MODULE}], ?INFO, [
+                {[{module, '*'}], config_to_mask('=debug'), debugonly},
+                {[{module, '*'}], config_to_mask('=info'), infoonly},
+                {[{module, '*'}], config_to_mask('<=info'), infoandbelow},
+                {[{module, '*'}], config_to_mask('!=info'), anythingbutinfo},
+                {[{module, '*'}], config_to_mask('!=notice'), anythingbutnotice}
+                ], [])),
+
     ok.
 
 is_loggable_test_() ->

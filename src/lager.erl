@@ -24,7 +24,7 @@
 %% API
 -export([start/0,
         log/3, log/4,
-        trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
@@ -62,21 +62,24 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
         Pid ->
             {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
             SeverityAsInt=lager_util:level_to_num(Severity),
-            Destinations = case TraceFilters of 
-                [] -> [];
-                _ -> 
-                    lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
-            end,
-            case (LevelThreshold >= SeverityAsInt orelse Destinations =/= []) of
-                true -> 
+            case (LevelThreshold band SeverityAsInt) /= 0 of
+                true ->
+                    Destinations = case TraceFilters of
+                        [] ->
+                            [];
+                        _ ->
+                            lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
+                    end,
                     Timestamp = lager_util:format_time(),
-                    Msg=case Args of 
-                        A when is_list(A) ->safe_format_chop(Format,Args,Size);
-                        _ -> Format
+                    Msg = case Args of
+                        A when is_list(A) ->
+                            safe_format_chop(Format,Args,Size);
+                        _ ->
+                            Format
                     end,
                     gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
                                 Severity, Metadata, Destinations)});
-                _ -> 
+                _ ->
                     ok
             end
     end.
@@ -108,7 +111,7 @@ trace_file(File, Filter, Level) ->
                 false ->
                     %% install the handler
                     supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, {File, none}]);
+                        [lager_event, {lager_file_backend, File}, {File, Level}]);
                 _ ->
                     {ok, exists}
             end,
@@ -118,7 +121,8 @@ trace_file(File, Filter, Level) ->
                 {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
                 case lists:member(Trace, Traces) of
                   false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                    {_, {mask, TraceMask}, _} = Trace,
+                    lager_mochiglobal:put(loglevel, {MinLevel bor TraceMask, [Trace|Traces]});
                   _ ->
                     ok
                 end,
@@ -134,13 +138,20 @@ trace_console(Filter) ->
     trace_console(Filter, debug).
 
 trace_console(Filter, Level) ->
-    Trace0 = {Filter, Level, lager_console_backend},
+    trace(lager_console_backend, Filter, Level).
+
+trace(Backend, Filter) ->
+    trace(Backend, Filter, debug).
+
+trace(Backend, Filter, Level) ->
+    Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
             case lists:member(Trace, Traces) of
                 false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
+                    {_, {mask, TraceMask}, _} = Trace,
+                    lager_mochiglobal:put(loglevel, {MinLevel bor TraceMask, [Trace|Traces]});
                 _ -> ok
             end,
             {ok, Trace};
@@ -149,8 +160,9 @@ trace_console(Filter, Level) ->
     end.
 
 stop_trace({_Filter, _Level, Target} = Trace) ->
-    {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+    {_, Traces} = lager_mochiglobal:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
+    MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
     lager_mochiglobal:put(loglevel, {MinLevel, NewTraces}),
     case get_loglevel(Target) of
         none ->
@@ -167,7 +179,7 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
     ok.
 
 clear_all_traces() ->
-    {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
+    MinLevel = minimum_loglevel(get_loglevels()),
     lager_mochiglobal:put(loglevel, {MinLevel, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
@@ -203,8 +215,8 @@ status() ->
 set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
     %% recalculate min log level
-    MinLog = minimum_loglevel(get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),
+    MinLog = minimum_loglevel(get_loglevels() ++ get_trace_levels(Traces)),
     lager_mochiglobal:put(loglevel, {MinLog, Traces}),
     Reply.
 
@@ -213,8 +225,8 @@ set_loglevel(Handler, Level) when is_atom(Level) ->
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
     %% recalculate min log level
-    MinLog = minimum_loglevel(get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),
+    MinLog = minimum_loglevel(get_loglevels() ++ get_trace_levels(Traces)),
     lager_mochiglobal:put(loglevel, {MinLog, Traces}),
     Reply.
 
@@ -222,6 +234,8 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 %% has multiple identifiers, the lowest is returned
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
+        {mask, Mask} ->
+            erlang:hd(lager_util:mask_to_levels(Mask));
         X when is_integer(X) ->
             lager_util:num_to_level(X);
         Y -> Y
@@ -243,10 +257,17 @@ get_loglevels() ->
         Handler <- gen_event:which_handlers(lager_event)].
 
 %% @private
-minimum_loglevel([]) ->
-    -1; %% lower than any log level, logging off
 minimum_loglevel(Levels) ->
-    erlang:hd(lists:reverse(lists:sort(Levels))).
+    lists:foldl(fun({mask, Mask}, Acc) ->
+                Mask bor Acc;
+            (Level, Acc) when is_integer(Level) ->
+                lager_util:config_to_mask(lager_util:num_to_level(Level)) bor Acc;
+            (_, Acc) ->
+                Acc
+        end, 0, Levels).
+
+get_trace_levels(Traces) ->
+    lists:map(fun({_, Level, _}) -> Level end, Traces).
 
 %% @doc Print the format string `Fmt' with `Args' safely with a size
 %% limit of `Limit'. If the format string is invalid, or not enough
