@@ -262,7 +262,8 @@ minimum_loglevel(Levels) ->
     lists:foldl(fun({mask, Mask}, Acc) ->
                 Mask bor Acc;
             (Level, Acc) when is_integer(Level) ->
-                lager_util:config_to_mask(lager_util:num_to_level(Level)) bor Acc;
+                {mask, Mask} = lager_util:config_to_mask(lager_util:num_to_level(Level)),
+                Mask bor Acc;
             (_, Acc) ->
                 Acc
         end, 0, Levels).

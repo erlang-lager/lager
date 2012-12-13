@@ -52,12 +52,14 @@ num_to_level(?ALERT) -> alert;
 num_to_level(?EMERGENCY) -> emergency;
 num_to_level(?LOG_NONE) -> none.
 
+-spec config_to_mask(atom()|string()) -> {'mask', integer()}.
 config_to_mask(Conf) ->
     Levels = config_to_levels(Conf),
     {mask, lists:foldl(fun(Level, Acc) ->
                 level_to_num(Level) bor Acc
             end, 0, Levels)}.
 
+-spec mask_to_levels(non_neg_integer()) -> [lager:log_level()].
 mask_to_levels(Mask) ->
     mask_to_levels(Mask, levels(), []).
 
@@ -72,36 +74,34 @@ mask_to_levels(Mask, [Level|Levels], Acc) ->
     end,
     mask_to_levels(Mask, Levels, NewAcc).
 
-%% TODO, try writing it all out by hand and EQC check it against this code
-%config_to_levels(X) when X == '>=debug'; X == 'debug' ->
-    %[debug, info, notice, warning, error, critical, alert, emergency];
-%config_to_levels(X) when X == '>=info'; X == 'info'; X == '!=debug' ->
-    %[info, notice, warning, error, critical, alert, emergency];
+-spec config_to_levels(atom()|string()) -> [lager:log_level()].
 config_to_levels(Conf) when is_atom(Conf) ->
     config_to_levels(atom_to_list(Conf));
 config_to_levels([$! | Rest]) ->
     levels() -- config_to_levels(Rest);
 config_to_levels([$=, $< | Rest]) ->
-    [_|Levels] = config_to_levels(Rest),
+    [_|Levels] = config_to_levels_int(Rest),
     lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
 config_to_levels([$<, $= | Rest]) ->
-    [_|Levels] = config_to_levels(Rest),
+    [_|Levels] = config_to_levels_int(Rest),
     lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
 config_to_levels([$>, $= | Rest]) ->
-    Levels = config_to_levels(Rest),
-    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+    config_to_levels_int(Rest);
 config_to_levels([$=, $> | Rest]) ->
-    Levels = config_to_levels(Rest),
-    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+    config_to_levels_int(Rest);
 config_to_levels([$= | Rest]) ->
     [level_to_atom(Rest)];
 config_to_levels([$< | Rest]) ->
-    Levels = config_to_levels(Rest),
+    Levels = config_to_levels_int(Rest),
     lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
 config_to_levels([$> | Rest]) ->
-    [_|Levels] = config_to_levels(Rest),
+    [_|Levels] = config_to_levels_int(Rest),
     lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
 config_to_levels(Conf) ->
+    config_to_levels_int(Conf).
+
+%% internal function to break the recursion loop
+config_to_levels_int(Conf) ->
     Level = level_to_atom(Conf),
     lists:dropwhile(fun(E) -> E /= Level end, levels()).
 
@@ -397,7 +397,7 @@ check_trace_iter(Attrs, [{Key, Match}|T]) ->
             false
     end.
 
--spec is_loggable(lager_msg:lager_msg(),integer()|list(),term()) -> boolean().
+-spec is_loggable(lager_msg:lager_msg(), non_neg_integer()|{'mask', non_neg_integer()}, term()) -> boolean().
 is_loggable(Msg, {mask, Mask}, MyName) ->
     %% using syslog style comparison flags
     %S = lager_msg:severity_as_int(Msg),
@@ -593,5 +593,32 @@ format_time_test_() ->
                 lists:flatten([D,$ ,T])
             end)
     ].
+
+config_to_levels_test() ->
+    ?assertEqual([debug], config_to_levels('=debug')),
+    ?assertEqual([debug], config_to_levels('<info')),
+    ?assertEqual(levels() -- [debug], config_to_levels('!=debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('>debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('>=info')),
+    ?assertEqual(levels() -- [debug], config_to_levels('=>info')),
+    ?assertEqual([debug, info, notice], config_to_levels('<=notice')),
+    ?assertEqual([debug, info, notice], config_to_levels('=<notice')),
+    ?assertEqual([debug], config_to_levels('<info')),
+    ?assertEqual([debug], config_to_levels('!info')),
+    ?assertError(badarg, config_to_levels(ok)),
+    ?assertError(badarg, config_to_levels('<=>info')),
+    ?assertError(badarg, config_to_levels('=<=info')),
+    ?assertError(badarg, config_to_levels('<==>=<=>info')),
+    %% double negatives DO work, however
+    ?assertEqual([debug], config_to_levels('!!=debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('!!!=debug')),
+    ok.
+
+mask_to_levels_test() ->
+    ?assertEqual([debug], mask_to_levels(2#10000000)),
+    ?assertEqual([debug, info], mask_to_levels(2#11000000)),
+    ?assertEqual([debug, info, emergency], mask_to_levels(2#11000001)),
+    ?assertEqual([debug, notice, error], mask_to_levels(?DEBUG bor ?NOTICE bor ?ERROR)),
+    ok.
 
 -endif.

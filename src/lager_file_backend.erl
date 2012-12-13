@@ -43,7 +43,7 @@
 
 -record(state, {
         name :: string(),
-        level :: integer(),
+        level :: {'mask', integer()},
         fd :: file:io_device(),
         inode :: integer(),
         flap=false :: boolean(),
