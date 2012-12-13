@@ -45,7 +45,7 @@
 
 -record(state, {
         name :: string(),
-        level :: integer(),
+        level :: {'mask', integer()},
         fd :: file:io_device(),
         inode :: integer(),
         flap=false :: boolean(),
@@ -66,12 +66,12 @@ init([LogFile,{Formatter,FormatterConfig}]) ->
             schedule_rotation(Name, Date),
             State = case lager_util:open_logfile(Name, true) of
                 {ok, {FD, Inode, _}} ->
-                    #state{name=Name, level=lager_util:level_to_num(Level),
+                    #state{name=Name, level=Level,
                         fd=FD, inode=Inode, size=Size, date=Date, count=Count, formatter=Formatter, formatter_config=FormatterConfig};
                 {error, Reason} ->
                     ?INT_LOG(error, "Failed to open log file ~s with error ~s",
                         [Name, file:format_error(Reason)]),
-                    #state{name=Name, level=lager_util:level_to_num(Level),
+                    #state{name=Name, level=Level,
                         flap=true, size=Size, date=Date, count=Count, formatter=Formatter, formatter_config=FormatterConfig}
             end,
 
@@ -85,8 +85,13 @@ init(LogFile) ->
 
 %% @private
 handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
-    ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
-    {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+    case validate_loglevel(Level) of
+        false ->
+            {ok, {error, bad_loglevel}, State};
+        Levels ->
+            ?INT_LOG(notice, "Changed loglevel of ~s to ~p", [Ident, Level]),
+            {ok, ok, State#state{level=Levels}}
+    end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call(_Request, State) ->
@@ -170,16 +175,16 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
     end.
 
 validate_logfile({Name, Level}) ->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            {Name, Level, 0, undefined, 0};
-        _ ->
+    case validate_loglevel(Level) of
+        false ->
             ?INT_LOG(error, "Invalid log level of ~p for ~s.",
                 [Level, Name]),
-            false
+            false;
+        Levels ->
+            {Name, Levels, 0, undefined, 0}
     end;
 validate_logfile({Name, Level, Size, Date, Count}) ->
-    ValidLevel = (lists:member(Level, ?LEVELS)),
+    ValidLevel = validate_loglevel(Level),
     ValidSize = (is_integer(Size) andalso Size >= 0),
     ValidCount = (is_integer(Count) andalso Count >= 0),
     case {ValidLevel, ValidSize, ValidCount} of
@@ -195,13 +200,13 @@ validate_logfile({Name, Level, Size, Date, Count}) ->
             ?INT_LOG(error, "Invalid rotation count of ~p for ~s.",
                 [Count, Name]),
             false;
-        {true, true, true} ->
+        {Levels, true, true} ->
             case lager_util:parse_rotation_date_spec(Date) of
                 {ok, Spec} ->
-                    {Name, Level, Size, Spec, Count};
+                    {Name, Levels, Size, Spec, Count};
                 {error, _} when Date == "" ->
                     %% blank ones are fine.
-                    {Name, Level, Size, undefined, Count};
+                    {Name, Levels, Size, undefined, Count};
                 {error, _} ->
                     ?INT_LOG(error, "Invalid rotation date of ~p for ~s.",
                         [Date, Name]),
@@ -211,6 +216,16 @@ validate_logfile({Name, Level, Size, Date, Count}) ->
 validate_logfile(H) ->
     ?INT_LOG(error, "Invalid log file config ~p.", [H]),
     false.
+
+validate_loglevel(Level) ->
+    try lager_util:config_to_mask(Level) of
+        Levels ->
+            Levels
+    catch
+        _:_ ->
+            false
+    end.
+
 
 schedule_rotation(_, undefined) ->
     ok;
@@ -222,11 +237,11 @@ schedule_rotation(Name, Date) ->
 
 get_loglevel_test() ->
     {ok, Level, _} = handle_call(get_loglevel,
-        #state{name="bar", level=lager_util:level_to_num(info), fd=0, inode=0}),
-    ?assertEqual(Level, lager_util:level_to_num(info)),
+        #state{name="bar", level=lager_util:config_to_mask(info), fd=0, inode=0}),
+    ?assertEqual(Level, lager_util:config_to_mask(info)),
     {ok, Level2, _} = handle_call(get_loglevel,
-        #state{name="foo", level=lager_util:level_to_num(warning), fd=0, inode=0}),
-    ?assertEqual(Level2, lager_util:level_to_num(warning)).
+        #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0}),
+    ?assertEqual(Level2, lager_util:config_to_mask(warning)).
 
 rotation_test() ->
     {ok, {FD, Inode, _}} = lager_util:open_logfile("test.log", true),

@@ -36,7 +36,7 @@ new() ->
     %% use insert_new here so that if we're in an appup we don't mess anything up
     %%
     %% until lager is completely started, allow all messages to go through
-    ets:insert_new(?TBL, {loglevel, {?DEBUG, []}}),
+    ets:insert_new(?TBL, {loglevel, {element(2, lager_util:config_to_mask(debug)), []}}),
     ok.
 
 
