@@ -111,6 +111,18 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                         {cons, _, {tuple, _, _}, _} ->
                             {concat_lists(Arg1, DefaultAttrs),
                                 Arg2, {atom, Line, none}};
+                        {var, _, _} ->
+                            %% crap, its a variable. look at the second
+                            %% argument to see if it is a string
+                            case Arg2 of
+                                {string, _, _} ->
+                                    {concat_lists(Arg1, DefaultAttrs),
+                                        Arg2, {atom, Line, none}};
+                                _ ->
+                                    %% not a string, going to have to guess
+                                    %% its the argument list
+                                    {DefaultAttrs, Arg1, Arg2}
+                            end;
                         _ ->
                             {DefaultAttrs, Arg1, Arg2}
                     end;
@@ -146,6 +158,10 @@ transform_statement(Stmt) ->
     Stmt.
 
 %% concat 2 list ASTs by replacing the terminating [] in A with the contents of B
+concat_lists({var, Line, Name}, B) ->
+    %% concatenating a var with a cons
+    {call, Line, {remote, Line, {atom, Line, lists},{atom, Line, flatten}},
+        [{cons, Line, {var, Line, Name}, B}]};
 concat_lists({nil, _Line}, B) ->
     B;
 concat_lists({cons, Line, Element, Tail}, B) ->

@@ -180,6 +180,36 @@ lager_test_() ->
                         ok
                 end
             },
+            {"variables inplace of literals in logging statements work",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        Attr = [{a, alpha}, {b, beta}],
+                        Fmt = "format ~p",
+                        Args = [world],
+                        lager:info(Attr, "hello"),
+                        lager:info(Attr, "hello ~p", [world]),
+                        lager:info(Fmt, [world]),
+                        lager:info("hello ~p", Args),
+                        lager:info(Attr, "hello ~p", Args),
+                        lager:info([{d, delta}, {g, gamma}], Fmt, Args),
+                        ?assertEqual(6, count()),
+                        {_Level, _Time, Message, Metadata}  = pop(),
+                        ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
+                        ?assertEqual("hello", lists:flatten(Message)),
+                        {_Level, _Time2, Message2, _Metadata2}  = pop(),
+                        ?assertEqual("hello world", lists:flatten(Message2)),
+                        {_Level, _Time3, Message3, _Metadata3}  = pop(),
+                        ?assertEqual("format world", lists:flatten(Message3)),
+                        {_Level, _Time4, Message4, _Metadata4}  = pop(),
+                        ?assertEqual("hello world", lists:flatten(Message4)),
+                        {_Level, _Time5, Message5, _Metadata5}  = pop(),
+                        ?assertEqual("hello world", lists:flatten(Message5)),
+                        {_Level, _Time6, Message6, Metadata6}  = pop(),
+                        ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
+                        ?assertEqual("format world", lists:flatten(Message6)),
+                        ok
+                end
+            },
             {"log messages below the threshold are ignored",
                 fun() ->
                         ?assertEqual(0, count()),
