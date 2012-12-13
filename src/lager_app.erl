@@ -81,7 +81,7 @@ expand_handlers([{lager_file_backend, Configs}|T]) ->
       expand_handlers(T);
 expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
     %% allow the backend to generate a gen_event handler id, if it wants to
-    code:load_file(Mod),
+    _ = code:load_file(Mod),
     Res = case erlang:function_exported(Mod, config_to_id, 1) of
         true ->
             {Mod:config_to_id(Config), Config};
