@@ -76,8 +76,13 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                         _ ->
                             Format
                     end,
-                    gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
-                                Severity, Metadata, Destinations)});
+                    Event = {log, lager_msg:new(Msg, Timestamp, Severity, Metadata, Destinations)},
+                    case lager_config:get(duplicate_threshold, 0) of
+                        0 ->
+                            gen_event:sync_notify(Pid, Event);
+                        N when N > 0 ->
+                            lager_deduper:dedup_notify(Event)
+                    end;
                 _ ->
                     ok
             end
