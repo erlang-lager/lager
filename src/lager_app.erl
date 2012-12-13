@@ -52,19 +52,26 @@ start(_StartType, _StartArgs) ->
     {_, Traces} = lager_config:get(loglevel),
     lager_config:set(loglevel, {MinLog, Traces}),
 
-    SavedHandlers = case application:get_env(lager, error_logger_redirect) of
-        {ok, false} ->
-            [];
-        _ ->
-            case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]) of
-              {ok, _} ->
-                %% Should we allow user to whitelist handlers to not be removed?
-                [begin error_logger:delete_report_handler(X), X end ||
-                  X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h]];
-              {error, _} ->
-                []
-            end
-    end,
+    SavedHandlers =
+        case application:get_env(lager, error_logger_redirect) of
+            {ok, false} ->
+                [];
+            _ ->
+                case application:get_env(lager, error_logger_whitelist) of
+                    undefined ->
+                        WhiteList = [];
+                    {ok, WhiteList} ->
+                        WhiteList
+                end,
+
+                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]) of
+                    {ok, _} ->
+                        [begin error_logger:delete_report_handler(X), X end ||
+                            X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
+                    {error, _} ->
+                        []
+                end
+        end,
 
     {ok, Pid, SavedHandlers}.
 
