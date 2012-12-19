@@ -73,7 +73,7 @@
 -define(INT_LOG(Level, Format, Args),
     case ?SHOULD_LOG(Level) of
         true ->
-            ?NOTIFY(Level, self(), Format, Args);
+            catch(?NOTIFY(Level, self(), Format, Args));
         _ ->
             ok
     end).

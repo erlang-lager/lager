@@ -224,7 +224,7 @@ safe_notify(Event) ->
     end.
 
 
--ifdef(TEST_CANCELLED).
+-ifdef(TEST).
 setup(Threshold, Timer) ->
     {ok, DedupPid} = start_link(),
     unlink(DedupPid),
@@ -239,7 +239,8 @@ cleanup(Pid) ->
     lager_config:set(duplicate_threshold, 0),
     lager_config:set(duplicate_limit, undefined),
     lager_config:set(duplicate_quick_notification, false),
-    exit(Pid, shutdown).
+    exit(Pid, shutdown),
+    timer:sleep(100).
 
 low_threshold_test_() ->
     {"Check that with low threshold, all messages are handled individually",
