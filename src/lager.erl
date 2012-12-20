@@ -115,7 +115,7 @@ trace_file(File, Filter, Level) ->
                 false ->
                     %% install the handler
                     supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, {File, Level}]);
+                        [lager_event, {lager_file_backend, File}, {File, none}]);
                 _ ->
                     {ok, exists}
             end,
