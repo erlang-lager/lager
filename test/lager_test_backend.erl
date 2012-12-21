@@ -204,7 +204,10 @@ lager_test_() ->
                         ok = lager:info("hello world"),
                         ?assertEqual(0, count()),
                         lager:trace(?MODULE, [{module, ?MODULE}], debug),
+                        %% elegible for tracing
                         ok = lager:info("hello world"),
+                        %% NOT elegible for tracing
+                        ok = lager:log(info, [{pid, self()}], "hello world"),
                         ?assertEqual(1, count()),
                         ok
                 end
