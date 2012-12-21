@@ -210,7 +210,10 @@ status() ->
         [begin
                     LevelName = case Level of
                         {mask, Mask} ->
-                            hd(lager_util:mask_to_levels(Mask));
+                            case lager_util:mask_to_levels(Mask) of
+                                [] -> none;
+                                Levels -> hd(Levels)
+                            end;
                         Num ->
                             lager_util:num_to_level(Num)
                     end,
@@ -243,7 +246,10 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
         {mask, Mask} ->
-            erlang:hd(lager_util:mask_to_levels(Mask));
+            case lager_util:mask_to_levels(Mask) of
+                [] -> none;
+                Levels -> hd(Levels)
+            end;
         X when is_integer(X) ->
             lager_util:num_to_level(X);
         Y -> Y
