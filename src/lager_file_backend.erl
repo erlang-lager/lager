@@ -412,6 +412,8 @@ filesystem_test_() ->
                         file:delete("foo.log"),
                         {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}]),
                         lager:error("Test message"),
+                        %% not elegible for trace
+                        lager:log(error, self(), "Test message"),
                         {ok, Bin3} = file:read_file("foo.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end

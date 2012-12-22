@@ -30,7 +30,7 @@
 -include("lager.hrl").
 
 levels() ->
-    [debug, info, notice, warning, error, critical, alert, emergency].
+    [debug, info, notice, warning, error, critical, alert, emergency, none].
 
 level_to_num(debug)     -> ?DEBUG;
 level_to_num(info)      -> ?INFO;
@@ -595,6 +595,8 @@ format_time_test_() ->
     ].
 
 config_to_levels_test() ->
+    ?assertEqual([none], config_to_levels('none')),
+    ?assertEqual({mask, 0}, config_to_mask('none')),
     ?assertEqual([debug], config_to_levels('=debug')),
     ?assertEqual([debug], config_to_levels('<info')),
     ?assertEqual(levels() -- [debug], config_to_levels('!=debug')),
@@ -614,7 +616,15 @@ config_to_levels_test() ->
     ?assertEqual(levels() -- [debug], config_to_levels('!!!=debug')),
     ok.
 
+config_to_mask_test() ->
+    ?assertEqual({mask, 0}, config_to_mask('none')),
+    ?assertEqual({mask, ?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('debug')),
+    ?assertEqual({mask, ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('warning')),
+    ?assertEqual({mask, ?DEBUG bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('!=info')),
+    ok.
+
 mask_to_levels_test() ->
+    ?assertEqual([], mask_to_levels(0)),
     ?assertEqual([debug], mask_to_levels(2#10000000)),
     ?assertEqual([debug, info], mask_to_levels(2#11000000)),
     ?assertEqual([debug, info, emergency], mask_to_levels(2#11000001)),
