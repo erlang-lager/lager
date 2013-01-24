@@ -394,6 +394,11 @@ alist([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:
 alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(H) ->
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
+alist([H|T], Max, Options = #print_options{force_strings=true}) when is_binary(H) ->
+    {List, Len} = print(H, Max, Options),
+    %% no need to decrement depth, as we're in printable string mode
+    {Final, FLen} = alist(T, Max - Len, Options),
+    {[List|Final], FLen};
 alist(_, _, #print_options{force_strings=true}) ->
     erlang:error(badarg);
 alist([H|_L], _Max, _Options) ->
@@ -648,6 +653,11 @@ list_printing_test() ->
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~P", [[1|[2|[3|4]]], 5], 50))),
     ?assertEqual("[1|1]", lists:flatten(format("~P", [[1|1], 5], 50))),
     ?assertEqual("[9|9]", lists:flatten(format("~p", [[9|9]], 50))),
+    ok.
+
+iolist_printing_test() ->
+    ?assertEqual("iolist: HelloIamaniolist",
+        lists:flatten(format("iolist: ~s", [[$H, $e,  $l, $l, $o, "I", ["am", [<<"an">>], [$i, $o, $l, $i, $s, $t]]]], 1000))),
     ok.
 
 tuple_printing_test() ->
