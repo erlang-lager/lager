@@ -24,7 +24,7 @@
 -export([start/0,
         log/9, log_dest/10, log/3, log/4,
         trace_file/2, trace_file/3, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/1, status/0,
+        clear_all_traces/0, start_trace/1, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         minimum_loglevel/1, posix_error/1,
         safe_format/3, safe_format_chop/3,dispatch_log/9]).
@@ -121,8 +121,9 @@ trace_file(File, Filter) ->
 
 trace_file(File, Filter, Level) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
-    case lager_util:validate_trace(Trace0) of
-        {ok, Trace} ->
+
+    case start_trace(Trace0) of
+	{ok, Trace} ->
             Handlers = gen_event:which_handlers(lager_event),
             %% check if this file backend is already installed
             Res = case lists:member({lager_file_backend, File}, Handlers) of
@@ -135,14 +136,6 @@ trace_file(File, Filter, Level) ->
             end,
             case Res of
               {ok, _} ->
-                %% install the trace.
-                {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-                case lists:member(Trace, Traces) of
-                  false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
-                  _ ->
-                    ok
-                end,
                 {ok, Trace};
               {error, _} = E ->
                 E
@@ -155,7 +148,9 @@ trace_console(Filter) ->
     trace_console(Filter, debug).
 
 trace_console(Filter, Level) ->
-    Trace0 = {Filter, Level, lager_console_backend},
+    start_trace({Filter, Level, lager_console_backend}).
+
+start_trace(Trace0) ->
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             {MinLevel, Traces} = lager_mochiglobal:get(loglevel),

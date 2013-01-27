@@ -47,6 +47,8 @@ start(_StartType, _StartArgs) ->
     _ = [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
         {Module, Config} <- expand_handlers(Handlers)],
 
+    ok = add_configured_traces(),
+
     %% mask the messages we have no use for
     MinLog = lager:minimum_loglevel(lager:get_loglevels()),
     {_, Traces} = lager_mochiglobal:get(loglevel),
@@ -81,3 +83,23 @@ expand_handlers([{lager_file_backend, Configs}|T]) ->
       expand_handlers(T);
 expand_handlers([H|T]) ->
     [H | expand_handlers(T)].
+
+add_configured_traces() ->
+
+    try
+	Traces = case application:get_env(lager, traces) of
+		     undefined ->
+			 [];
+		     {ok, TraceVal} ->
+			 TraceVal
+		 end,
+	
+	lists:foreach(fun({Handler, Filter, Level}) ->
+			      {ok, _} = lager:start_trace({Filter, Level, Handler})
+		      end,
+		      Traces)
+    catch
+	A:B -> io:format("~p, ~p, ~p~n", [A, B, erlang:get_stacktrace()])
+    end,
+    
+    ok.
