@@ -148,6 +148,7 @@ trace(Backend, Filter) ->
 
 trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
+
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             {MinLevel, Traces} = lager_config:get(loglevel),

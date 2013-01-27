@@ -47,6 +47,8 @@ start(_StartType, _StartArgs) ->
     _ = [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
         {Module, Config} <- expand_handlers(Handlers)],
 
+    ok = add_configured_traces(),
+
     %% mask the messages we have no use for
     MinLog = lager:minimum_loglevel(lager:get_loglevels()),
     {_, Traces} = lager_config:get(loglevel),
@@ -99,8 +101,20 @@ expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
 expand_handlers([H|T]) ->
     [H | expand_handlers(T)].
 
+add_configured_traces() ->
 
-
+    Traces = case application:get_env(lager, traces) of
+		 undefined ->
+		     [];
+		 {ok, TraceVal} ->
+		     TraceVal
+	     end,
+    
+    lists:foreach(fun({Handler, Filter, Level}) ->
+			  {ok, _} = lager:trace(Handler, Filter, Level)
+		  end,
+		  Traces),
+    ok.
 
 -ifdef(TEST).
 application_config_mangling_test_() ->
