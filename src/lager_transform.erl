@@ -107,12 +107,15 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                     %% [Format, Args] or [Attr, Format].
                     %% The trace attributes will be a list of tuples, so check
                     %% for that.
-                    case Arg1 of
-                        {cons, _, {tuple, _, _}, _} ->
+                    case {element(1, Arg1), Arg1} of
+                        {_, {cons, _, {tuple, _, _}, _}} ->
                             {concat_lists(Arg1, DefaultAttrs),
                                 Arg2, {atom, Line, none}};
-                        {var, _, _} ->
-                            %% crap, its a variable. look at the second
+                        {Type, _} when Type == var;
+                                       Type == lc;
+                                       Type == call;
+                                       Type == record_field ->
+                            %% crap, its not a literal. look at the second
                             %% argument to see if it is a string
                             case Arg2 of
                                 {string, _, _} ->
@@ -120,7 +123,7 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                                         Arg2, {atom, Line, none}};
                                 _ ->
                                     %% not a string, going to have to guess
-                                    %% its the argument list
+                                    %% it's the argument list
                                     {DefaultAttrs, Arg1, Arg2}
                             end;
                         _ ->
@@ -158,10 +161,22 @@ transform_statement(Stmt) ->
     Stmt.
 
 %% concat 2 list ASTs by replacing the terminating [] in A with the contents of B
-concat_lists({var, Line, Name}, B) ->
+concat_lists({var, Line, _Name}=Var, B) ->
     %% concatenating a var with a cons
     {call, Line, {remote, Line, {atom, Line, lists},{atom, Line, flatten}},
-        [{cons, Line, {var, Line, Name}, B}]};
+        [{cons, Line, Var, B}]};
+concat_lists({lc, Line, _Body, _Generator} = LC, B) ->
+    %% concatenating a LC with a cons
+    {call, Line, {remote, Line, {atom, Line, lists},{atom, Line, flatten}},
+        [{cons, Line, LC, B}]};
+concat_lists({call, Line, _Function, _Args} = Call, B) ->
+    %% concatenating a call with a cons
+    {call, Line, {remote, Line, {atom, Line, lists},{atom, Line, flatten}},
+        [{cons, Line, Call, B}]};
+concat_lists({record_field, Line, _Var, _Record, _Field} = Rec, B) ->
+    %% concatenating a record_field with a cons
+    {call, Line, {remote, Line, {atom, Line, lists},{atom, Line, flatten}},
+        [{cons, Line, Rec, B}]};
 concat_lists({nil, _Line}, B) ->
     B;
 concat_lists({cons, Line, Element, Tail}, B) ->
