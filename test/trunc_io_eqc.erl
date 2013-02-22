@@ -36,11 +36,11 @@
 %%====================================================================
 
 eqc_test_() ->
-    {timeout, 30,
+    {timeout, 60,
      {spawn, 
       [
-                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_format()))))},
-                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_equivalence()))))}
+                {timeout, 30, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_format()))))},
+                {timeout, 30, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_equivalence()))))}
                 ]
      }}.
 
