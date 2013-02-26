@@ -161,7 +161,14 @@ print(Binary, Max, Options) when is_binary(Binary) ->
                     string:substr(B, 1, MaxSize);
                 false -> B
             end,
-            try alist(In, Max -1, Options) of
+            MaxLen = case Options#print_options.force_strings of
+                true ->
+                    Max;
+                false ->
+                    %% make room for the leading doublequote
+                    Max - 1
+            end,
+            try alist(In, MaxLen, Options) of
                 {L0, Len0} ->
                     case Options#print_options.force_strings of
                         false ->
@@ -394,11 +401,17 @@ alist([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:
 alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(H) ->
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
-alist([H|T], Max, Options = #print_options{force_strings=true}) when is_binary(H) ->
+alist([H|T], Max, Options = #print_options{force_strings=true}) when is_binary(H); is_list(H) ->
     {List, Len} = print(H, Max, Options),
-    %% no need to decrement depth, as we're in printable string mode
-    {Final, FLen} = alist(T, Max - Len, Options),
-    {[List|Final], FLen};
+    case (Max - Len) =< 0 of
+        true ->
+            %% no more room to print anything
+            {List, Len};
+        false ->
+            %% no need to decrement depth, as we're in printable string mode
+            {Final, FLen} = alist(T, Max - Len, Options),
+            {[List|Final], FLen+Len}
+    end;
 alist(_, _, #print_options{force_strings=true}) ->
     erlang:error(badarg);
 alist([H|_L], _Max, _Options) ->
@@ -658,6 +671,14 @@ list_printing_test() ->
 iolist_printing_test() ->
     ?assertEqual("iolist: HelloIamaniolist",
         lists:flatten(format("iolist: ~s", [[$H, $e,  $l, $l, $o, "I", ["am", [<<"an">>], [$i, $o, $l, $i, $s, $t]]]], 1000))),
+    ?assertEqual("123...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 6))),
+    ?assertEqual("123456...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 9))),
+    ?assertEqual("123456789H...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 13))),
+    ?assertEqual("123456789HellIamaniolist",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 30))),
     ok.
 
 tuple_printing_test() ->
