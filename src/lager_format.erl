@@ -29,6 +29,8 @@
 format(FmtStr, Args, MaxLen) ->
     format(FmtStr, Args, MaxLen, []).
 
+format([], [], _, _) ->
+    "";
 format(FmtStr, Args, MaxLen, Opts) when is_atom(FmtStr) ->
     format(atom_to_list(FmtStr), Args, MaxLen, Opts);
 format(FmtStr, Args, MaxLen, Opts) when is_binary(FmtStr) ->
