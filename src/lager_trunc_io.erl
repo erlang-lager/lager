@@ -149,7 +149,7 @@ print(Bin, Max, _Options) when is_binary(Bin), Max < 2 ->
     {"<<...>>", 7};
 print(Binary, Max, Options) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, byte_size(Binary)])),
-    {L, Len} = case Options#print_options.lists_as_strings orelse
+    {Res, Length} = case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
         true ->
             Depth = Options#print_options.depth,
@@ -161,7 +161,14 @@ print(Binary, Max, Options) when is_binary(Binary) ->
                     string:substr(B, 1, MaxSize);
                 false -> B
             end,
-            try alist(In, Max -1, Options) of
+            MaxLen = case Options#print_options.force_strings of
+                true ->
+                    Max;
+                false ->
+                    %% make room for the leading doublequote
+                    Max - 1
+            end,
+            try alist(In, MaxLen, Options) of
                 {L0, Len0} ->
                     case Options#print_options.force_strings of
                         false ->
@@ -190,12 +197,6 @@ print(Binary, Max, Options) when is_binary(Binary) ->
             end;
         _ ->
             list_body(B, Max-4, dec_depth(Options), true)
-    end,
-    {Res, Length} = case L of
-        [91, X, 93] ->
-            {X, Len-2};
-        X ->
-            {X, Len}
     end,
     case Options#print_options.force_strings of
         true ->
@@ -394,6 +395,17 @@ alist([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:
 alist([H|T], Max, #print_options{force_strings=true} = Options) when is_integer(H) ->
     {L, Len} = alist(T, Max-1, Options),
     {[H|L], Len + 1};
+alist([H|T], Max, Options = #print_options{force_strings=true}) when is_binary(H); is_list(H) ->
+    {List, Len} = print(H, Max, Options),
+    case (Max - Len) =< 0 of
+        true ->
+            %% no more room to print anything
+            {List, Len};
+        false ->
+            %% no need to decrement depth, as we're in printable string mode
+            {Final, FLen} = alist(T, Max - Len, Options),
+            {[List|Final], FLen+Len}
+    end;
 alist(_, _, #print_options{force_strings=true}) ->
     erlang:error(badarg);
 alist([H|_L], _Max, _Options) ->
@@ -593,6 +605,9 @@ binary_printing_test() ->
     ?assertEqual("<<\"hello\\fworld\">>", lists:flatten(format("~p", [<<"hello\fworld">>], 50))),
     ?assertEqual("<<\"hello\\vworld\">>", lists:flatten(format("~p", [<<"hello\vworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
+    ?assertEqual("[a]", lists:flatten(format("~s", [<<"[a]">>], 50))),
+    ?assertEqual("[a]", lists:flatten(format("~s", [[<<"[a]">>]], 50))),
+
     ok.
 
 bitstring_printing_test() ->
@@ -648,6 +663,20 @@ list_printing_test() ->
     ?assertEqual("[1,2,3|4]", lists:flatten(format("~P", [[1|[2|[3|4]]], 5], 50))),
     ?assertEqual("[1|1]", lists:flatten(format("~P", [[1|1], 5], 50))),
     ?assertEqual("[9|9]", lists:flatten(format("~p", [[9|9]], 50))),
+    ok.
+
+iolist_printing_test() ->
+    ?assertEqual("iolist: HelloIamaniolist",
+        lists:flatten(format("iolist: ~s", [[$H, $e,  $l, $l, $o, "I", ["am", [<<"an">>], [$i, $o, $l, $i, $s, $t]]]], 1000))),
+    ?assertEqual("123...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 6))),
+    ?assertEqual("123456...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 9))),
+    ?assertEqual("123456789H...",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 13))),
+    ?assertEqual("123456789HellIamaniolist",
+                 lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 30))),
+
     ok.
 
 tuple_printing_test() ->

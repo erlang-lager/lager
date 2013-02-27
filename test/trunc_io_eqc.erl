@@ -36,11 +36,11 @@
 %%====================================================================
 
 eqc_test_() ->
-    {timeout, 30,
+    {timeout, 60,
      {spawn, 
       [
-                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_format()))))},
-                {timeout, 15, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_equivalence()))))}
+                {timeout, 30, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_format()))))},
+                {timeout, 30, ?_assertEqual(true, eqc:quickcheck(eqc:testing_time(14, ?QC_OUT(prop_equivalence()))))}
                 ]
      }}.
 
@@ -66,7 +66,7 @@ gen_fmt_args() ->
                 "~~",
                 {"~10000000.p", gen_any(5)},
                 {"~w", gen_any(5)},
-                {"~s", oneof([gen_print_str(), gen_atom(), gen_quoted_atom(), gen_print_bin()])},
+                {"~s", oneof([gen_print_str(), gen_atom(), gen_quoted_atom(), gen_print_bin(), gen_iolist(5)])},
                 {"~1000000.P", gen_any(5), 4},
                 {"~W", gen_any(5), 4},
                 {"~i", gen_any(5)},
@@ -91,7 +91,7 @@ gen_fmt_args() ->
 
 %% Generates a printable string
 gen_print_str() ->
-    ?LET(Xs, list(char()), [X || X <- Xs, io_lib:printable_list([X]), X /= $~]).
+    ?LET(Xs, list(char()), [X || X <- Xs, io_lib:printable_list([X]), X /= $~, X < 255]).
 
 gen_print_bin() ->
     ?LET(Xs, gen_print_str(), list_to_binary(Xs)).
@@ -110,7 +110,12 @@ gen_any(MaxDepth) ->
            gen_fun()] ++
            [?LAZY(list(gen_any(MaxDepth - 1))) || MaxDepth /= 0] ++
            [?LAZY(gen_tuple(gen_any(MaxDepth - 1))) || MaxDepth /= 0]).
-          
+
+gen_iolist(0) ->
+    [];
+gen_iolist(Depth) ->
+    list(oneof([gen_char(), gen_print_str(), gen_print_bin(), gen_iolist(Depth-1)])).
+
 gen_atom() ->
     elements([abc, def, ghi]).
 
