@@ -95,12 +95,12 @@ handle_event(Event, State) ->
                             ?LOGFMT(error, Pid,
                                 "Cowboy handler ~p terminated with reason: call to undefined function ~p:~p/~p",
                                 [Module, Module, Function, Arity]);
-                        [Module, Function, Arity | Tail] ->
+                        [Module, Function, Arity, _Class, Reason | Tail] ->
                             %% any other cowboy error_format list *always* ends with the stacktrace
                             StackTrace = lists:last(Tail),
                             ?LOGFMT(error, Pid,
                                 "Cowboy handler ~p terminated in ~p:~p/~p with reason: ~s",
-                                [Module, Module, Function, Arity, format_reason(StackTrace)])
+                                [Module, Module, Function, Arity, format_reason({Reason, StackTrace})])
                     end;
                 "webmachine error"++_ ->
                     %% Webmachine HTTP server error
