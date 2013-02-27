@@ -149,7 +149,7 @@ print(Bin, Max, _Options) when is_binary(Bin), Max < 2 ->
     {"<<...>>", 7};
 print(Binary, Max, Options) when is_binary(Binary) ->
     B = binary_to_list(Binary, 1, lists:min([Max, byte_size(Binary)])),
-    {L, Len} = case Options#print_options.lists_as_strings orelse
+    {Res, Length} = case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
         true ->
             Depth = Options#print_options.depth,
@@ -197,12 +197,6 @@ print(Binary, Max, Options) when is_binary(Binary) ->
             end;
         _ ->
             list_body(B, Max-4, dec_depth(Options), true)
-    end,
-    {Res, Length} = case L of
-        [91, X, 93] ->
-            {X, Len-2};
-        X ->
-            {X, Len}
     end,
     case Options#print_options.force_strings of
         true ->
@@ -611,6 +605,9 @@ binary_printing_test() ->
     ?assertEqual("<<\"hello\\fworld\">>", lists:flatten(format("~p", [<<"hello\fworld">>], 50))),
     ?assertEqual("<<\"hello\\vworld\">>", lists:flatten(format("~p", [<<"hello\vworld">>], 50))),
     ?assertEqual("     hello", lists:flatten(format("~10s", [<<"hello">>], 50))),
+    ?assertEqual("[a]", lists:flatten(format("~s", [<<"[a]">>], 50))),
+    ?assertEqual("[a]", lists:flatten(format("~s", [[<<"[a]">>]], 50))),
+
     ok.
 
 bitstring_printing_test() ->
@@ -679,6 +676,7 @@ iolist_printing_test() ->
                  lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 13))),
     ?assertEqual("123456789HellIamaniolist",
                  lists:flatten(format("~s", [[<<"123456789">>, "HellIamaniolist"]], 30))),
+
     ok.
 
 tuple_printing_test() ->
