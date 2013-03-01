@@ -27,7 +27,7 @@
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
-        safe_format/3, safe_format_chop/3,dispatch_log/5, pr/2]).
+        safe_format/3, safe_format_chop/3,dispatch_log/5,dispatch_log/9,pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -87,6 +87,10 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                     ok
             end
     end.
+
+%% backwards compatible with beams compiled with lager 1.x
+dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, Size) ->
+    dispatch_log(Severity, Metadata, Format, Args, Size).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid() | atom() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
