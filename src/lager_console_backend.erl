@@ -36,13 +36,11 @@
 -define(TERSE_FORMAT,[time, " [", severity,"] ", message, "\r\n"]).
 
 %% @private
-init(Level) when is_atom(Level) ->
-    init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
 init([Level, true]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,[{eol, "\r\n"}]}]);
 init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT}]);
-init([Level,{Formatter,FormatterConfig}])  when is_atom(Level), is_atom(Formatter)->
+init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
    try lager_util:config_to_mask(Level) of
         Levels ->
             {ok, #state{level=Levels,
@@ -51,7 +49,9 @@ init([Level,{Formatter,FormatterConfig}])  when is_atom(Level), is_atom(Formatte
     catch
         _:_ ->
             {error, bad_log_level}
-    end.
+    end;
+init(Level) ->
+    init([Level,{lager_default_formatter,?TERSE_FORMAT}]).
 
 
 %% @private
