@@ -48,9 +48,7 @@ start(_StartType, _StartArgs) ->
         {Module, Config} <- expand_handlers(Handlers)],
 
     %% mask the messages we have no use for
-    MinLog = lager:minimum_loglevel(lager:get_loglevels()),
-    {_, Traces} = lager_config:get(loglevel),
-    lager_config:set(loglevel, {MinLog, Traces}),
+    lager:update_loglevel_config(),
 
     SavedHandlers =
         case application:get_env(lager, error_logger_redirect) of
