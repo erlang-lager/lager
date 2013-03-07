@@ -100,7 +100,7 @@ handle_event(Event, State) ->
                     Offender = format_offender(Off),
                     ?LOGFMT(error, Pid,
                         "Supervisor ~w had child ~s exit with reason ~s in context ~w",
-                        [element(2, Name), Offender, format_reason(Reason), Ctx]);
+                        [Name, Offender, format_reason(Reason), Ctx]);
                 _ ->
                     ?LOGMSG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
