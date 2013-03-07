@@ -98,9 +98,13 @@ handle_event(Event, State) ->
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
+                    Name1 = case Name of
+                                {local, N} -> N;
+                                _ -> Name
+                            end,
                     ?LOGFMT(error, Pid,
                         "Supervisor ~w had child ~s exit with reason ~s in context ~w",
-                        [Name, Offender, format_reason(Reason), Ctx]);
+                        [Name1, Offender, format_reason(Reason), Ctx]);
                 _ ->
                     ?LOGMSG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
