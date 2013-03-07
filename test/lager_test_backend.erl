@@ -730,6 +730,17 @@ error_logger_redirect_test_() ->
                 end
             },
 
+            {"supervisor reports with real error and pid",
+                fun() ->
+                        sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{name, mini_steve}, {mfargs, {a, b, [c]}}, {pid, bleh}]}, {reason, {function_clause,[{crash,handle_info,[foo]}]}}, {supervisor, somepid}]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor somepid had child mini_steve started with a:b(c) at bleh exit with reason no function clause matching crash:handle_info(foo) in context france", lists:flatten(Msg))
+                end
+            },
+
             {"supervisor_bridge reports",
                 fun() ->
                         sync_error_logger:error_report(supervisor_report, [{errorContext, france}, {offender, [{mod, mini_steve}, {pid, bleh}]}, {reason, fired}, {supervisor, {local, steve}}]),
@@ -760,6 +771,17 @@ error_logger_redirect_test_() ->
                         ?assertEqual(lager_util:level_to_num(debug),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("Supervisor foo started foo:bar/1 at pid baz", lists:flatten(Msg))
+                end
+            },
+            {"supervisor progress report with pid",
+                fun() ->
+                        lager:set_loglevel(?MODULE, debug),
+                        sync_error_logger:info_report(progress, [{supervisor, somepid}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(debug),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Supervisor somepid started foo:bar/1 at pid baz", lists:flatten(Msg))
                 end
             },
             {"crash report for emfile",
