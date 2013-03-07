@@ -32,6 +32,17 @@
 
 -export([format_reason/1]).
 
+-record(state, {
+        %% how many messages per second we try to deliver
+        hwm = undefined :: 'undefined' | pos_integer(),
+        %% how many messages we've received this second
+        mps = 0 :: non_neg_integer(),
+        %% the current second
+        lasttime = os:timestamp() :: os:timestamp(),
+        %% count of dropped messages this second
+        dropped = 0 :: non_neg_integer()
+    }).
+
 -define(LOGMSG(Level, Pid, Msg),
     case ?SHOULD_LOG(Level) of
         true ->
@@ -58,13 +69,73 @@
 -endif.
 
 -spec init(any()) -> {ok, {}}.
-init(_) ->
-    {ok, {}}.
+init([HighWaterMark]) ->
+    {ok, #state{hwm=HighWaterMark}}.
 
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 handle_event(Event, State) ->
+    case check_hwm(State) of
+        {true, NewState} ->
+            log_event(Event, NewState);
+        {false, NewState} ->
+            {ok, NewState}
+    end.
+
+handle_info(_Info, State) ->
+    {ok, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+%% internal functions
+
+check_hwm(State = #state{hwm = undefined}) ->
+    {true, State};
+check_hwm(State = #state{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
+    %% haven't hit high water mark yet, just log it
+    {true, State#state{mps=Mps+1}};
+check_hwm(State = #state{hwm = Hwm, lasttime = Last, dropped = Drop}) ->
+    %% are we still in the same second?
+    {M, S, _} = Now = os:timestamp(),
+    case Last of
+        {M, S, _} ->
+            %% still in same second, but have exceeded the high water mark
+            NewDrops = discard_messages(Now, 0),
+            %io:format("dropped ~p messages~n", [NewDrops]),
+            {false, State#state{dropped=Drop+NewDrops}};
+        _ ->
+            %% different second, reset all counters and allow it
+            %% TODO - do we care if the clock goes backwards?
+            case Drop > 0 of
+                true ->
+                    ?LOGFMT(warning, self(), "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
+                        [Drop, Hwm]);
+                false ->
+                    ok
+            end,
+            {true, State#state{dropped = 0, mps=1, lasttime = Now}}
+    end.
+
+discard_messages(Second, Count) ->
+    {M, S, _} = os:timestamp(),
+    case Second of
+        {M, S, _} ->
+            receive
+                _Msg ->
+                    discard_messages(Second, Count+1)
+            after 0 ->
+                    Count
+            end;
+        _ ->
+            Count
+    end.
+
+log_event(Event, State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
             case Fmt of
@@ -142,17 +213,6 @@ handle_event(Event, State) ->
             ?LOGFMT(warning, self(), "Unexpected error_logger event ~w", [Event])
     end,
     {ok, State}.
-
-handle_info(_Info, State) ->
-    {ok, State}.
-
-terminate(_Reason, _State) ->
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%% internal functions
 
 format_crash_report(Report, Neighbours) ->
     Name = case proplists:get_value(registered_name, Report, []) of
