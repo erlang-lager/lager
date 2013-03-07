@@ -100,7 +100,7 @@ handle_event(Event, State) ->
                     Offender = format_offender(Off),
                     ?LOGFMT(error, Pid,
                         "Supervisor ~w had child ~s exit with reason ~s in context ~w",
-                        [element(2, Name), Offender, format_reason(Reason), Ctx]);
+                        [supervisor_name(Name), Offender, format_reason(Reason), Ctx]);
                 _ ->
                     ?LOGMSG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
@@ -134,7 +134,7 @@ handle_event(Event, State) ->
                     MFA = format_mfa(proplists:get_value(mfargs, Started)),
                     Pid = proplists:get_value(pid, Started),
                     ?LOGFMT(debug, P, "Supervisor ~w started ~s at pid ~w",
-                        [element(2, Name), MFA, Pid]);
+                        [supervisor_name(Name), MFA, Pid]);
                 _ ->
                     ?LOGMSG(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;
@@ -311,3 +311,7 @@ print_silly_list([H|T], Fmt, Acc) ->
 print_val(Val) ->
     {Str, _} = lager_trunc_io:print(Val, 500),
     Str.
+
+
+supervisor_name({local, Name}) -> Name;
+supervisor_name(Name) -> Name.
