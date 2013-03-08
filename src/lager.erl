@@ -78,8 +78,14 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
                                 _ ->
                                     Format
                             end,
-                            gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
-                                        Severity, Metadata, Destinations)});
+                            case lager_config:get(async, false) of
+                                true ->
+                                    gen_event:notify(Pid, {log, lager_msg:new(Msg, Timestamp,
+                                                Severity, Metadata, Destinations)});
+                                false ->
+                                    gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
+                                                Severity, Metadata, Destinations)})
+                            end;
                         false ->
                             ok
                     end;
