@@ -27,6 +27,7 @@
 
 -behaviour(gen_event).
 
+-export([set_high_water/1]).
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
@@ -60,6 +61,7 @@
     end).
 
 -ifdef(TEST).
+-compile(export_all).
 %% Make CRASH synchronous when testing, to avoid timing headaches
 -define(CRASH_LOG(Event),
     catch(gen_server:call(lager_crash_log, {log, Event}))).
@@ -68,12 +70,17 @@
     gen_server:cast(lager_crash_log, {log, Event})).
 -endif.
 
+set_high_water(N) ->
+    gen_event:call(error_logger, ?MODULE, {set_high_water, N}, infinity).
+
 -spec init(any()) -> {ok, {}}.
 init([HighWaterMark]) ->
     {ok, #state{hwm=HighWaterMark}}.
 
+handle_call({set_high_water, N}, State) ->
+    {ok, ok, State#state{hwm = N}};
 handle_call(_Request, State) ->
-    {ok, ok, State}.
+    {ok, unknown_call, State}.
 
 handle_event(Event, State) ->
     case check_hwm(State) of
@@ -106,11 +113,9 @@ check_hwm(State = #state{hwm = Hwm, lasttime = Last, dropped = Drop}) ->
         {M, S, _} ->
             %% still in same second, but have exceeded the high water mark
             NewDrops = discard_messages(Now, 0),
-            %io:format("dropped ~p messages~n", [NewDrops]),
             {false, State#state{dropped=Drop+NewDrops}};
         _ ->
             %% different second, reset all counters and allow it
-            %% TODO - do we care if the clock goes backwards?
             case Drop > 0 of
                 true ->
                     ?LOGFMT(warning, self(), "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
@@ -372,6 +377,23 @@ print_val(Val) ->
     {Str, _} = lager_trunc_io:print(Val, 500),
     Str.
 
-
 supervisor_name({local, Name}) -> Name;
 supervisor_name(Name) -> Name.
+-ifdef(TEST).
+
+%% Not intended to be a fully paranoid EUnit test....
+
+t0() ->
+    application:stop(lager),
+    application:stop(sasl),
+    application:start(sasl),
+    application:start(lager),
+    set_high_water(5),
+    [error_logger:warning_msg("Foo ~p!", [X]) || X <- lists:seq(1,10)],
+    timer:sleep(1000),
+    [error_logger:warning_msg("Bar ~p!", [X]) || X <- lists:seq(1,10)],
+    timer:sleep(1000),
+    error_logger:warning_msg("Baz!"),
+    ok.
+
+-endif. % TEST
