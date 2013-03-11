@@ -52,6 +52,16 @@ start(_StartType, _StartArgs) ->
     {_, Traces} = lager_config:get(loglevel),
     lager_config:set(loglevel, {MinLog, Traces}),
 
+    HighWaterMark = case application:get_env(lager, error_logger_hwm) of
+        {ok, HwmVal} when is_integer(HwmVal), HwmVal > 0 ->
+            HwmVal;
+        {ok, BadVal} ->
+            _ = lager:log(warning, self(), "Invalid error_logger high water mark: ~p, disabling", [BadVal]),
+            undefined;
+        undefined ->
+            undefined
+    end,
+
     SavedHandlers =
         case application:get_env(lager, error_logger_redirect) of
             {ok, false} ->
@@ -64,7 +74,7 @@ start(_StartType, _StartArgs) ->
                         WhiteList
                 end,
 
-                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]) of
+                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark]]) of
                     {ok, _} ->
                         [begin error_logger:delete_report_handler(X), X end ||
                             X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
