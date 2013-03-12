@@ -311,6 +311,7 @@ lager_test_() ->
                         ?assertEqual(0, count()),
                         ?assertEqual(1, count_ignored()),
                         lager:set_loglevel(?MODULE, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         lager:debug("this message should be logged"),
                         ?assertEqual(1, count()),
                         ?assertEqual(1, count_ignored()),
@@ -324,6 +325,7 @@ lager_test_() ->
                         ok = lager:info("hello world"),
                         ?assertEqual(0, count()),
                         lager:trace(?MODULE, [{module, ?MODULE}], debug),
+                        ?assertMatch({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, _}, lager_config:get(loglevel)),
                         %% elegible for tracing
                         ok = lager:info("hello world"),
                         %% NOT elegible for tracing
@@ -335,6 +337,7 @@ lager_test_() ->
             {"tracing works with custom attributes",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
+                        ?assertEqual({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         lager_config:set(loglevel, {element(2, lager_util:config_to_mask(error)), []}),
                         lager:info([{requestid, 6}], "hello world"),
                         ?assertEqual(0, count()),
@@ -353,6 +356,7 @@ lager_test_() ->
             {"tracing honors loglevel",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
+                        ?assertEqual({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         {ok, T} = lager:trace(?MODULE, [{module, ?MODULE}], notice),
                         ok = lager:info("hello world"),
                         ?assertEqual(0, count()),
@@ -410,6 +414,14 @@ lager_test_() ->
                         {Level, _Time, Message, _Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(info)),
                         ?assertEqual("State {state,1}", lists:flatten(Message)),
+                        ok
+                end
+            },
+            {"installing a new handler adjusts the global loglevel if necessary",
+                fun() ->
+                        ?assertEqual({?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
+                        supervisor:start_child(lager_handler_watcher_sup, [lager_event, {?MODULE, foo}, debug]),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         ok
                 end
             }
@@ -765,6 +777,7 @@ error_logger_redirect_test_() ->
             {"supervisor progress report",
                 fun() ->
                         lager:set_loglevel(?MODULE, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         sync_error_logger:info_report(progress, [{supervisor, {local, foo}}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
@@ -776,6 +789,7 @@ error_logger_redirect_test_() ->
             {"supervisor progress report with pid",
                 fun() ->
                         lager:set_loglevel(?MODULE, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         sync_error_logger:info_report(progress, [{supervisor, somepid}, {started, [{mfargs, {foo, bar, 1}}, {pid, baz}]}]),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
@@ -914,16 +928,19 @@ error_logger_redirect_test_() ->
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
+                        ?assertEqual({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         sync_error_logger:info_report([hello, world]),
                         _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(0, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, info),
+                        ?assertEqual({?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         sync_error_logger:info_report([hello, world]),
                         _ = gen_event:which_handlers(error_logger),
                         ?assertEqual(1, count()),
                         ?assertEqual(0, count_ignored()),
                         lager:set_loglevel(?MODULE, error),
+                        ?assertEqual({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         lager_config:set(loglevel, {element(2, lager_util:config_to_mask(debug)), []}),
                         sync_error_logger:info_report([hello, world]),
                         _ = gen_event:which_handlers(error_logger),
