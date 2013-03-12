@@ -74,6 +74,7 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
             {atom, _Line3, Severity}}, Arguments0} = Stmt) ->
     case lists:member(Severity, ?LEVELS) of
         true ->
+            SeverityAsInt=lager_util:level_to_num(Severity),
             DefaultAttrs0 = {cons, Line, {tuple, Line, [
                         {atom, Line, module}, {atom, Line, get(module)}]},
                     {cons, Line, {tuple, Line, [
@@ -132,18 +133,55 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                 [Attrs, Format, Args] ->
                     {concat_lists(Attrs, DefaultAttrs), Format, Args}
             end,
-            {call, Line, {remote, Line, {atom,Line,lager},{atom,Line,dispatch_log}},
+            %% Generate some unique variable names so we don't accidentaly export from case clauses.
+            %% Note that these are not actual atoms, but the AST treats variable names as atoms.
+            LevelVar = list_to_atom("__Level" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
+            TracesVar = list_to_atom("__Traces" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
+            PidVar = list_to_atom("__Pid" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
+            %% Wrap the call to lager_dispatch log in a case that will avoid doing any work if this message is not elegible for logging
+            %% case  {whereis(lager_event(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
+            {'case', Line,
+               {tuple, Line,
+                   [{call, Line, {atom, Line, whereis}, [{atom, Line, lager_event}]},
+                    {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{atom, Line, loglevel}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
                 [
-                    {atom,Line,Severity},
-                    Traces,
-                    Message,
-                    Arguments,
-                    {integer, Line, get(truncation_size)}
-                ]
-            };
-            false ->
-                Stmt
-        end;
+                    %% {undefined, _} -> {error, lager_not_running}
+                    {clause, Line,
+                        [{tuple, Line, [{atom, Line, undefined}, {var, Line, '_'}]}],
+                        [],
+                        %% trick the linter into avoiding a 'term constructed by not used' error:
+                        %% (fun() -> {error, lager_not_running} end)();
+                        [{call,9, {'fun',9, {clauses, [{clause,9,[],[], [{tuple,9,[{atom,9,error},{atom,9,lager_not_running}]}]}]}}, []}]},
+                    %% If we care about the loglevel, or there's any traces installed, we have do more checking
+                    %% {Level, Traces} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+                    {clause, Line,
+                        [{tuple, Line, [{var, Line, PidVar}, {tuple, Line, [{var, Line, LevelVar}, {var, Line, TracesVar}]}]}],
+                        [[{op, Line, 'orelse',
+                          {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
+                          {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
+                        [
+                            %% do the call to lager:dispatch_log
+                            {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, do_log}},
+                                [
+                                    {atom,Line,Severity},
+                                    Traces,
+                                    Message,
+                                    Arguments,
+                                    {integer, Line, get(truncation_size)},
+                                    {integer, Line, SeverityAsInt},
+                                    {var, Line, LevelVar},
+                                    {var, Line, TracesVar},
+                                    {var, Line, PidVar}
+                                ]
+                            }
+                        ]},
+                    %% otherwise, do nothing
+                    %% _ -> ok
+                {clause, Line, [{var, Line, '_'}],[],[{atom, Line, ok}]}
+            ]};
+        false ->
+            Stmt
+    end;
 transform_statement({call, Line, {remote, Line1, {atom, Line2, boston_lager},
             {atom, Line3, Severity}}, Arguments}) ->
         NewArgs = case Arguments of
