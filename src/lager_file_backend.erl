@@ -279,6 +279,7 @@ filesystem_test_() ->
                 fun() ->
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
                         lager:log(error, self(), "Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin} = file:read_file("test.log"),
                         Pid = pid_to_list(self()),
                         ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
@@ -299,12 +300,14 @@ filesystem_test_() ->
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
                         ?assertEqual(0, lager_test_backend:count()),
                         lager:log(error, self(), "Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         ?assertEqual(1, lager_test_backend:count()),
                         file:delete("test.log"),
                         file:write_file("test.log", ""),
                         {ok, FInfo} = file:read_file_info("test.log"),
                         file:write_file_info("test.log", FInfo#file_info{mode = 0}),
                         lager:log(error, self(), "Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         ?assertEqual(3, lager_test_backend:count()),
                         lager_test_backend:pop(),
                         lager_test_backend:pop(),
@@ -323,6 +326,7 @@ filesystem_test_() ->
                         ?assertEqual("Failed to open log file test.log with error permission denied", lists:flatten(Message)),
                         file:write_file_info("test.log", FInfo#file_info{mode = OldPerms}),
                         lager:log(error, self(), "Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin} = file:read_file("test.log"),
                         Pid = pid_to_list(self()),
                         ?assertMatch([_, _, "[error]", Pid, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
@@ -333,15 +337,18 @@ filesystem_test_() ->
                         gen_event:add_handler(lager_event, lager_file_backend, {"test.log", info}),
                         ?assertEqual(0, lager_test_backend:count()),
                         lager:log(error, self(), "Test message1"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         ?assertEqual(1, lager_test_backend:count()),
                         file:delete("test.log"),
                         file:write_file("test.log", ""),
                         lager:log(error, self(), "Test message2"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin} = file:read_file("test.log"),
                         Pid = pid_to_list(self()),
                         ?assertMatch([_, _, "[error]", Pid, "Test message2\n"], re:split(Bin, " ", [{return, list}, {parts, 5}])),
                         file:rename("test.log", "test.log.0"),
                         lager:log(error, self(), "Test message3"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin2} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", Pid, "Test message3\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}]))
                 end
@@ -352,12 +359,14 @@ filesystem_test_() ->
                         ?assertEqual(0, lager_test_backend:count()),
                         lager:log(info, self(), "Test message1"),
                         lager:log(error, self(), "Test message2"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin} = file:read_file("test.log"),
                         Lines = length(re:split(Bin, "\n", [{return, list}, trim])),
                         ?assertEqual(Lines, 2),
                         ?assertEqual(ok, lager:set_loglevel(lager_file_backend, "test.log", warning)),
                         lager:log(info, self(), "Test message3"), %% this won't get logged
                         lager:log(error, self(), "Test message4"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin2} = file:read_file("test.log"),
                         Lines2 = length(re:split(Bin2, "\n", [{return, list}, trim])),
                         ?assertEqual(Lines2, 3)
@@ -375,13 +384,14 @@ filesystem_test_() ->
                         gen_event:add_handler(lager_event, lager_file_backend,
                             {"test.log", critical}),
                         lager:error("Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         ?assertEqual({ok, <<>>}, file:read_file("test.log")),
                         {Level, _} = lager_config:get(loglevel),
                         lager_config:set(loglevel, {Level, [{[{module,
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:error("Test message"),
-                        timer:sleep(1000),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin, " ", [{return, list}, {parts, 5}]))
                 end
@@ -391,6 +401,7 @@ filesystem_test_() ->
                         gen_event:add_handler(lager_event, lager_file_backend,
                             {"test.log", critical}),
                         lager:critical("Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin1} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin1, " ", [{return, list}, {parts, 5}])),
                         ok = file:delete("test.log"),
@@ -399,10 +410,12 @@ filesystem_test_() ->
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:critical("Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin2} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin2, " ", [{return, list}, {parts, 5}])),
                         ok = file:delete("test.log"),
                         lager:error("Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         {ok, Bin3} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
@@ -412,6 +425,7 @@ filesystem_test_() ->
                         file:delete("foo.log"),
                         {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}]),
                         lager:error("Test message"),
+                        gen_event:sync_notify(lager_event, wait_for_pending),
                         %% not elegible for trace
                         lager:log(error, self(), "Test message"),
                         {ok, Bin3} = file:read_file("foo.log"),
@@ -443,6 +457,7 @@ formatting_test_() ->
                        gen_event:add_handler(lager_event, lager_file_backend,[{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]),
                        gen_event:add_handler(lager_event, lager_file_backend,[{"test2.log", debug},{lager_default_formatter,["2> [",severity,"] ", message, "\n"]}]),
                        lager:log(error, self(), "Test message"),
+                       gen_event:sync_notify(lager_event, wait_for_pending),
                        ?assertMatch({ok, <<"[error] Test message\n">>},file:read_file("test.log")),
                        ?assertMatch({ok, <<"2> [error] Test message\n">>},file:read_file("test2.log"))
                 end
