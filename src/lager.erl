@@ -26,7 +26,7 @@
         trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        minimum_loglevel/1, posix_error/1,
+        update_loglevel_config/0, posix_error/1,
         safe_format/3, safe_format_chop/3,dispatch_log/5, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
@@ -121,14 +121,7 @@ trace_file(File, Filter, Level) ->
             end,
             case Res of
               {ok, _} ->
-                %% install the trace.
-                {MinLevel, Traces} = lager_config:get(loglevel),
-                case lists:member(Trace, Traces) of
-                  false ->
-                    lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
-                  _ ->
-                    ok
-                end,
+                add_trace_to_loglevel_config(Trace),
                 {ok, Trace};
               {error, _} = E ->
                 E
@@ -150,12 +143,7 @@ trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
-            {MinLevel, Traces} = lager_config:get(loglevel),
-            case lists:member(Trace, Traces) of
-                false ->
-                    lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
-                _ -> ok
-            end,
+            add_trace_to_loglevel_config(Trace),
             {ok, Trace};
         Error ->
             Error
@@ -225,20 +213,14 @@ status() ->
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
-    %% recalculate min log level
-    {_, Traces} = lager_config:get(loglevel),
-    MinLog = minimum_loglevel(get_loglevels()),
-    lager_config:set(loglevel, {MinLog, Traces}),
+    update_loglevel_config(),
     Reply.
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
-    %% recalculate min log level
-    {_, Traces} = lager_config:get(loglevel),
-    MinLog = minimum_loglevel(get_loglevels()),
-    lager_config:set(loglevel, {MinLog, Traces}),
+    update_loglevel_config(),
     Reply.
 
 %% @doc Get the loglevel for a particular backend. In the case that the backend
@@ -269,6 +251,22 @@ posix_error(Error) ->
 get_loglevels() ->
     [gen_event:call(lager_event, Handler, get_loglevel, infinity) ||
         Handler <- gen_event:which_handlers(lager_event)].
+
+%% @private
+add_trace_to_loglevel_config(Trace) ->
+    {MinLevel, Traces} = lager_config:get(loglevel),
+    case lists:member(Trace, Traces) of
+        false ->
+            lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
+        _ ->
+            ok
+    end.
+
+%% @doc recalculate min log level
+update_loglevel_config() ->
+    {_, Traces} = lager_config:get(loglevel),
+    MinLog = minimum_loglevel(get_loglevels()),
+    lager_config:set(loglevel, {MinLog, Traces}).
 
 %% @private
 minimum_loglevel(Levels) ->

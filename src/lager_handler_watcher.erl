@@ -88,6 +88,7 @@ install_handler(Event, Module, Config) ->
     case gen_event:add_sup_handler(Event, Module, Config) of
         ok ->
             _ = lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
+            lager:update_loglevel_config(),
             ok;
         Error ->
             %% try to reinstall it later
