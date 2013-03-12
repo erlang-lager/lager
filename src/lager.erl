@@ -75,14 +75,13 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
     end,
     case (LevelThreshold band SeverityAsInt) /= 0 orelse Destinations /= [] of
         true ->
-            Timestamp = lager_util:format_time(),
             Msg = case Args of
                 A when is_list(A) ->
                     safe_format_chop(Format,Args,Size);
                 _ ->
                     Format
             end,
-            LagerMsg = lager_msg:new(Msg, Timestamp,
+            LagerMsg = lager_msg:new(Msg,
                 Severity, Metadata, Destinations),
             case lager_config:get(async, false) of
                 true ->
