@@ -162,6 +162,34 @@ log_event(Event, State) ->
                     ?CRASH_LOG(Event),
                     ?LOGFMT(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
+                "** Cowboy handler"++_ ->
+                    %% Cowboy HTTP server error
+                    ?CRASH_LOG(Event),
+                    case Args of
+                        [Module, Function, Arity, _Request, _State] ->
+                            %% we only get the 5-element list when its a non-exported function
+                            ?LOGFMT(error, Pid,
+                                "Cowboy handler ~p terminated with reason: call to undefined function ~p:~p/~p",
+                                [Module, Module, Function, Arity]);
+                        [Module, Function, Arity, _Class, Reason | Tail] ->
+                            %% any other cowboy error_format list *always* ends with the stacktrace
+                            StackTrace = lists:last(Tail),
+                            ?LOGFMT(error, Pid,
+                                "Cowboy handler ~p terminated in ~p:~p/~p with reason: ~s",
+                                [Module, Module, Function, Arity, format_reason({Reason, StackTrace})])
+                    end;
+                "webmachine error"++_ ->
+                    %% Webmachine HTTP server error
+                    ?CRASH_LOG(Event),
+                    [Path, Error] = Args,
+                    %% webmachine likes to mangle the stack, for some reason
+                    StackTrace = case Error of
+                        {error, {error, Reason, Stack}} ->
+                            {Reason, Stack};
+                        _ ->
+                            Error
+                    end,
+                    ?LOGFMT(error, Pid, "Webmachine error at path ~p : ~s", [Path, format_reason(StackTrace)]);
                 _ ->
                     ?CRASH_LOG(Event),
                     ?LOGMSG(error, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION))
