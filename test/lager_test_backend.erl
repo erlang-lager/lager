@@ -917,6 +917,57 @@ safe_format_test() ->
     ?assertEqual("FORMAT ERROR: \"~p ~p ~p\" [foo,bar]", lists:flatten(lager:safe_format("~p ~p ~p", [foo, bar], 1024))),
     ok.
 
+async_threshold_test_() ->
+    {foreach,
+        fun() ->
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, error_logger_redirect, false),
+                application:set_env(lager, async_threshold, 10),
+                application:set_env(lager, handlers, [{?MODULE, info}]),
+                application:start(lager)
+        end,
+        fun(_) ->
+                application:unset_env(lager, async_threshold),
+                application:stop(lager),
+                error_logger:tty(true)
+        end,
+        [
+            {"async threshold works",
+                fun() ->
+                        %% we start out async
+                        ?assertEqual(true, lager_config:get(async)),
+
+                        %% put a ton of things in the queue
+                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 1000)] end) || _ <- lists:seq(1, 10)],
+
+                        %% serialize on mailbox
+                        _ = gen_event:which_handlers(lager_event),
+                        %% there should be a ton of outstanding messages now, so async is false
+                        ?assertEqual(false, lager_config:get(async)),
+                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're in sync mode)
+                        collect_workers(Workers),
+                        %% serialize ont  the mailbox again
+                        _ = gen_event:which_handlers(lager_event),
+                        %% just in case...
+                        timer:sleep(100),
+
+                        %% async is true again now that the mailbox has drained
+                        ?assertEqual(true, lager_config:get(async)),
+                        ok
+                end
+            }
+        ]
+    }.
+
+collect_workers([]) ->
+    ok;
+collect_workers(Workers) ->
+    receive
+        {'DOWN', Ref, _, _, _} ->
+            collect_workers(lists:keydelete(Ref, 2, Workers))
+    end.
+
 -endif.
 
 

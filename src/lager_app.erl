@@ -41,8 +41,8 @@ start(_StartType, _StartArgs) ->
             ok;
         {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
             _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, Threshold]);
-        {ok, BadVal} ->
-            error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadVal]),
+        {ok, BadThreshold} ->
+            error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadThreshold]),
             throw({error, bad_config})
     end,
 
