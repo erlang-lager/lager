@@ -95,12 +95,15 @@ expand_handlers([{lager_file_backend, Configs}|T]) ->
     [ {lager_file_backend:config_to_id(Config), Config} || Config <- Configs] ++
       expand_handlers(T);
 expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
-    %% allow the backend to generate a gen_event handler id, if it wants to
-    _ = code:load_file(Mod),
-    Res = case erlang:function_exported(Mod, config_to_id, 1) of
-        true ->
-            {Mod:config_to_id(Config), Config};
-        false ->
+    %% Allow the backend to generate a gen_event handler id, if it wants to.
+    %% We don't use erlang:function_exported here because that requires the module 
+    %% already be loaded, which is unlikely at this phase of startup. Using code:load
+    %% caused undesireable side-effects with generating code-coverage reports.
+    Res = try Mod:config_to_id(Config) of
+        Id ->
+            {Id, Config}
+    catch
+        _:_ ->
             {Mod, Config}
     end,
     [Res | expand_handlers(T)];
