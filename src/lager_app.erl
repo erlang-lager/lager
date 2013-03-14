@@ -39,10 +39,11 @@ start(_StartType, _StartArgs) ->
     case application:get_env(lager, async_threshold) of
         undefined ->
             ok;
-        {ok, Threshold} when is_integer(Threshold), Threshold > 0 ->
-            _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, [Threshold]]);
-        {ok, _BadVal} ->
-            ok
+        {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
+            _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, Threshold]);
+        {ok, BadVal} ->
+            error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadVal]),
+            throw({error, bad_config})
     end,
 
     Handlers = case application:get_env(lager, handlers) of
