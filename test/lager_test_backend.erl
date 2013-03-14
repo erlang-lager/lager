@@ -889,6 +889,74 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
+            {"webmachine error reports",
+                fun() ->
+                        Path = "/cgi-bin/phpmyadmin",
+                        Reason = {error,{error,{badmatch,{error,timeout}},
+                                        [{myapp,dostuff,2,[{file,"src/myapp.erl"},{line,123}]},
+                                         {webmachine_resource,resource_call,3,[{file,"src/webmachine_resource.erl"},{line,169}]}]}},
+                        sync_error_logger:error_msg("webmachine error: path=~p~n~p~n", [Path, Reason]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Webmachine error at path \"/cgi-bin/phpmyadmin\" : no match of right hand value {error,timeout} in myapp:dostuff/2 line 123", lists:flatten(Msg))
+
+                end
+            },
+            {"Cowboy error reports, 8 arg version",
+             fun() ->
+                        Stack = [{my_handler,init, 3,[{file,"src/my_handler.erl"},{line,123}]},
+                                 {cowboy_handler,handler_init,4,[{file,"src/cowboy_handler.erl"},{line,169}]}],
+
+                        sync_error_logger:error_msg(
+                            "** Cowboy handler ~p terminating in ~p/~p~n"
+                            "   for the reason ~p:~p~n"
+                            "** Options were ~p~n"
+                            "** Request was ~p~n"
+                            "** Stacktrace: ~p~n~n",
+                            [my_handler, init, 3, error, {badmatch, {error, timeout}}, [],
+                             "Request", Stack]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Cowboy handler my_handler terminated in my_handler:init/3 with reason: no match of right hand value {error,timeout} in my_handler:init/3 line 123", lists:flatten(Msg))
+                end
+            },
+            {"Cowboy error reports, 10 arg version",
+             fun() ->
+                        Stack = [{my_handler,somecallback, 3,[{file,"src/my_handler.erl"},{line,123}]},
+                                 {cowboy_handler,handler_init,4,[{file,"src/cowboy_handler.erl"},{line,169}]}],
+                        sync_error_logger:error_msg(
+                            "** Cowboy handler ~p terminating in ~p/~p~n"
+                            "   for the reason ~p:~p~n** Message was ~p~n"
+                            "** Options were ~p~n** Handler state was ~p~n"
+                            "** Request was ~p~n** Stacktrace: ~p~n~n",
+                            [my_handler, somecallback, 3, error, {badmatch, {error, timeout}}, hello, [],
+                             {}, "Request", Stack]),
+
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Cowboy handler my_handler terminated in my_handler:somecallback/3 with reason: no match of right hand value {error,timeout} in my_handler:somecallback/3 line 123", lists:flatten(Msg))
+                end
+            },
+            {"Cowboy error reports, 5 arg version",
+             fun() ->
+                        sync_error_logger:error_msg(
+                            "** Cowboy handler ~p terminating; "
+                            "function ~p/~p was not exported~n"
+                            "** Request was ~p~n** State was ~p~n~n",
+                            [my_handler, to_json, 2, "Request", {}]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Cowboy handler my_handler terminated with reason: call to undefined function my_handler:to_json/2", lists:flatten(Msg))
+                end
+            },
             {"messages should not be generated if they don't satisfy the threshold",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
