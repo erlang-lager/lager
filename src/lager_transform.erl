@@ -89,7 +89,9 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                         {cons, Line, {tuple, Line, [
                                     {atom, Line, node},
                                     {call, Line, {atom, Line, node}, []}]},
-                         {nil, Line}}}}}},
+                        %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
+                        {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}},
+                            %{nil, Line}}}}}}},
             DefaultAttrs = case erlang:get(application) of
                 undefined ->
                     DefaultAttrs0;
@@ -151,7 +153,7 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                         [],
                         %% trick the linter into avoiding a 'term constructed by not used' error:
                         %% (fun() -> {error, lager_not_running} end)();
-                        [{call,9, {'fun',9, {clauses, [{clause,9,[],[], [{tuple,9,[{atom,9,error},{atom,9,lager_not_running}]}]}]}}, []}]},
+                        [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]},
                     %% If we care about the loglevel, or there's any traces installed, we have do more checking
                     %% {Level, Traces} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
                     {clause, Line,

@@ -424,6 +424,33 @@ lager_test_() ->
                         ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
                         ok
                 end
+            },
+            {"metadata in the process dictionary works",
+                fun() ->
+                        lager:md([{platypus, gravid}, {sloth, hirsute}, {duck, erroneous}]),
+                        lager:info("I sing the animal kingdom electric!"),
+                        {_Level, _Time, _Message, Metadata}  = pop(),
+                        ?assertEqual(gravid, proplists:get_value(platypus, Metadata)),
+                        ?assertEqual(hirsute, proplists:get_value(sloth, Metadata)),
+                        ?assertEqual(erroneous, proplists:get_value(duck, Metadata)),
+                        ?assertEqual(undefined, proplists:get_value(eagle, Metadata)),
+                        lager:md([{platypus, gravid}, {sloth, hirsute}, {eagle, superincumbent}]),
+                        lager:info("I sing the animal kingdom dielectric!"),
+                        {_Level2, _Time2, _Message2, Metadata2}  = pop(),
+                        ?assertEqual(gravid, proplists:get_value(platypus, Metadata2)),
+                        ?assertEqual(hirsute, proplists:get_value(sloth, Metadata2)),
+                        ?assertEqual(undefined, proplists:get_value(duck, Metadata2)),
+                        ?assertEqual(superincumbent, proplists:get_value(eagle, Metadata2)),
+                        ok
+                end
+            },
+            {"can't store invalid metadata",
+                fun() ->
+                        ?assertEqual(ok, lager:md([{platypus, gravid}, {sloth, hirsute}, {duck, erroneous}])),
+                        ?assertError(badarg, lager:md({flamboyant, flamingo})),
+                        ?assertError(badarg, lager:md("zookeeper zephyr")),
+                        ok
+                end
             }
         ]
     }.

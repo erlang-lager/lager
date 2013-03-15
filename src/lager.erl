@@ -20,9 +20,12 @@
 
 -include("lager.hrl").
 
+-define(LAGER_MD_KEY, '__lager_metadata').
+
 %% API
 -export([start/0,
         log/3, log/4,
+        md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
@@ -51,6 +54,31 @@ start_ok(App, {error, {not_started, Dep}}) ->
 start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
+%% @doc Get lager metadata for current process
+-spec md() -> [{atom(), any()}].
+md() ->
+    case erlang:get(?LAGER_MD_KEY) of
+        undefined -> [];
+        MD -> MD
+    end.
+
+%% @doc Set lager metadata for current process.
+%% Will badarg if you don't supply a list of {key, value} tuples keyed by atoms.
+-spec md([{atom(), any()},...]) -> ok.
+md(NewMD) when is_list(NewMD) ->
+    %% make sure its actually a real proplist
+    case lists:all(
+            fun({Key, _Value}) when is_atom(Key) -> true;
+                (_) -> false
+            end, NewMD) of
+        true ->
+            erlang:put(?LAGER_MD_KEY, NewMD),
+            ok;
+        false ->
+            erlang:error(badarg)
+    end;
+md(_) ->
+    erlang:error(badarg).
 
 -spec dispatch_log(log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
 %% this is the same check that the parse transform bakes into the module at compile time
