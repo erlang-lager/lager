@@ -39,7 +39,7 @@
         %% how many messages we've received this second
         mps = 0 :: non_neg_integer(),
         %% the current second
-        lasttime = os:timestamp() :: os:timestamp(),
+        lasttime = os:timestamp() :: erlang:timestamp(),
         %% count of dropped messages this second
         dropped = 0 :: non_neg_integer()
     }).
@@ -73,7 +73,7 @@
 set_high_water(N) ->
     gen_event:call(error_logger, ?MODULE, {set_high_water, N}, infinity).
 
--spec init(any()) -> {ok, {}}.
+-spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark]) ->
     {ok, #state{hwm=HighWaterMark}}.
 
