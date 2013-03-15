@@ -135,9 +135,9 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
             end,
             %% Generate some unique variable names so we don't accidentaly export from case clauses.
             %% Note that these are not actual atoms, but the AST treats variable names as atoms.
-            LevelVar = list_to_atom("__Level" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
-            TracesVar = list_to_atom("__Traces" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
-            PidVar = list_to_atom("__Pid" ++ atom_to_list(get(module)) ++ integer_to_list(Line)),
+            LevelVar = make_varname("__Level", Line),
+            TracesVar = make_varname("__Traces", Line),
+            PidVar = make_varname("__Pid", Line),
             %% Wrap the call to lager_dispatch log in a case that will avoid doing any work if this message is not elegible for logging
             %% case  {whereis(lager_event(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
             {'case', Line,
@@ -197,6 +197,9 @@ transform_statement(Stmt) when is_list(Stmt) ->
     [transform_statement(S) || S <- Stmt];
 transform_statement(Stmt) ->
     Stmt.
+
+make_varname(Prefix, Line) ->
+    list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(Line)).
 
 %% concat 2 list ASTs by replacing the terminating [] in A with the contents of B
 concat_lists({var, Line, _Name}=Var, B) ->
