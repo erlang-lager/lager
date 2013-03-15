@@ -27,7 +27,7 @@
         clear_all_traces/0, stop_trace/1, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
-        safe_format/3, safe_format_chop/3,dispatch_log/5,dispatch_log/9,pr/2]).
+        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, do_log/9, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -53,45 +53,45 @@ start_ok(App, {error, Reason}) ->
 
 
 -spec dispatch_log(log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
+%% this is the same check that the parse transform bakes into the module at compile time
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
-    case whereis(lager_event) of
-        undefined ->
-            %% lager isn't running
+    SeverityAsInt=lager_util:level_to_num(Severity),
+    case {whereis(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
+        {undefined, _} ->
             {error, lager_not_running};
-        Pid ->
-            {LevelThreshold,TraceFilters} = lager_config:get(loglevel,{?LOG_NONE,[]}),
-            SeverityAsInt=lager_util:level_to_num(Severity),
-            case (LevelThreshold band SeverityAsInt) /= 0 orelse TraceFilters /= [] of
-                true ->
-                    Destinations = case TraceFilters of
-                        [] ->
-                            [];
-                        _ ->
-                            lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
-                    end,
-                    case (LevelThreshold band SeverityAsInt) /= 0 orelse Destinations /= [] of
-                        true ->
-                            Timestamp = lager_util:format_time(),
-                            Msg = case Args of
-                                A when is_list(A) ->
-                                    safe_format_chop(Format,Args,Size);
-                                _ ->
-                                    Format
-                            end,
-                            LagerMsg = lager_msg:new(Msg, Timestamp,
-                                Severity, Metadata, Destinations),
-                            case lager_config:get(async, false) of
-                                true ->
-                                    gen_event:notify(Pid, {log, LagerMsg});
-                                false ->
-                                    gen_event:sync_notify(Pid, {log, LagerMsg})
-                            end;
-                        false ->
-                            ok
-                    end;
+        {Pid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+            do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Pid);
+        _ ->
+            ok
+    end.
+
+%% @private Should only be called externally from code generated from the parse transform
+do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Pid) when is_atom(Severity) ->
+    Destinations = case TraceFilters of
+        [] ->
+            [];
+        _ ->
+            lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
+    end,
+    case (LevelThreshold band SeverityAsInt) /= 0 orelse Destinations /= [] of
+        true ->
+            Timestamp = lager_util:format_time(),
+            Msg = case Args of
+                A when is_list(A) ->
+                    safe_format_chop(Format,Args,Size);
                 _ ->
-                    ok
-            end
+                    Format
+            end,
+            LagerMsg = lager_msg:new(Msg, Timestamp,
+                Severity, Metadata, Destinations),
+            case lager_config:get(async, false) of
+                true ->
+                    gen_event:notify(Pid, {log, LagerMsg});
+                false ->
+                    gen_event:sync_notify(Pid, {log, LagerMsg})
+            end;
+        false ->
+            ok
     end.
 
 %% backwards compatible with beams compiled with lager 1.x
