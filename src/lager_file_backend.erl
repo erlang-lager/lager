@@ -145,7 +145,7 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
             write(State, Level, Msg);
         {ok, {NewFD, NewInode, _}} ->
             %% delayed_write doesn't report errors
-            _ = file:write(NewFD, Msg),
+            _ = file_write(NewFD, Msg),
             case Level of
                 _ when Level =< ?ERROR ->
                     %% force a sync on any message at error severity or above
@@ -232,6 +232,11 @@ schedule_rotation(_, undefined) ->
 schedule_rotation(Name, Date) ->
     erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}),
     ok.
+
+file_write(Fd, Msg) when is_list(Msg) ->
+    file:write(Fd, unicode:characters_to_binary(Msg));
+file_write(Fd, Msg) ->
+    file:write(Fd, Msg).
 
 -ifdef(TEST).
 
