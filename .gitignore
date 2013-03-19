@@ -5,3 +5,4 @@ doc
 *.swp
 erl_crash.dump
 .project
+log

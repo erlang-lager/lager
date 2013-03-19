@@ -78,11 +78,11 @@ start(_StartType, _StartArgs) ->
             {ok, false} ->
                 [];
             _ ->
-                case application:get_env(lager, error_logger_whitelist) of
+                WhiteList = case application:get_env(lager, error_logger_whitelist) of
                     undefined ->
-                        WhiteList = [];
-                    {ok, WhiteList} ->
-                        WhiteList
+                        [];
+                    {ok, WhiteList0} ->
+                        WhiteList0
                 end,
 
                 case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark]]) of
