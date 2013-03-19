@@ -20,7 +20,7 @@
 
 -export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
-        localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
+        localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
 
 -ifdef(TEST).
@@ -124,8 +124,10 @@ open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
         ok ->
             Options = [append, raw] ++
-            if Buffer == true -> [delayed_write];
-                true -> []
+            case  Buffer of
+                {Size, Interval} when is_integer(Interval), Interval >= 0, is_integer(Size), Size >= 0 ->
+                    [{delayed_write, Size, Interval}];
+                _ -> []
             end,
             case file:open(Name, Options) of
                 {ok, FD} ->
@@ -175,9 +177,14 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
 
 %% returns localtime with milliseconds included
 localtime_ms() ->
-    {_, _, Micro} = Now = os:timestamp(),
+    Now = os:timestamp(),
+    localtime_ms(Now).
+
+localtime_ms(Now) ->
+    {_, _, Micro} = Now,
     {Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
     {Date, {Hours, Minutes, Seconds, Micro div 1000 rem 1000}}.
+
 
 maybe_utc({Date, {H, M, S, Ms}}) ->
     case lager_stdlib:maybe_utc({Date, {H, M, S}}) of
@@ -558,11 +565,11 @@ check_trace_test() ->
 
 is_loggable_test_() ->
     [
-        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], []),2,me))},
-        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], []),1,me))},
-        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], [you]),2,me))},
-        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], [you]),1,me))},
-        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("",{"",""}, critical, [], [me]),1,me))}
+        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("", alert, [], []),2,me))},
+        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("", critical, [], []),1,me))},
+        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("", alert, [], [you]),2,me))},
+        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("", critical, [], [you]),1,me))},
+        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("", critical, [], [me]),1,me))}
     ].
 
 format_time_test_() ->

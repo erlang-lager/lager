@@ -1,8 +1,9 @@
 -module(lager_msg).
 
--export([new/5]).
+-export([new/4, new/5]).
 -export([message/1]).
 -export([timestamp/1]).
+-export([datetime/1]).
 -export([severity/1]).
 -export([severity_as_int/1]).
 -export([metadata/1]).
@@ -12,17 +13,25 @@
         destinations :: list(),
         metadata :: [tuple()],
         severity :: lager:log_level(),
-        timestamp :: {string(), string()},
+        datetime :: {string(), string()},
+        timestamp :: erlang:datetime(),
         message :: list()
     }).
 
 -opaque lager_msg() :: #lager_msg{}.
 -export_type([lager_msg/0]).
 
--spec new(list(), {string(), string()}, atom(), [tuple()], list()) -> lager_msg().
+%% create with provided timestamp, handy for testing mostly
+-spec new(list(), erlang:timestamp(), lager:log_level(), [tuple()], list()) -> lager_msg().
 new(Msg, Timestamp, Severity, Metadata, Destinations) ->
-    #lager_msg{message=Msg, timestamp=Timestamp, severity=Severity,
+    {Date, Time} = lager_util:format_time(lager_util:maybe_utc(lager_util:localtime_ms(Timestamp))),
+    #lager_msg{message=Msg, datetime={Date, Time}, timestamp=Timestamp, severity=Severity,
         metadata=Metadata, destinations=Destinations}.
+
+-spec new(list(), lager:log_level(), [tuple()], list()) -> lager_msg().
+new(Msg, Severity, Metadata, Destinations) ->
+    Now = os:timestamp(),
+    new(Msg, Now, Severity, Metadata, Destinations).
 
 -spec message(lager_msg()) -> list().
 message(Msg) ->
@@ -31,6 +40,10 @@ message(Msg) ->
 -spec timestamp(lager_msg()) -> {string(), string()}.
 timestamp(Msg) ->
     Msg#lager_msg.timestamp.
+
+-spec datetime(lager_msg()) -> calendar:datetime().
+datetime(Msg) ->
+    Msg#lager_msg.datetime.
 
 -spec severity(lager_msg()) -> lager:log_level().
 severity(Msg) ->

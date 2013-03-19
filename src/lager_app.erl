@@ -104,31 +104,35 @@ stop(Handlers) ->
 
 expand_handlers([]) ->
     [];
+expand_handlers([{lager_file_backend, [{Key, _Value}|_]=Config}|T]) when is_atom(Key) ->
+    %% this is definitely a new-style config, no expansion needed
+    [maybe_make_handler_id(lager_file_backend, Config) | expand_handlers(T)];
 expand_handlers([{lager_file_backend, Configs}|T]) ->
+    ?INT_LOG(notice, "Deprecated lager_file_backend config detected, please consider updating it", []),
     [ {lager_file_backend:config_to_id(Config), Config} || Config <- Configs] ++
       expand_handlers(T);
 expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
+    [maybe_make_handler_id(Mod, Config) | expand_handlers(T)];
+expand_handlers([H|T]) ->
+    [H | expand_handlers(T)].
+
+maybe_make_handler_id(Mod, Config) ->
     %% Allow the backend to generate a gen_event handler id, if it wants to.
     %% We don't use erlang:function_exported here because that requires the module 
     %% already be loaded, which is unlikely at this phase of startup. Using code:load
     %% caused undesireable side-effects with generating code-coverage reports.
-    Res = try Mod:config_to_id(Config) of
+    try Mod:config_to_id(Config) of
         Id ->
             {Id, Config}
     catch
-        _:_ ->
+        error:undef ->
             {Mod, Config}
-    end,
-    [Res | expand_handlers(T)];
-expand_handlers([H|T]) ->
-    [H | expand_handlers(T)].
-
-
-
+    end.
 
 -ifdef(TEST).
 application_config_mangling_test_() ->
-    [{"Explode the file backend handlers",
+    [
+        {"Explode the file backend handlers",
             ?_assertMatch(
                 [{lager_console_backend, info},
                     {{lager_file_backend,"error.log"},{"error.log",error,10485760, "$D0",5}},
@@ -139,7 +143,21 @@ application_config_mangling_test_() ->
                                 {"error.log", error, 10485760, "$D0", 5},
                                 {"console.log", info, 10485760, "$D0", 5}
                             ]}]
-                ))},
+                ))
+        },
+        {"Explode the short form of backend file handlers",
+            ?_assertMatch(
+                [{lager_console_backend, info},
+                    {{lager_file_backend,"error.log"},{"error.log",error}},
+                    {{lager_file_backend,"console.log"},{"console.log",info}}
+                ],
+                expand_handlers([{lager_console_backend, info},
+                        {lager_file_backend, [
+                                {"error.log", error},
+                                {"console.log", info}
+                            ]}]
+                ))
+        },
         {"Explode with formatter info",
             ?_assertMatch(
                 [{{lager_file_backend,"test.log"},  [{"test.log", debug, 10485760, "$D0", 5},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]},
@@ -150,5 +168,30 @@ application_config_mangling_test_() ->
                             ]
                         }])
             )
-        }].
+        },
+        {"Explode short form with short formatter info",
+            ?_assertMatch(
+                [{{lager_file_backend,"test.log"},  [{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]},
+                    {{lager_file_backend,"test2.log"}, [{"test2.log",debug},{lager_default_formatter}]}],
+                expand_handlers([{lager_file_backend, [
+                                [{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}],
+                                [{"test2.log",debug},{lager_default_formatter}]
+                            ]
+                        }])
+            )
+        },
+        {"New form needs no expansion",
+            ?_assertMatch([
+                    {{lager_file_backend,"test.log"},  [{file, "test.log"}]},
+                    {{lager_file_backend,"test2.log"}, [{file, "test2.log"}, {level, info}, {sync_on, none}]},
+                    {{lager_file_backend,"test3.log"}, [{formatter, lager_default_formatter}, {file, "test3.log"}]}
+                ],
+                expand_handlers([
+                        {lager_file_backend, [{file, "test.log"}]},
+                        {lager_file_backend, [{file, "test2.log"}, {level, info}, {sync_on, none}]},
+                        {lager_file_backend, [{formatter, lager_default_formatter},{file, "test3.log"}]}
+                    ])
+            )
+        }
+    ].
 -endif.
