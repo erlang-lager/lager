@@ -27,7 +27,7 @@
 %%
 %% Exported Functions
 %%
--export([format/2]).
+-export([format/2, format/3]).
 
 %%
 %% API Functions
@@ -53,22 +53,28 @@
 %%
 %%    `[{pid, ["My pid is ", pid], "Unknown Pid"}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
 %% @end
--spec format(lager_msg:lager_msg(),list()) -> any().
-format(Msg,[]) ->
-    format(Msg, [{eol, "\n"}]);
-format(Msg,[{eol, EOL}]) ->
+-spec format(lager_msg:lager_msg(),list(),list()) -> any().
+format(Msg,[], Colors) ->
+    format(Msg, [{eol, "\n"}], Colors);
+format(Msg,[{eol, EOL}], Colors) ->
     format(Msg,
-        [date, " ", time, " [", severity, "] ",
+        [date, " ", time, " ", color, "[", severity, "] ",
             {pid, ""},
             {module, [
                     {pid, ["@"], ""},
                     module,
                     {function, [":", function], ""},
                     {line, [":",line], ""}], ""},
-            " ", message, EOL]);
-format(Message,Config) ->
-    [ output(V,Message) || V <- Config ].
+            " ", message, EOL], Colors);
+format(Message,Config,Colors) ->
+    [ case V of
+        color -> output_color(Message,Colors);
+        _ -> output(V,Message) 
+      end || V <- Config ].
 
+-spec format(lager_msg:lager_msg(),list()) -> any().
+format(Msg, Config) ->
+    format(Msg, Config, []).
 
 -spec output(term(),lager_msg:lager_msg()) -> iolist().
 output(message,Msg) -> lager_msg:message(Msg);
@@ -96,6 +102,14 @@ output({Prop, Present, Absent}, Msg) when is_atom(Prop) ->
             [ output(V, Msg) || V <- Present]
     end;
 output(Other,_) -> make_printable(Other).
+
+output_color(_Msg,[]) -> [];
+output_color(Msg,Colors) ->
+    Level = lager_msg:severity(Msg),
+    case lists:keyfind(Level, 1, Colors) of
+        {_, Color} -> Color;
+        _ -> []
+    end.
 
 -spec make_printable(any()) -> iolist().
 make_printable(A) when is_atom(A) -> atom_to_list(A);
