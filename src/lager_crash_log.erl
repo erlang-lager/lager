@@ -206,8 +206,8 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                         lager_stdlib:maybe_utc(erlang:localtime())),
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),
-                    Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
-                    case file:write(NewFD, Msg) of
+                    Msg = io_lib:format("~s~ts~s", [Time, MsgStr, NodeSuffix]),
+                    case file_write(NewFD, Msg) of
                         {error, Reason} when Flap == false ->
                             ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
                                 [Name, file:format_error(Reason)]),
@@ -229,6 +229,10 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
             end
     end.
 
+file_write(Fd, Msg) when is_list(Msg) ->
+    file:write(Fd, unicode:characters_to_binary(Msg));
+file_write(Fd, Msg) ->
+    file:write(Fd, Msg).
 
 -ifdef(TEST).
 
