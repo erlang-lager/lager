@@ -16,6 +16,7 @@
 
 
 -define(DEFAULT_TRUNCATION, 4096).
+-define(DEFAULT_TRACER, lager_default_tracer).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
