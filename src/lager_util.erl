@@ -21,7 +21,7 @@
 -export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
+        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3, trace_all/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -343,23 +343,22 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
     NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
     calculate_next_rotation(T, NewNow).
 
-validate_trace({Filter, Level, {Destination, ID}}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
+validate_trace({Filter, Level, {Destination, ID}}) when is_tuple(Filter); is_list(Filter), is_atom(Level), is_atom(Destination) ->
     case validate_trace({Filter, Level, Destination}) of
         {ok, {F, L, D}} ->
             {ok, {F, L, {D, ID}}};
         Error ->
             Error
     end;
-validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
+validate_trace({Filter, Level, Destination}) when is_tuple(Filter); is_list(Filter), is_atom(Level), is_atom(Destination) ->
+    ValidFilter = validate_trace_filter(Filter),
     try config_to_mask(Level) of
+        _ when not ValidFilter ->
+            {error, invalid_trace};
+        L when is_list(Filter)  ->
+            {ok, {glc_lib:reduce(trace_all(Filter)), L, Destination}};
         L ->
-            case lists:all(fun({Key, _Value}) when is_atom(Key) -> true; (_) ->
-                            false end, Filter) of
-                true ->
-                    {ok, {Filter, L, Destination}};
-                _ ->
-                    {error, invalid_filter}
-            end
+            {ok, {glc_lib:reduce(Filter), L, Destination}}
     catch
         _:_ ->
             {error, invalid_level}
@@ -367,6 +366,43 @@ validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level
 validate_trace(_) ->
     {error, invalid_trace}.
 
+validate_trace_filter(Filter) when is_tuple(Filter), is_atom(element(1, Filter)) =:= false ->
+    false;
+validate_trace_filter(Filter) ->
+        case lists:all(fun({Key, _Value}) when is_atom(Key) -> true; 
+                          ({Key, _Op, _Value}) when is_atom(Key) -> true;
+                          (_) -> false end, Filter) of
+            true ->
+                true;
+            _ ->
+                false
+        end.
+
+trace_all(Query) -> 
+	glc:all(trace_acc(Query)).
+
+%% unused, since adding multiple traces is basically the same thing
+%trace_any(Query) -> 
+%	glc:any(trace_acc(Query)).
+
+trace_acc(Query) ->
+    trace_acc(Query, []).
+
+trace_acc([], Acc) -> 
+	lists:reverse(Acc);
+trace_acc([{Key, '*'}|T], Acc) ->
+	trace_acc(T, [glc:wc(Key, undefined)|Acc]);
+trace_acc([{Key, Val}|T], Acc) ->
+	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+trace_acc([{Key, '=', Val}|T], Acc) ->
+	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+trace_acc([{Key, '>', Val}|T], Acc) ->
+	trace_acc(T, [glc:gt(Key, Val)|Acc]);
+trace_acc([{Key, '<', Val}|T], Acc) ->
+	trace_acc(T, [glc:lt(Key, Val)|Acc]);
+trace_acc([{Key, '*', Val}|T], Acc) ->
+	trace_acc(T, [glc:wc(Key, Val)|Acc]).
+	
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
@@ -377,24 +413,16 @@ check_traces(Attrs, Level, [{Filter, _, _}|Flows], Acc) when length(Attrs) < len
 check_traces(Attrs, Level, [Flow|Flows], Acc) ->
     check_traces(Attrs, Level, Flows, [check_trace(Attrs, Flow)|Acc]).
 
-check_trace(Attrs, {Filter, _Level, Dest}) ->
-    case check_trace_iter(Attrs, Filter) of
-        true ->
-            Dest;
-        false ->
-            []
-    end.
+check_trace(Attrs, {Filter, _Level, Dest}) when is_list(Filter) ->
+    check_trace(Attrs, {trace_all(Filter), _Level, Dest});
 
-check_trace_iter(_, []) ->
-    true;
-check_trace_iter(Attrs, [{Key, Match}|T]) ->
-    case lists:keyfind(Key, 1, Attrs) of
-        {Key, _} when Match == '*' ->
-            check_trace_iter(Attrs, T);
-        {Key, Match} ->
-            check_trace_iter(Attrs, T);
-        _ ->
-            false
+check_trace(Attrs, {Filter, _Level, Dest}) when is_tuple(Filter) ->
+    Match = glc_lib:matches(Filter, gre:make(Attrs, [list])),
+    case Match of
+	true ->
+	    Dest;
+	false ->
+	    []
     end.
 
 -spec is_loggable(lager_msg:lager_msg(), non_neg_integer()|{'mask', non_neg_integer()}, term()) -> boolean().
