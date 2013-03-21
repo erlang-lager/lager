@@ -168,6 +168,21 @@ trace_file(File, Filter, Level) ->
             Error
     end.
 
+filter(Query) ->
+    filter(?DEFAULT_TRACER, Query).
+
+%% TODO: Support multiple trace modules 
+filter(Module, Query) when Query == none; Query == [] ->
+    filter(Module, glc:null(true));
+filter(Module, Query) when is_list(Query) ->
+    filter(Module, lager_util:trace_all(Query));
+filter(Module, Query) ->
+    {ok, _} = glc:compile(Module, Query).
+        %glc:with(Query, 
+        %    fun(Event) ->
+        %        gen_event:sync_notify(gre:fetch(notify_pid, Event), 
+	%		{log, gre:fetch(log, Event)})
+        %    end)).
 trace_console(Filter) ->
     trace_console(Filter, debug).
 
@@ -190,6 +205,7 @@ trace(Backend, Filter, Level) ->
 stop_trace({_Filter, _Level, Target} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
+    filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
     lager_config:set(loglevel, {Level, NewTraces}),
     case get_loglevel(Target) of
@@ -208,6 +224,7 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
 
 clear_all_traces() ->
     {Level, _Traces} = lager_config:get(loglevel),
+    filter(none),
     lager_config:set(loglevel, {Level, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
@@ -295,6 +312,7 @@ add_trace_to_loglevel_config(Trace) ->
     {MinLevel, Traces} = lager_config:get(loglevel),
     case lists:member(Trace, Traces) of
         false ->
+            filter(element(1, Trace)),
             lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
         _ ->
             ok

@@ -353,6 +353,25 @@ lager_test_() ->
                         ok
                 end
             },
+            {"tracing works with custom attributes and event stream processing",
+                fun() ->
+                        lager:set_loglevel(?MODULE, error),
+                        ?assertEqual({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get(loglevel)),
+                        lager_config:set(loglevel, {element(2, lager_util:config_to_mask(error)), []}),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(0, count()),
+                        lager:trace(?MODULE, [{requestid, '>', 5}, {requestid, '<', 7}, {foo, bar}], debug),
+                        lager:info([{requestid, 6}, {foo, bar}], "hello world"),
+                        ?assertEqual(1, count()),
+                        lager:trace(?MODULE, [{requestid, '*'}], debug),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(2, count()),
+                        lager:clear_all_traces(),
+                        lager:info([{requestid, 6}], "hello world"),
+                        ?assertEqual(2, count()),
+                        ok
+                end
+            },
             {"tracing honors loglevel",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
