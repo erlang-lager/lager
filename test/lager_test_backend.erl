@@ -69,7 +69,7 @@ handle_event({log, Msg},
         true ->
             {ok, State#state{buffer=Buffer ++
                              [{lager_msg:severity_as_int(Msg),
-                               lager_msg:timestamp(Msg),
+                               lager_msg:datetime(Msg),
                                lager_msg:message(Msg), lager_msg:metadata(Msg)}]}};
         _ ->
             {ok, State#state{ignored=Ignored ++ [ignored]}}

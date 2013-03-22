@@ -79,10 +79,10 @@ format(Msg, Config) ->
 -spec output(term(),lager_msg:lager_msg()) -> iolist().
 output(message,Msg) -> lager_msg:message(Msg);
 output(date,Msg) ->
-    {D, _T} = lager_msg:timestamp(Msg),
+    {D, _T} = lager_msg:datetime(Msg),
     D;
 output(time,Msg) ->
-    {_D, T} = lager_msg:timestamp(Msg),
+    {_D, T} = lager_msg:datetime(Msg),
     T;
 output(severity,Msg) ->
     atom_to_list(lager_msg:severity(Msg));
@@ -129,11 +129,17 @@ get_metadata(Key, Metadata, Default) ->
     end.
 
 -ifdef(TEST).
+date_time_now() ->
+    Now = os:timestamp(),
+    {Date, Time} = lager_util:format_time(lager_util:maybe_utc(lager_util:localtime_ms(Now))),
+    {Date, Time, Now}.
+
 basic_test_() ->
+    {Date, Time, Now} = date_time_now(),
     [{"Default formatting test",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time,  " [error] ", pid_to_list(self()), " Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -142,16 +148,16 @@ basic_test_() ->
         {"Basic Formatting",
             ?_assertEqual(<<"Simplist Format">>,
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
                         ["Simplist Format"])))
         },
         {"Default equivalent formatting test",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] ", pid_to_list(self()), " Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -159,9 +165,9 @@ basic_test_() ->
                     )))
         },
         {"Non existant metadata can default to string",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -169,9 +175,9 @@ basic_test_() ->
                     )))
         },
         {"Non existant metadata can default to other metadata",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, "Fallback"}],
                             []),
