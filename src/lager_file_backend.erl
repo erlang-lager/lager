@@ -175,7 +175,7 @@ config_to_id(Config) ->
 
 write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
         count=Count} = State, Timestamp, Level, Msg) ->
-    LastCheck = timer:now_diff(os:timestamp(), Timestamp) div 1000,
+    LastCheck = timer:now_diff(Timestamp, State#state.last_check) div 1000,
     case LastCheck >= State#state.check_interval orelse FD == undefined of
         true ->
             %% need to check for rotation
