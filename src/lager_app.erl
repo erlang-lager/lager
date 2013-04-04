@@ -39,6 +39,8 @@ start(_StartType, _StartArgs) ->
     case application:get_env(lager, async_threshold) of
         undefined ->
             ok;
+        {ok, undefined} ->
+            undefined;
         {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
             _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, Threshold]),
             ok;
@@ -64,6 +66,8 @@ start(_StartType, _StartArgs) ->
     lager:update_loglevel_config(),
 
     HighWaterMark = case application:get_env(lager, error_logger_hwm) of
+        {ok, undefined} ->
+            undefined;
         {ok, HwmVal} when is_integer(HwmVal), HwmVal > 0 ->
             HwmVal;
         {ok, BadVal} ->
