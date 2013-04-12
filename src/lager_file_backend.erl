@@ -413,6 +413,17 @@ filesystem_test_() ->
                         ?assertMatch([_, _, "[error]", Pid,  [228,184,173,230,150,135,230,181,139,232,175,149, $\n]], re:split(Bin, " ", [{return, list}, {parts, 5}]))
                 end
             },
+            {"don't choke on latin-1",
+                fun() ->
+                        %% XXX if this test fails, check that this file is encoded latin-1, not utf-8!
+                        gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}, {lager_default_formatter}]),
+                        lager:log(error, self(),"~ts", ["LÆÝÎN-ï"]),
+                        {ok, Bin} = file:read_file("test.log"),
+                        Pid = pid_to_list(self()),
+                        Res = re:split(Bin, " ", [{return, list}, {parts, 5}]),
+                        ?assertMatch([_, _, "[error]", Pid,  [76,195,134,195,157,195,142,78,45,195,175,$\n]], Res)
+                end
+            },
             {"file can't be opened on startup triggers an error message",
                 fun() ->
                         {ok, FInfo} = file:read_file_info("test.log"),
