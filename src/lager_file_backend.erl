@@ -17,14 +17,16 @@
 %% @doc File backend for lager, with multiple file support.
 %% Multiple files are supported, each with the path and the loglevel being
 %% configurable. The configuration paramter for this backend is a list of
-%% 5-tuples of the form
-%% `{FileName, Level, RotationSize, RotationDate, RotationCount}'.
+%% key-value 2-tuples. See the init() function for the available options.
 %% This backend supports external and internal log
 %% rotation and will re-open handles to files if the inode changes. It will
 %% also rotate the files itself if the size of the file exceeds the
-%% `RotationSize' and keep `RotationCount' rotated files. `RotationDate' is
+%% `size' and keep `count' rotated files. `date' is
 %% an alternate rotation trigger, based on time. See the README for
 %% documentation.
+%% For performance, the file backend does delayed writes, although it will
+%% sync at specific log levels, configured via the `sync_on' option. By default
+%% the error level or above will trigger a sync.
 
 -module(lager_file_backend).
 
@@ -70,8 +72,14 @@
         last_check = os:timestamp()
     }).
 
-%% @private
--spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
+-type option() :: {file, string()} | {level, lager:log_level()} |
+                  {size, non_neg_integer()} | {date, string()} |
+                  {count, non_neg_integer()} | {sync_interval, non_neg_integer()} |
+                  {sync_size, non_neg_integer()} | {sync_on, lager:log_level()} |
+                  {check_interval, non_neg_integer()} | {formatter, atom()} |
+                  {formatter_config, term()}.
+
+-spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack
     init([{file, FileName}, {level, LogLevel}]);
@@ -91,7 +99,7 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
     case validate_logfile_proplist(LogFileConfig) of
         false ->
             %% falied to validate config
-            ignore;
+            {error, bad_config};
         Config ->
             %% probabably a better way to do this, but whatever
             [Name, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
@@ -155,7 +163,7 @@ terminate(_Reason, #state{fd=FD}) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% convert the config into a gen_event handler ID
+%% @private convert the config into a gen_event handler ID
 config_to_id({Name,_Severity}) when is_list(Name) ->
     {?MODULE, Name};
 config_to_id({Name,_Severity,_Size,_Rotation,_Count}) ->
