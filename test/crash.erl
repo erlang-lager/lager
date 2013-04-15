@@ -63,7 +63,8 @@ handle_call(badarith, _, State) ->
     Res = 1 / length(tuple_to_list(State)),
     {reply, Res, State};
 handle_call(badarg1, _, State) ->
-    Res = list_to_binary(["foo", bar]),
+    Arg = (fun() -> ["foo", bar] end)(),
+    Res = list_to_binary(Arg),
     {reply, Res, State};
 handle_call(badarg2, _, State) ->
     Res = erlang:iolist_to_binary(["foo", bar]),
