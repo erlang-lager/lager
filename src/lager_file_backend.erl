@@ -71,7 +71,7 @@
     }).
 
 %% @private
--spec init([{string(), lager:log_level()},...]) -> {ok, #state{}}.
+-spec init([{atom(), lager:log_level()},...]) -> {ok, #state{}}.
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack
     init([{file, FileName}, {level, LogLevel}]);

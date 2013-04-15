@@ -14,7 +14,7 @@
         metadata :: [tuple()],
         severity :: lager:log_level(),
         datetime :: {string(), string()},
-        timestamp :: erlang:datetime(),
+        timestamp :: erlang:timestamp(),
         message :: list()
     }).
 
@@ -37,11 +37,11 @@ new(Msg, Severity, Metadata, Destinations) ->
 message(Msg) ->
     Msg#lager_msg.message.
 
--spec timestamp(lager_msg()) -> {string(), string()}.
+-spec timestamp(lager_msg()) -> erlang:timestamp().
 timestamp(Msg) ->
     Msg#lager_msg.timestamp.
 
--spec datetime(lager_msg()) -> calendar:datetime().
+-spec datetime(lager_msg()) -> {string(), string()}.
 datetime(Msg) ->
     Msg#lager_msg.datetime.
 
