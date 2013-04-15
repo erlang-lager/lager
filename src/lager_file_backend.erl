@@ -355,27 +355,91 @@ get_loglevel_test() ->
         #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0}),
     ?assertEqual(Level2, lager_util:config_to_mask(warning)).
 
-rotation_test() ->
-    SyncLevel = validate_loglevel(?DEFAULT_SYNC_LEVEL),
-    SyncSize = ?DEFAULT_SYNC_SIZE,
-    SyncInterval = ?DEFAULT_SYNC_INTERVAL,
-    CheckInterval = 0, %% hard to test delayed mode
-    {ok, {FD, Inode, _}} = lager_util:open_logfile("test.log", {SyncSize, SyncInterval}),
-    State0 = #state{name="test.log", level=?DEBUG, fd=FD, inode=Inode, sync_on=SyncLevel,
-        sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval},
-    ?assertMatch(#state{name="test.log", level=?DEBUG, fd=FD, inode=Inode},
-        write(State0, os:timestamp(), ?DEBUG, "hello world")),
-    file:delete("test.log"),
-    Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
-    %% assert file has changed
-    ?assert(#state{name="test.log", level=?DEBUG, fd=FD, inode=Inode} =/= Result),
-    ?assertMatch(#state{name="test.log", level=?DEBUG}, Result),
-    file:rename("test.log", "test.log.1"),
-    Result2 = write(Result, os:timestamp(), ?DEBUG, "hello world"),
-    %% assert file has changed
-    ?assert(Result =/= Result2),
-    ?assertMatch(#state{name="test.log", level=?DEBUG}, Result2),
-    ok.
+rotation_test_() ->
+    {foreach,
+     fun() ->
+             [file:delete(F)||F <- filelib:wildcard("test.log*")],
+             SyncLevel = validate_loglevel(?DEFAULT_SYNC_LEVEL),
+             SyncSize = ?DEFAULT_SYNC_SIZE,
+             SyncInterval = ?DEFAULT_SYNC_INTERVAL,
+             CheckInterval = 0, %% hard to test delayed mode
+
+             #state{name="test.log", level=?DEBUG, sync_on=SyncLevel,
+                    sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval}
+
+     end,
+     fun(_) ->
+             [file:delete(F)||F <- filelib:wildcard("test.log*")]
+     end,
+     [fun(DefaultState = #state{sync_size=SyncSize, sync_interval = SyncInterval}) ->
+          {"External rotation should work",
+           fun() ->
+                   {ok, {FD, Inode, _}} = lager_util:open_logfile("test.log", {SyncSize, SyncInterval}),
+                   State0 = DefaultState#state{fd=FD, inode=Inode},
+                   ?assertMatch(#state{name="test.log", level=?DEBUG, fd=FD, inode=Inode},
+                                write(State0, os:timestamp(), ?DEBUG, "hello world")),
+                   file:delete("test.log"),
+                   Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                   %% assert file has changed
+                   ?assert(#state{name="test.log", level=?DEBUG, fd=FD, inode=Inode} =/= Result),
+                   ?assertMatch(#state{name="test.log", level=?DEBUG}, Result),
+                   file:rename("test.log", "test.log.1"),
+                   Result2 = write(Result, os:timestamp(), ?DEBUG, "hello world"),
+                   %% assert file has changed
+                   ?assert(Result =/= Result2),
+                   ?assertMatch(#state{name="test.log", level=?DEBUG}, Result2),
+                   ok
+           end}
+      end,
+      fun(DefaultState = #state{sync_size=SyncSize, sync_interval = SyncInterval}) ->
+          {"Internal rotation and delayed write",
+           fun() ->
+                   CheckInterval = 3000, % 3 sec
+                   RotationSize = 15,
+                   PreviousCheck = os:timestamp(),
+
+                   {ok, {FD, Inode, _}} = lager_util:open_logfile("test.log", {SyncSize, SyncInterval}),
+                   State0 = DefaultState#state{
+                              fd=FD, inode=Inode, size=RotationSize,
+                              check_interval=CheckInterval, last_check=PreviousCheck},
+
+                   %% new message within check interval with sync_on level
+                   Msg1Timestamp = add_secs(PreviousCheck, 1),
+                   State0 = State1 = write(State0, Msg1Timestamp, ?ERROR, "big big message 1"),
+
+                   %% new message within check interval under sync_on level
+                   %% not written to disk yet
+                   Msg2Timestamp = add_secs(PreviousCheck, 2),
+                   State0 = State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
+
+                   %% although file size is big enough...
+                   {ok, FInfo} = file:read_file_info("test.log"),
+                   ?assert(RotationSize < FInfo#file_info.size),
+                   %% ...no rotation yet
+                   ?assertEqual(PreviousCheck, State2#state.last_check),
+                   ?assertNot(filelib:is_regular("test.log.0")),
+
+                   %% new message after check interval
+                   Msg3Timestamp = add_secs(PreviousCheck, 4),
+                   _State3 = write(State2, Msg3Timestamp, ?DEBUG, "message 3"),
+
+                   %% rotation happened
+                   ?assert(filelib:is_regular("test.log.0")),
+
+                   {ok, Bin1} = file:read_file("test.log.0"),
+                   {ok, Bin2} = file:read_file("test.log"),
+                   %% message 1-3 written to file
+                   ?assertEqual(<<"big big message 1buffered message 2">>, Bin1),
+                   %% message 4 buffered, not yet written to file
+                   ?assertEqual(<<"">>, Bin2),
+                   ok
+           end}
+      end
+     ]}.
+
+add_secs({Mega, Secs, Micro}, Add) ->
+    NewSecs = Secs + Add,
+    {Mega + NewSecs div 10000000, NewSecs rem 10000000, Micro}.
 
 filesystem_test_() ->
     {foreach,
