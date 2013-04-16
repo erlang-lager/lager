@@ -251,7 +251,7 @@ control2($s, [L0], F, Adj, P, Pad, latin1, L) ->
 control2($s, [L0], F, Adj, P, Pad, unicode, L) ->
     List = lager_trunc_io:fprint(unicode:characters_to_list(L0), L, [{force_strings, true}]),
     Res = uniconv(string(List, F, Adj, P, Pad)),
-    {Res, lists:flatlength(Res)}.
+    {Res, unisize(Res)}.
 
 maybe_flatten(X) when is_list(X) ->
     lists:flatten(X);
@@ -266,9 +266,13 @@ make_options([{chomp, Bool}|T], Options) when is_boolean(Bool) ->
 -ifdef(UNICODE_AS_BINARIES).
 uniconv(C) ->
     unicode:characters_to_binary(C,unicode).
+unisize(C) ->
+    byte_size(C).
 -else.
 uniconv(C) ->
     C.
+unisize(C) ->
+    lists:flatlength(C).
 -endif.
 %% Default integer base
 base(none) ->

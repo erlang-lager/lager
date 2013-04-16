@@ -53,6 +53,8 @@ string_p1([H|T]) when is_list(H) ->
         true -> string_p1(T);
         _    -> false
     end;
+string_p1([H|T]) when is_binary(H) ->
+    string_p1(T);
 string_p1([]) -> true;
 string_p1(_) ->  false.
 
