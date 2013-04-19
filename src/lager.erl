@@ -223,6 +223,10 @@ clear_all_traces() ->
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
+    TraceCount = case length(element(2, lager_config:get(loglevel))) of
+        0 -> 1;
+        N -> N
+    end,
     Status = ["Lager status:\n",
         [begin
                     Level = get_loglevel(Handler),
@@ -260,7 +264,7 @@ status() ->
           "Tracing Statistics:\n ",
               [ begin 
                     [" ", atom_to_list(Table), ": ",
-                     integer_to_list(?DEFAULT_TRACER:info(Table)),
+                     integer_to_list(?DEFAULT_TRACER:info(Table) div TraceCount),
                      "\n"]
                 end || Table <- [input, output, filter] ]
          ]],
