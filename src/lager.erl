@@ -27,10 +27,11 @@
         log/3, log/4,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/1, status/0,
+        clear_all_traces/0, stop_trace/1, status/0, 
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
-        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, do_log/9, pr/2]).
+        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
+        do_log/9, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -167,6 +168,7 @@ trace_file(File, Filter, Level) ->
             Error
     end.
 
+
 trace_console(Filter) ->
     trace_console(Filter, debug).
 
@@ -189,6 +191,7 @@ trace(Backend, Filter, Level) ->
 stop_trace({_Filter, _Level, Target} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
+    lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
     lager_config:set(loglevel, {Level, NewTraces}),
     case get_loglevel(Target) of
@@ -207,6 +210,7 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
 
 clear_all_traces() ->
     {Level, _Traces} = lager_config:get(loglevel),
+    lager_util:trace_filter(none),
     lager_config:set(loglevel, {Level, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
@@ -219,6 +223,10 @@ clear_all_traces() ->
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
+    TraceCount = case length(element(2, lager_config:get(loglevel))) of
+        0 -> 1;
+        N -> N
+    end,
     Status = ["Lager status:\n",
         [begin
                     Level = get_loglevel(Handler),
@@ -244,8 +252,24 @@ status() ->
                     end,
                     io_lib:format("Tracing messages matching ~p at level ~p to ~p\n",
                         [Filter, LevelName, Destination])
-            end || {Filter, Level, Destination} <- element(2, lager_config:get(loglevel))]],
+            end || {Filter, Level, Destination} <- element(2, lager_config:get(loglevel))],
+         [
+         "Tracing Reductions:\n",
+            case ?DEFAULT_TRACER:info('query') of
+                {null, false} -> "";
+                Query -> io_lib:format("~p~n", [Query])
+            end
+         ],
+         [
+          "Tracing Statistics:\n ",
+              [ begin 
+                    [" ", atom_to_list(Table), ": ",
+                     integer_to_list(?DEFAULT_TRACER:info(Table) div TraceCount),
+                     "\n"]
+                end || Table <- [input, output, filter] ]
+         ]],
     io:put_chars(Status).
+
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
@@ -294,6 +318,8 @@ add_trace_to_loglevel_config(Trace) ->
     {MinLevel, Traces} = lager_config:get(loglevel),
     case lists:member(Trace, Traces) of
         false ->
+            NewTraces = [Trace|Traces],
+            lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
             lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
         _ ->
             ok
