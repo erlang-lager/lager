@@ -180,6 +180,7 @@ trace(Backend, Filter) ->
 
 trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
+
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             add_trace_to_loglevel_config(Trace),
