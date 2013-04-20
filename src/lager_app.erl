@@ -34,6 +34,21 @@ start() ->
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
+
+
+    case application:get_env(lager, async_threshold) of
+        undefined ->
+            ok;
+        {ok, undefined} ->
+            undefined;
+        {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
+            _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, Threshold]),
+            ok;
+        {ok, BadThreshold} ->
+            error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadThreshold]),
+            throw({error, bad_config})
+    end,
+
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, info},
@@ -50,23 +65,33 @@ start(_StartType, _StartArgs) ->
     ok = add_configured_traces(),
 
     %% mask the messages we have no use for
-    MinLog = lager:minimum_loglevel(lager:get_loglevels()),
-    {_, Traces} = lager_config:get(loglevel),
-    lager_config:set(loglevel, {MinLog, Traces}),
+    lager:update_loglevel_config(),
+
+    HighWaterMark = case application:get_env(lager, error_logger_hwm) of
+        {ok, undefined} ->
+            undefined;
+        {ok, HwmVal} when is_integer(HwmVal), HwmVal > 0 ->
+            HwmVal;
+        {ok, BadVal} ->
+            _ = lager:log(warning, self(), "Invalid error_logger high water mark: ~p, disabling", [BadVal]),
+            undefined;
+        undefined ->
+            undefined
+    end,
 
     SavedHandlers =
         case application:get_env(lager, error_logger_redirect) of
             {ok, false} ->
                 [];
             _ ->
-                case application:get_env(lager, error_logger_whitelist) of
+                WhiteList = case application:get_env(lager, error_logger_whitelist) of
                     undefined ->
-                        WhiteList = [];
-                    {ok, WhiteList} ->
-                        WhiteList
+                        [];
+                    {ok, WhiteList0} ->
+                        WhiteList0
                 end,
 
-                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, []]) of
+                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark]]) of
                     {ok, _} ->
                         [begin error_logger:delete_report_handler(X), X end ||
                             X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
@@ -74,6 +99,8 @@ start(_StartType, _StartArgs) ->
                         []
                 end
         end,
+
+    lager_util:trace_filter(none), 
 
     {ok, Pid, SavedHandlers}.
 
@@ -85,19 +112,15 @@ stop(Handlers) ->
 
 expand_handlers([]) ->
     [];
+expand_handlers([{lager_file_backend, [{Key, _Value}|_]=Config}|T]) when is_atom(Key) ->
+    %% this is definitely a new-style config, no expansion needed
+    [maybe_make_handler_id(lager_file_backend, Config) | expand_handlers(T)];
 expand_handlers([{lager_file_backend, Configs}|T]) ->
+    ?INT_LOG(notice, "Deprecated lager_file_backend config detected, please consider updating it", []),
     [ {lager_file_backend:config_to_id(Config), Config} || Config <- Configs] ++
       expand_handlers(T);
 expand_handlers([{Mod, Config}|T]) when is_atom(Mod) ->
-    %% allow the backend to generate a gen_event handler id, if it wants to
-    _ = code:load_file(Mod),
-    Res = case erlang:function_exported(Mod, config_to_id, 1) of
-        true ->
-            {Mod:config_to_id(Config), Config};
-        false ->
-            {Mod, Config}
-    end,
-    [Res | expand_handlers(T)];
+    [maybe_make_handler_id(Mod, Config) | expand_handlers(T)];
 expand_handlers([H|T]) ->
     [H | expand_handlers(T)].
 
@@ -116,9 +139,23 @@ add_configured_traces() ->
 		  Traces),
     ok.
 
+maybe_make_handler_id(Mod, Config) ->
+    %% Allow the backend to generate a gen_event handler id, if it wants to.
+    %% We don't use erlang:function_exported here because that requires the module 
+    %% already be loaded, which is unlikely at this phase of startup. Using code:load
+    %% caused undesireable side-effects with generating code-coverage reports.
+    try Mod:config_to_id(Config) of
+        Id ->
+            {Id, Config}
+    catch
+        error:undef ->
+            {Mod, Config}
+    end.
+
 -ifdef(TEST).
 application_config_mangling_test_() ->
-    [{"Explode the file backend handlers",
+    [
+        {"Explode the file backend handlers",
             ?_assertMatch(
                 [{lager_console_backend, info},
                     {{lager_file_backend,"error.log"},{"error.log",error,10485760, "$D0",5}},
@@ -129,7 +166,21 @@ application_config_mangling_test_() ->
                                 {"error.log", error, 10485760, "$D0", 5},
                                 {"console.log", info, 10485760, "$D0", 5}
                             ]}]
-                ))},
+                ))
+        },
+        {"Explode the short form of backend file handlers",
+            ?_assertMatch(
+                [{lager_console_backend, info},
+                    {{lager_file_backend,"error.log"},{"error.log",error}},
+                    {{lager_file_backend,"console.log"},{"console.log",info}}
+                ],
+                expand_handlers([{lager_console_backend, info},
+                        {lager_file_backend, [
+                                {"error.log", error},
+                                {"console.log", info}
+                            ]}]
+                ))
+        },
         {"Explode with formatter info",
             ?_assertMatch(
                 [{{lager_file_backend,"test.log"},  [{"test.log", debug, 10485760, "$D0", 5},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]},
@@ -140,5 +191,30 @@ application_config_mangling_test_() ->
                             ]
                         }])
             )
-        }].
+        },
+        {"Explode short form with short formatter info",
+            ?_assertMatch(
+                [{{lager_file_backend,"test.log"},  [{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}]},
+                    {{lager_file_backend,"test2.log"}, [{"test2.log",debug},{lager_default_formatter}]}],
+                expand_handlers([{lager_file_backend, [
+                                [{"test.log", debug},{lager_default_formatter,["[",severity,"] ", message, "\n"]}],
+                                [{"test2.log",debug},{lager_default_formatter}]
+                            ]
+                        }])
+            )
+        },
+        {"New form needs no expansion",
+            ?_assertMatch([
+                    {{lager_file_backend,"test.log"},  [{file, "test.log"}]},
+                    {{lager_file_backend,"test2.log"}, [{file, "test2.log"}, {level, info}, {sync_on, none}]},
+                    {{lager_file_backend,"test3.log"}, [{formatter, lager_default_formatter}, {file, "test3.log"}]}
+                ],
+                expand_handlers([
+                        {lager_file_backend, [{file, "test.log"}]},
+                        {lager_file_backend, [{file, "test2.log"}, {level, info}, {sync_on, none}]},
+                        {lager_file_backend, [{formatter, lager_default_formatter},{file, "test3.log"}]}
+                    ])
+            )
+        }
+    ].
 -endif.

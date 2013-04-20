@@ -16,6 +16,7 @@
 
 
 -define(DEFAULT_TRUNCATION, 4096).
+-define(DEFAULT_TRACER, lager_default_tracer).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
@@ -59,7 +60,6 @@
 
 -define(NOTIFY(Level, Pid, Format, Args),
     gen_event:notify(lager_event, {log, lager_msg:new(io_lib:format(Format, Args),
-            lager_util:format_time(),
             Level,
             [{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
             [])}
