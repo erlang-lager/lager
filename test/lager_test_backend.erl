@@ -434,6 +434,20 @@ lager_test_() ->
                         ok
                 end
             },
+            {"persistent traces work",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        lager:debug([{foo, bar}], "hello world"),
+                        ?assertEqual(0, count()),
+                        application:stop(lager),
+                        application:set_env(lager, traces, [{lager_test_backend, [{foo, bar}], debug}]),
+                        application:start(lager),
+                        lager:debug([{foo, bar}], "hello world"),
+                        ?assertEqual(1, count()),
+                        application:unset_env(lager, traces),
+                        ok
+                end
+            },
             {"tracing honors loglevel",
                 fun() ->
                         lager:set_loglevel(?MODULE, error),
