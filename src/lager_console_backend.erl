@@ -24,7 +24,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, formatter,format_config,colors=[]}).
+-record(state, {is_safe, level, formatter, format_config, colors=[]}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -40,6 +40,13 @@ init([Level, true]) -> % for backwards compatibility
 init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]);
 init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
+    IsSafe = case is_new_style_console_available() of
+                 false=Res ->
+                     spawn(fun warn_user/0),
+                     Res;
+                 Res ->
+                     Res
+             end,
     Colors = case application:get_env(lager, colored) of
         {ok, true} -> 
             {ok, LagerColors} = application:get_env(lager, colors),
@@ -49,10 +56,11 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
 
     try lager_util:config_to_mask(Level) of
         Levels ->
-            {ok, #state{level=Levels,
-                    formatter=Formatter, 
-                    format_config=FormatterConfig,
-                    colors=Colors}}
+            {ok, #state{is_safe=IsSafe,
+                        level=Levels,
+                        formatter=Formatter,
+                        format_config=FormatterConfig,
+                        colors=Colors}}
     catch
         _:_ ->
             {error, bad_log_level}
@@ -77,7 +85,8 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Message},
-    #state{level=L,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
+             #state{is_safe=true,level=L,formatter=Formatter,
+                    format_config=FormatConfig,colors=Colors} = State) ->
     case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->
             io:put_chars(user, Formatter:format(Message,FormatConfig,Colors)),
@@ -107,6 +116,36 @@ eol() ->
         _ -> 
             "\r\n"
     end.
+
+-ifdef(TEST).
+is_new_style_console_available() ->
+    true.
+-else.
+is_new_style_console_available() ->
+    %% Criteria:
+    %% 1. If the user has specified '-noshell' on the command line,
+    %%    then we will pretend that the new-style console is available.
+    %%    If there is no shell at all, then we don't have to worry
+    %%    about log events being blocked by the old-style shell.
+    %% 2. If the user_drv process iss registered, all is OK.
+    %%    'user_drv' is a registered proc name used by the "new"
+    %%    console driver.
+    init:get_argument(noshell) /= error orelse
+        is_pid(whereis(user_drv)).
+-endif.
+
+warn_user() ->
+    Msg = lists:flatten(
+            io_lib:format("WARNING: old-style console is in use, so ~s "
+                          "log output to the console is disabled.  "
+                          "Restart the VM on a pseudo-tty to ensure "
+                          "use of the new-style VM console.",
+                          [?MODULE])),
+    catch alarm_handler:set_alarm({?MODULE, Msg}),
+    [begin
+         error_logger:warning_msg(Msg),
+         timer:sleep(1000)
+     end || _ <- lists:seq(1, 10)].
 
 -ifdef(TEST).
 console_log_test_() ->
