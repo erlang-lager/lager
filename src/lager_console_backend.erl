@@ -24,7 +24,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {is_safe, level, formatter, format_config, colors=[]}).
+-record(state, {level, formatter,format_config,colors=[]}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -54,13 +54,14 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _ -> []
     end,
 
-    try lager_util:config_to_mask(Level) of
-        Levels ->
-            {ok, #state{is_safe=IsSafe,
-                        level=Levels,
-                        formatter=Formatter,
-                        format_config=FormatterConfig,
-                        colors=Colors}}
+    try {IsSafe, lager_util:config_to_mask(Level)} of
+        {false, _} ->
+            {error, "Old style console was detected"};
+        {true, Levels} ->
+            {ok, #state{level=Levels,
+                    formatter=Formatter, 
+                    format_config=FormatterConfig,
+                    colors=Colors}}
     catch
         _:_ ->
             {error, bad_log_level}
@@ -85,8 +86,7 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Message},
-             #state{is_safe=true,level=L,formatter=Formatter,
-                    format_config=FormatConfig,colors=Colors} = State) ->
+    #state{level=L,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
     case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->
             io:put_chars(user, Formatter:format(Message,FormatConfig,Colors)),
