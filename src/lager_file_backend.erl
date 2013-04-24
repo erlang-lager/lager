@@ -99,7 +99,7 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
     case validate_logfile_proplist(LogFileConfig) of
         false ->
             %% falied to validate config
-            {error, bad_config};
+            {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever
             [Name, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =

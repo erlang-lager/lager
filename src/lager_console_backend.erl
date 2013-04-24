@@ -47,15 +47,27 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _ -> []
     end,
 
-    try lager_util:config_to_mask(Level) of
-        Levels ->
+    try {is_new_style_console_available(), lager_util:config_to_mask(Level)} of
+        {false, _} ->
+            Msg = "Lager's console backend is incompatible with the 'old' shell, not enabling it",
+            %% be as noisy as possible, log to every possible place
+            try
+                alarm_handler:set_alarm({?MODULE, "WARNING: " ++ Msg})
+            catch
+                _:_ ->
+                    error_logger:warning_msg(Msg ++ "~n")
+            end,
+            io:format("WARNING: " ++ Msg ++ "~n"),
+            ?INT_LOG(warning, Msg, []),
+            {error, {fatal, old_shell}};
+        {true, Levels} ->
             {ok, #state{level=Levels,
                     formatter=Formatter, 
                     format_config=FormatterConfig,
                     colors=Colors}}
     catch
         _:_ ->
-            {error, bad_log_level}
+            {error, {fatal, bad_log_level}}
     end;
 init(Level) ->
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]).
@@ -107,6 +119,23 @@ eol() ->
         _ -> 
             "\r\n"
     end.
+
+-ifdef(TEST).
+is_new_style_console_available() ->
+    true.
+-else.
+is_new_style_console_available() ->
+    %% Criteria:
+    %% 1. If the user has specified '-noshell' on the command line,
+    %%    then we will pretend that the new-style console is available.
+    %%    If there is no shell at all, then we don't have to worry
+    %%    about log events being blocked by the old-style shell.
+    %% 2. If the user_drv process iss registered, all is OK.
+    %%    'user_drv' is a registered proc name used by the "new"
+    %%    console driver.
+    init:get_argument(noshell) /= error orelse
+        is_pid(whereis(user_drv)).
+-endif.
 
 -ifdef(TEST).
 console_log_test_() ->
