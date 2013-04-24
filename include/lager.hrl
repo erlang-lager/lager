@@ -84,7 +84,7 @@
     %% from a gen_event handler
     spawn(fun() ->
             case catch(gen_event:which_handlers(lager_event)) of
-                X when X == []; X == {'EXIT', noproc} ->
+                X when X == []; X == {'EXIT', noproc}; X == [lager_backend_throttle] ->
                     %% there's no handlers yet or lager isn't running, try again
                     %% in half a second.
                     timer:sleep(500),
