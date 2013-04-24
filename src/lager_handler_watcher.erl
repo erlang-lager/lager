@@ -23,6 +23,8 @@
 
 -behaviour(gen_server).
 
+-include("lager.hrl").
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -73,6 +75,8 @@ handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
 handle_info(reinstall_handler, #state{module=Module, config=Config, event=Event} = State) ->
     install_handler(Event, Module, Config),
     {noreply, State};
+handle_info(stop, State) ->
+    {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -87,12 +91,18 @@ code_change(_OldVsn, State, _Extra) ->
 install_handler(Event, Module, Config) ->
     case gen_event:add_sup_handler(Event, Module, Config) of
         ok ->
-            _ = lager:log(debug, self(), "Lager installed handler ~p into ~p", [Module, Event]),
+            ?INT_LOG(debug, "Lager installed handler ~p into ~p", [Module, Event]),
             lager:update_loglevel_config(),
+            ok;
+        {error, {fatal, Reason}} ->
+            ?INT_LOG(error, "Lager fatally failed to install handler ~p into"
+                " ~p, NOT retrying: ~p", [Module, Event, Reason]),
+            %% tell ourselves to stop
+            self() ! stop,
             ok;
         Error ->
             %% try to reinstall it later
-            _ = lager:log(error, self(), "Lager failed to install handler ~p into"
+            ?INT_LOG(error, "Lager failed to install handler ~p into"
                " ~p, retrying later : ~p", [Module, Event, Error]),
             erlang:send_after(5000, self(), reinstall_handler),
             ok
@@ -145,10 +155,10 @@ reinstall_on_runtime_failure_test_() ->
                         ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event))),
                         timer:sleep(6000),
                         ?assertEqual(2, lager_test_backend:count()),
-                        {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
-                        ?assertEqual("Lager event handler lager_crash_backend exited with reason crash", lists:flatten(Message)),
-                        {_Level2, _Time2, Message2, _Metadata} = lager_test_backend:pop(),
-                        ?assertMatch("Lager failed to install handler lager_crash_backend into lager_event, retrying later :"++_, lists:flatten(Message2)),
+                        {_Severity, _Date, Msg, _Metadata} = lager_test_backend:pop(),
+                        ?assertEqual("Lager event handler lager_crash_backend exited with reason crash", lists:flatten(Msg)),
+                        {_Severity2, _Date2, Msg2, _Metadata2} = lager_test_backend:pop(),
+                        ?assertMatch("Lager failed to install handler lager_crash_backend into lager_event, retrying later :"++_, lists:flatten(Msg2)),
                         ?assertEqual(false, lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
                     after
                        application:stop(lager),

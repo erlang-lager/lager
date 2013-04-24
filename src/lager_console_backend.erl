@@ -40,13 +40,6 @@ init([Level, true]) -> % for backwards compatibility
 init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]);
 init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
-    IsSafe = case is_new_style_console_available() of
-                 false=Res ->
-                     spawn(fun warn_user/0),
-                     Res;
-                 Res ->
-                     Res
-             end,
     Colors = case application:get_env(lager, colored) of
         {ok, true} -> 
             {ok, LagerColors} = application:get_env(lager, colors),
@@ -54,9 +47,19 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _ -> []
     end,
 
-    try {IsSafe, lager_util:config_to_mask(Level)} of
+    try {is_new_style_console_available(), lager_util:config_to_mask(Level)} of
         {false, _} ->
-            {error, "Old style console was detected"};
+            Msg = "Lager's console backend is incompatible with the 'old' shell, not enabling it",
+            %% be as noisy as possible, log to every possible place
+            try
+                alarm_handler:set_alarm({?MODULE, "WARNING: " ++ Msg})
+            catch
+                _:_ ->
+                    error_logger:warning_msg(Msg ++ "~n")
+            end,
+            io:format("WARNING: " ++ Msg ++ "~n"),
+            ?INT_LOG(warning, Msg, []),
+            {error, {fatal, old_shell}};
         {true, Levels} ->
             {ok, #state{level=Levels,
                     formatter=Formatter, 
@@ -64,7 +67,7 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
                     colors=Colors}}
     catch
         _:_ ->
-            {error, bad_log_level}
+            {error, {fatal, bad_log_level}}
     end;
 init(Level) ->
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]).
@@ -133,19 +136,6 @@ is_new_style_console_available() ->
     init:get_argument(noshell) /= error orelse
         is_pid(whereis(user_drv)).
 -endif.
-
-warn_user() ->
-    Msg = lists:flatten(
-            io_lib:format("WARNING: old-style console is in use, so ~s "
-                          "log output to the console is disabled.  "
-                          "Restart the VM on a pseudo-tty to ensure "
-                          "use of the new-style VM console.",
-                          [?MODULE])),
-    catch alarm_handler:set_alarm({?MODULE, Msg}),
-    [begin
-         error_logger:warning_msg(Msg),
-         timer:sleep(1000)
-     end || _ <- lists:seq(1, 10)].
 
 -ifdef(TEST).
 console_log_test_() ->
