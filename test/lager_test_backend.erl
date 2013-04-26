@@ -441,7 +441,7 @@ lager_test_() ->
                         ?assertEqual(0, count()),
                         application:stop(lager),
                         application:set_env(lager, traces, [{lager_test_backend, [{foo, bar}], debug}]),
-                        application:start(lager),
+                        lager:start(),
                         lager:debug([{foo, bar}], "hello world"),
                         ?assertEqual(1, count()),
                         application:unset_env(lager, traces),
@@ -555,7 +555,7 @@ setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
-    application:start(lager),
+    lager:start(),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
@@ -608,7 +608,7 @@ error_logger_redirect_crash_test_() ->
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, error}]),
-                application:start(lager),
+                lager:start(),
                 crash:start()
         end,
 
@@ -655,7 +655,7 @@ error_logger_redirect_test_() ->
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, handlers, [{?MODULE, info}]),
-                application:start(lager),
+                lager:start(),
                 lager:log(error, self(), "flush flush"),
                 timer:sleep(100),
                 gen_event:call(lager_event, ?MODULE, flush)
@@ -1154,7 +1154,7 @@ async_threshold_test_() ->
                 application:set_env(lager, error_logger_redirect, false),
                 application:set_env(lager, async_threshold, 10),
                 application:set_env(lager, handlers, [{?MODULE, info}]),
-                application:start(lager)
+                lager:start()
         end,
         fun(_) ->
                 application:unset_env(lager, async_threshold),

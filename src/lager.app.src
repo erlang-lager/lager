@@ -7,10 +7,11 @@
   {modules, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  syntax_tools,
+                  goldrush
                  ]},
   {registered, [lager_sup, lager_event, lager_crash_log, lager_handler_watcher_sup]},
-  {included_applications, [syntax_tools, goldrush]},
   {mod, {lager_app, []}},
   {env, [
             %% What handlers to install with what arguments

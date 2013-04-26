@@ -241,7 +241,7 @@ filesystem_test_() ->
                 application:set_env(lager, handlers, [{lager_test_backend, info}]),
                 application:set_env(lager, error_logger_redirect, true),
                 application:unset_env(lager, crash_log),
-                application:start(lager),
+                lager:start(),
                 timer:sleep(100),
                 lager_test_backend:flush()
         end,
