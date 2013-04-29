@@ -200,6 +200,7 @@ transform_statement(Stmt) when is_list(Stmt) ->
 transform_statement(Stmt) ->
     Stmt.
 
+make_varname(Prefix, {Line, _}) -> make_varname(Prefix, Line);
 make_varname(Prefix, Line) ->
     list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(Line)).
 
