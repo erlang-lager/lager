@@ -130,10 +130,13 @@ is_new_style_console_available() ->
     %%    then we will pretend that the new-style console is available.
     %%    If there is no shell at all, then we don't have to worry
     %%    about log events being blocked by the old-style shell.
-    %% 2. If the user_drv process iss registered, all is OK.
+    %% 2. Windows doesn't support the new shell, so all windows users
+    %%    have is the oldshell.
+    %% 3. If the user_drv process iss registered, all is OK.
     %%    'user_drv' is a registered proc name used by the "new"
     %%    console driver.
     init:get_argument(noshell) /= error orelse
+        element(1, os:type()) == win32 orelse
         is_pid(whereis(user_drv)).
 -endif.
 
