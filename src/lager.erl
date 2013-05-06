@@ -42,7 +42,8 @@
 
 %% @doc Start the application. Mainly useful for using `-s lager' as a command
 %% line switch to the VM to make lager start on boot.
-start() -> start(lager).
+start() ->
+    start(lager).
 
 start(App) ->
     start_ok(App, application:start(App, permanent)).

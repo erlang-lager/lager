@@ -123,7 +123,7 @@ reinstall_on_initial_failure_test_() ->
                     application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [from_now(2), undefined]}]),
                     application:set_env(lager, error_logger_redirect, false),
                     application:unset_env(lager, crash_log),
-                    application:start(lager),
+                    lager:start(),
                     try
                       ?assertEqual(1, lager_test_backend:count()),
                       {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
@@ -149,7 +149,7 @@ reinstall_on_runtime_failure_test_() ->
                     application:set_env(lager, handlers, [{lager_test_backend, info}, {lager_crash_backend, [undefined, from_now(5)]}]),
                     application:set_env(lager, error_logger_redirect, false),
                     application:unset_env(lager, crash_log),
-                    application:start(lager),
+                    lager:start(),
                     try
                         ?assertEqual(0, lager_test_backend:count()),
                         ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event))),
