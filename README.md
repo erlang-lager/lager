@@ -302,7 +302,7 @@ add
 {colored, true}
 ```
 
-To lager's application environment config. If you don't like the default colors, they are]
+To lager's application environment config. If you don't like the default colors, they are
 also configurable, see the app.src file for more details.
 
 Tracing
