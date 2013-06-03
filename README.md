@@ -81,7 +81,6 @@ your app.config):
     {lager_console_backend, info},
     {lager_file_backend, [{file, "error.log"}, {level, error}]},
     {lager_file_backend, [{file, "console.log"}, {level, info}]}
-    ]}
   ]}
 ]}.
 ```
@@ -102,7 +101,6 @@ for the backend:
     {lager_file_backend, [{name, "error.log"}, {level, error}, {formatter, lager_default_formatter},
       {formatter_config, [date, " ", time," [",severity,"] ",pid, " ", message, "\n"]}]},
     {lager_file_backend, [{name, "console.log"}, {level, info}]}
-    ]}
   ]}
 ]}.
 ```
