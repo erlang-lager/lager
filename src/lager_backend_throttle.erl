@@ -31,12 +31,13 @@
 
 -record(state, {
         hwm,
+        window_min,
         async = true
     }).
 
-init(Hwm) ->
+init([Hwm, Window]) ->
     lager_config:set(async, true),
-    {ok, #state{hwm=Hwm}}.
+    {ok, #state{hwm=Hwm, window_min=Hwm - Window}}.
 
 
 handle_call(get_loglevel, State) ->
@@ -48,12 +49,12 @@ handle_call(_Request, State) ->
 
 handle_event({log, _Message},State) ->
     {message_queue_len, Len} = erlang:process_info(self(), message_queue_len),
-    case {Len > State#state.hwm, State#state.async} of
-        {true, true} ->
+    case {Len > State#state.hwm, Len < State#state.window_min, State#state.async} of
+        {true, _, true} ->
             %% need to flip to sync mode
             lager_config:set(async, false),
             {ok, State#state{async=false}};
-        {false, false} ->
+        {_, true, false} ->
             %% need to flip to async mode
             lager_config:set(async, true),
             {ok, State#state{async=true}};

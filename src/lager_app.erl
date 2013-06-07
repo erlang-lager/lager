@@ -42,7 +42,20 @@ start(_StartType, _StartArgs) ->
         {ok, undefined} ->
             undefined;
         {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
-            _ = supervisor:start_child(lager_handler_watcher_sup, [lager_event, lager_backend_throttle, Threshold]),
+            DefWindow = erlang:trunc(Threshold * 0.2), % maybe 0?
+            ThresholdWindow =
+                case application:get_env(lager, async_threshold_window) of
+                    undefined ->
+                        DefWindow;
+                    {ok, Window} when is_integer(Window), Window < Threshold, Window >= 0 ->
+                        Window;
+                    {ok, BadWindow} ->
+                        error_logger:error_msg(
+                          "Invalid value for 'async_threshold_window': ~p~n", [BadWindow]),
+                        throw({error, bad_config})
+                end,
+            _ = supervisor:start_child(lager_handler_watcher_sup,
+                                       [lager_event, lager_backend_throttle, [Threshold, ThresholdWindow]]),
             ok;
         {ok, BadThreshold} ->
             error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadThreshold]),

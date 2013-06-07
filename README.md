@@ -154,11 +154,13 @@ polls its own mailbox size and toggles the messaging between synchronous and
 asynchronous depending on mailbox size.
 
 ```erlang
-{async_threshold, 20}
+{async_threshold, 20},
+{async_threshold_window, 5}
 ```
 
 This will use async messaging until the mailbox exceeds 20 messages, at which
-point synchronous messaging will be used.
+point synchronous messaging will be used, and switch back to asynchronous, when
+size reduces to `20 - 5 = 15`.
 
 If you wish to disable this behaviour, simply set it to 'undefined'. It defaults
 to a low number to prevent the mailbox growing rapidly beyond the limit and causing
