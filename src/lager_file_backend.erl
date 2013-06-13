@@ -296,7 +296,7 @@ validate_logfile_proplist([{date, Date}|Tail], Acc) ->
             validate_logfile_proplist(Tail, [{date, Spec}|Acc]);
         {error, _} when Date == "" ->
             %% legacy config allowed blanks
-            validate_logfile_proplist(Tail, Acc);
+            validate_logfile_proplist(Tail, [{date, undefined}|Acc]);
         {error, _} ->
             throw({bad_config, "Invalid rotation date", Date})
     end;
