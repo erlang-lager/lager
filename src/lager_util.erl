@@ -195,16 +195,18 @@ maybe_utc({Date, {H, M, S, Ms}}) ->
             {Date1, {H1, M1, S1, Ms}}
     end.
 
-%% renames and deletes failing are OK
+%% renames failing are OK
 rotate_logfile(File, 0) ->
-    _ = file:delete(File),
-    ok;
+    file:delete(File);
 rotate_logfile(File, 1) ->
-    _ = file:rename(File, File++".0"),
-    rotate_logfile(File, 0);
+    case file:rename(File, File++".0") of
+        ok ->
+            ok;
+        _ ->
+            rotate_logfile(File, 0)
+    end;
 rotate_logfile(File, Count) ->
-    _ =file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++
-        integer_to_list(Count - 1)),
+    _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
     rotate_logfile(File, Count - 1).
 
 format_time() ->
