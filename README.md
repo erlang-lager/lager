@@ -97,10 +97,10 @@ for the backend:
 ```erlang
 {lager, [
   {handlers, [
-    {lager_console_backend, [info, {lager_default_formatter, [time," [",severity,"] ", message, "\n"]}},
-    {lager_file_backend, [{name, "error.log"}, {level, error}, {formatter, lager_default_formatter},
+    {lager_console_backend, [info, {lager_default_formatter, [time," [",severity,"] ", message, "\n"]}]},
+    {lager_file_backend, [{file, "error.log"}, {level, error}, {formatter, lager_default_formatter},
       {formatter_config, [date, " ", time," [",severity,"] ",pid, " ", message, "\n"]}]},
-    {lager_file_backend, [{name, "console.log"}, {level, info}]}
+    {lager_file_backend, [{file, "console.log"}, {level, info}]}
   ]}
 ]}.
 ```
