@@ -565,6 +565,25 @@ rotate_file_test() ->
                 rotate_logfile("rotation.log", 10)
     end || N <- lists:seq(0, 20)].
 
+rotate_file_fail_test() ->
+    %% make sure the directory exists
+    ?assertEqual(ok, filelib:ensure_dir("rotation/rotation.log")),
+    %% fix the permissions on it
+    os:cmd("chown -R u+rwx rotation"),
+    %% delete any old files
+    [ok = file:delete(F) || F <- filelib:wildcard("rotation/*")],
+    %% write a file
+    file:write_file("rotation/rotation.log", "hello"),
+    %% hose up the permissions
+    os:cmd("chown u-w rotation"),
+    ?assertMatch({error, _}, rotate_logfile("rotation.log", 10)),
+    ?assert(filelib:is_regular("rotation/rotation.log")),
+    os:cmd("chown u+w rotation"),
+    ?assertMatch(ok, rotate_logfile("rotation/rotation.log", 10)),
+    ?assert(filelib:is_regular("rotation/rotation.log.0")),
+    ?assertEqual(false, filelib:is_regular("rotation/rotation.log")),
+    ok.
+
 check_trace_test() ->
     trace_filter(none),
     %% match by module
