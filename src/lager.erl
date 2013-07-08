@@ -19,16 +19,19 @@
 -module(lager).
 
 -include("lager.hrl").
--include_lib("eunit/include/eunit.hrl").
+
+-define(LAGER_MD_KEY, '__lager_metadata').
 
 %% API
 -export([start/0,
         log/3, log/4,
-        trace_file/2, trace_file/3, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/1, status/0,
+        md/0, md/1,
+        trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        clear_all_traces/0, stop_trace/1, status/0, 
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        minimum_loglevel/1, posix_error/1,
-        safe_format/3, safe_format_chop/3,dispatch_log/5]).
+        update_loglevel_config/0, posix_error/1,
+        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
+        do_log/9, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -52,34 +55,76 @@ start_ok(App, {error, {not_started, Dep}}) ->
 start_ok(App, {error, Reason}) ->
     erlang:error({app_start_failed, App, Reason}).
 
+%% @doc Get lager metadata for current process
+-spec md() -> [{atom(), any()}].
+md() ->
+    case erlang:get(?LAGER_MD_KEY) of
+        undefined -> [];
+        MD -> MD
+    end.
+
+%% @doc Set lager metadata for current process.
+%% Will badarg if you don't supply a list of {key, value} tuples keyed by atoms.
+-spec md([{atom(), any()},...]) -> ok.
+md(NewMD) when is_list(NewMD) ->
+    %% make sure its actually a real proplist
+    case lists:all(
+            fun({Key, _Value}) when is_atom(Key) -> true;
+                (_) -> false
+            end, NewMD) of
+        true ->
+            erlang:put(?LAGER_MD_KEY, NewMD),
+            ok;
+        false ->
+            erlang:error(badarg)
+    end;
+md(_) ->
+    erlang:error(badarg).
 
 -spec dispatch_log(log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
+%% this is the same check that the parse transform bakes into the module at compile time
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
-    case whereis(lager_event) of
-        undefined ->
-            %% lager isn't running
+    SeverityAsInt=lager_util:level_to_num(Severity),
+    case {whereis(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
+        {undefined, _} ->
             {error, lager_not_running};
-        Pid ->
-            {LevelThreshold,TraceFilters} = lager_mochiglobal:get(loglevel,{?LOG_NONE,[]}),
-            SeverityAsInt=lager_util:level_to_num(Severity),
-            Destinations = case TraceFilters of 
-                [] -> [];
-                _ -> 
-                    lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
-            end,
-            case (LevelThreshold >= SeverityAsInt orelse Destinations =/= []) of
-                true -> 
-                    Timestamp = lager_util:format_time(),
-                    Msg=case Args of 
-                        A when is_list(A) ->safe_format_chop(Format,Args,Size);
-                        _ -> Format
-                    end,
-                    gen_event:sync_notify(Pid, {log, lager_msg:new(Msg, Timestamp,
-                                Severity, Metadata, Destinations)});
-                _ -> 
-                    ok
-            end
+        {Pid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+            do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Pid);
+        _ ->
+            ok
     end.
+
+%% @private Should only be called externally from code generated from the parse transform
+do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Pid) when is_atom(Severity) ->
+    Destinations = case TraceFilters of
+        [] ->
+            [];
+        _ ->
+            lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
+    end,
+    case (LevelThreshold band SeverityAsInt) /= 0 orelse Destinations /= [] of
+        true ->
+            Msg = case Args of
+                A when is_list(A) ->
+                    safe_format_chop(Format,Args,Size);
+                _ ->
+                    Format
+            end,
+            LagerMsg = lager_msg:new(Msg,
+                Severity, Metadata, Destinations),
+            case lager_config:get(async, false) of
+                true ->
+                    gen_event:notify(Pid, {log, LagerMsg});
+                false ->
+                    gen_event:sync_notify(Pid, {log, LagerMsg})
+            end;
+        false ->
+            ok
+    end.
+
+%% backwards compatible with beams compiled with lager 1.x
+dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, Size) ->
+    dispatch_log(Severity, Metadata, Format, Args, Size).
 
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid() | atom() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
@@ -114,14 +159,7 @@ trace_file(File, Filter, Level) ->
             end,
             case Res of
               {ok, _} ->
-                %% install the trace.
-                {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-                case lists:member(Trace, Traces) of
-                  false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
-                  _ ->
-                    ok
-                end,
+                add_trace_to_loglevel_config(Trace),
                 {ok, Trace};
               {error, _} = E ->
                 E
@@ -130,28 +168,32 @@ trace_file(File, Filter, Level) ->
             Error
     end.
 
+
 trace_console(Filter) ->
     trace_console(Filter, debug).
 
 trace_console(Filter, Level) ->
-    Trace0 = {Filter, Level, lager_console_backend},
+    trace(lager_console_backend, Filter, Level).
+
+trace(Backend, Filter) ->
+    trace(Backend, Filter, debug).
+
+trace(Backend, Filter, Level) ->
+    Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
-            {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
-            case lists:member(Trace, Traces) of
-                false ->
-                    lager_mochiglobal:put(loglevel, {MinLevel, [Trace|Traces]});
-                _ -> ok
-            end,
+            add_trace_to_loglevel_config(Trace),
             {ok, Trace};
         Error ->
             Error
     end.
 
 stop_trace({_Filter, _Level, Target} = Trace) ->
-    {MinLevel, Traces} = lager_mochiglobal:get(loglevel),
+    {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
-    lager_mochiglobal:put(loglevel, {MinLevel, NewTraces}),
+    lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
+    %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
+    lager_config:set(loglevel, {Level, NewTraces}),
     case get_loglevel(Target) of
         none ->
             %% check no other traces point here
@@ -167,8 +209,9 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
     ok.
 
 clear_all_traces() ->
-    {MinLevel, _Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLevel, []}),
+    {Level, _Traces} = lager_config:get(loglevel),
+    lager_util:trace_filter(none),
+    lager_config:set(loglevel, {Level, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
             none ->
@@ -180,6 +223,10 @@ clear_all_traces() ->
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
+    TraceCount = case length(element(2, lager_config:get(loglevel))) of
+        0 -> 1;
+        N -> N
+    end,
     Status = ["Lager status:\n",
         [begin
                     Level = get_loglevel(Handler),
@@ -194,35 +241,58 @@ status() ->
             end || Handler <- Handlers],
         "Active Traces:\n",
         [begin
+                    LevelName = case Level of
+                        {mask, Mask} ->
+                            case lager_util:mask_to_levels(Mask) of
+                                [] -> none;
+                                Levels -> hd(Levels)
+                            end;
+                        Num ->
+                            lager_util:num_to_level(Num)
+                    end,
                     io_lib:format("Tracing messages matching ~p at level ~p to ~p\n",
-                        [Filter, lager_util:num_to_level(Level), Destination])
-            end || {Filter, Level, Destination} <- element(2, lager_mochiglobal:get(loglevel))]],
+                        [Filter, LevelName, Destination])
+            end || {Filter, Level, Destination} <- element(2, lager_config:get(loglevel))],
+         [
+         "Tracing Reductions:\n",
+            case ?DEFAULT_TRACER:info('query') of
+                {null, false} -> "";
+                Query -> io_lib:format("~p~n", [Query])
+            end
+         ],
+         [
+          "Tracing Statistics:\n ",
+              [ begin 
+                    [" ", atom_to_list(Table), ": ",
+                     integer_to_list(?DEFAULT_TRACER:info(Table) div TraceCount),
+                     "\n"]
+                end || Table <- [input, output, filter] ]
+         ]],
     io:put_chars(Status).
+
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
     Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
-    %% recalculate min log level
-    MinLog = minimum_loglevel(get_loglevels()),
-    {_, Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    update_loglevel_config(),
     Reply.
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    io:format("handler: ~p~n", [{Handler, Ident}]),
     Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
-    %% recalculate min log level
-    MinLog = minimum_loglevel(get_loglevels()),
-    {_, Traces} = lager_mochiglobal:get(loglevel),
-    lager_mochiglobal:put(loglevel, {MinLog, Traces}),
+    update_loglevel_config(),
     Reply.
 
 %% @doc Get the loglevel for a particular backend. In the case that the backend
 %% has multiple identifiers, the lowest is returned
 get_loglevel(Handler) ->
     case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
+        {mask, Mask} ->
+            case lager_util:mask_to_levels(Mask) of
+                [] -> none;
+                Levels -> hd(Levels)
+            end;
         X when is_integer(X) ->
             lager_util:num_to_level(X);
         Y -> Y
@@ -244,10 +314,33 @@ get_loglevels() ->
         Handler <- gen_event:which_handlers(lager_event)].
 
 %% @private
-minimum_loglevel([]) ->
-    -1; %% lower than any log level, logging off
+add_trace_to_loglevel_config(Trace) ->
+    {MinLevel, Traces} = lager_config:get(loglevel),
+    case lists:member(Trace, Traces) of
+        false ->
+            NewTraces = [Trace|Traces],
+            lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
+            lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
+        _ ->
+            ok
+    end.
+
+%% @doc recalculate min log level
+update_loglevel_config() ->
+    {_, Traces} = lager_config:get(loglevel),
+    MinLog = minimum_loglevel(get_loglevels()),
+    lager_config:set(loglevel, {MinLog, Traces}).
+
+%% @private
 minimum_loglevel(Levels) ->
-    erlang:hd(lists:reverse(lists:sort(Levels))).
+    lists:foldl(fun({mask, Mask}, Acc) ->
+                Mask bor Acc;
+            (Level, Acc) when is_integer(Level) ->
+                {mask, Mask} = lager_util:config_to_mask(lager_util:num_to_level(Level)),
+                Mask bor Acc;
+            (_, Acc) ->
+                Acc
+        end, 0, Levels).
 
 %% @doc Print the format string `Fmt' with `Args' safely with a size
 %% limit of `Limit'. If the format string is invalid, or not enough
@@ -266,3 +359,33 @@ safe_format(Fmt, Args, Limit, Options) ->
 %% @private
 safe_format_chop(Fmt, Args, Limit) ->
     safe_format(Fmt, Args, Limit, [{chomp, true}]).
+
+%% @doc Print a record lager found during parse transform
+pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
+    try Module:module_info(attributes) of
+        Attrs ->
+            case lists:keyfind(lager_records, 1, Attrs) of
+                false ->
+                    Record;
+                {lager_records, Records} ->
+                    RecordName = element(1, Record),
+                    RecordSize = tuple_size(Record) - 1,
+                    case lists:filter(fun({Name, Fields}) when Name == RecordName,
+                                length(Fields) == RecordSize ->
+                                    true;
+                                (_) ->
+                                    false
+                            end, Records) of
+                        [] ->
+                            Record;
+                        [{RecordName, RecordFields}|_] ->
+                            {'$lager_record', RecordName,
+                                lists:zip(RecordFields, tl(tuple_to_list(Record)))}
+                    end
+            end
+    catch
+        error:undef ->
+            Record
+    end;
+pr(Record, _) ->
+    Record.

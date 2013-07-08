@@ -18,10 +18,11 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, open_logfile/2,
-        ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
-        localtime_ms/0, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3]).
+-export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
+        open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
+        localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
+        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
+        trace_filter/1, trace_filter/2]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -30,34 +31,104 @@
 -include("lager.hrl").
 
 levels() ->
-    [debug, info, notice, warning, error, critical, alert, emergency].
+    [debug, info, notice, warning, error, critical, alert, emergency, none].
 
-level_to_num(debug)     -> 7;
-level_to_num(info)      -> 6;
-level_to_num(notice)    -> 5;
-level_to_num(warning)   -> 4;
-level_to_num(error)     -> 3;
-level_to_num(critical)  -> 2;
-level_to_num(alert)     -> 1;
-level_to_num(emergency) -> 0;
-level_to_num(none)      -> -1.
+level_to_num(debug)     -> ?DEBUG;
+level_to_num(info)      -> ?INFO;
+level_to_num(notice)    -> ?NOTICE;
+level_to_num(warning)   -> ?WARNING;
+level_to_num(error)     -> ?ERROR;
+level_to_num(critical)  -> ?CRITICAL;
+level_to_num(alert)     -> ?ALERT;
+level_to_num(emergency) -> ?EMERGENCY;
+level_to_num(none)      -> ?LOG_NONE.
 
-num_to_level(7) -> debug;
-num_to_level(6) -> info;
-num_to_level(5) -> notice;
-num_to_level(4) -> warning;
-num_to_level(3) -> error;
-num_to_level(2) -> critical;
-num_to_level(1) -> alert;
-num_to_level(0) -> emergency;
-num_to_level(-1) -> none.
+num_to_level(?DEBUG) -> debug;
+num_to_level(?INFO) -> info;
+num_to_level(?NOTICE) -> notice;
+num_to_level(?WARNING) -> warning;
+num_to_level(?ERROR) -> error;
+num_to_level(?CRITICAL) -> critical;
+num_to_level(?ALERT) -> alert;
+num_to_level(?EMERGENCY) -> emergency;
+num_to_level(?LOG_NONE) -> none.
+
+-spec config_to_mask(atom()|string()) -> {'mask', integer()}.
+config_to_mask(Conf) ->
+    Levels = config_to_levels(Conf),
+    {mask, lists:foldl(fun(Level, Acc) ->
+                level_to_num(Level) bor Acc
+            end, 0, Levels)}.
+
+-spec mask_to_levels(non_neg_integer()) -> [lager:log_level()].
+mask_to_levels(Mask) ->
+    mask_to_levels(Mask, levels(), []).
+
+mask_to_levels(_Mask, [], Acc) ->
+    lists:reverse(Acc);
+mask_to_levels(Mask, [Level|Levels], Acc) ->
+    NewAcc = case (level_to_num(Level) band Mask) /= 0 of
+        true ->
+            [Level|Acc];
+        false ->
+            Acc
+    end,
+    mask_to_levels(Mask, Levels, NewAcc).
+
+-spec config_to_levels(atom()|string()) -> [lager:log_level()].
+config_to_levels(Conf) when is_atom(Conf) ->
+    config_to_levels(atom_to_list(Conf));
+config_to_levels([$! | Rest]) ->
+    levels() -- config_to_levels(Rest);
+config_to_levels([$=, $< | Rest]) ->
+    [_|Levels] = config_to_levels_int(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$<, $= | Rest]) ->
+    [_|Levels] = config_to_levels_int(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$>, $= | Rest]) ->
+    config_to_levels_int(Rest);
+config_to_levels([$=, $> | Rest]) ->
+    config_to_levels_int(Rest);
+config_to_levels([$= | Rest]) ->
+    [level_to_atom(Rest)];
+config_to_levels([$< | Rest]) ->
+    Levels = config_to_levels_int(Rest),
+    lists:filter(fun(E) -> not lists:member(E, Levels) end, levels());
+config_to_levels([$> | Rest]) ->
+    [_|Levels] = config_to_levels_int(Rest),
+    lists:filter(fun(E) -> lists:member(E, Levels) end, levels());
+config_to_levels(Conf) ->
+    config_to_levels_int(Conf).
+
+%% internal function to break the recursion loop
+config_to_levels_int(Conf) ->
+    Level = level_to_atom(Conf),
+    lists:dropwhile(fun(E) -> E /= Level end, levels()).
+
+level_to_atom(String) ->
+    Levels = levels(),
+    try list_to_existing_atom(String) of
+        Atom ->
+            case lists:member(Atom, Levels) of
+                true ->
+                    Atom;
+                false ->
+                    erlang:error(badarg)
+            end
+    catch
+        _:_ ->
+            erlang:error(badarg)
+    end.
 
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
         ok ->
             Options = [append, raw] ++
-            if Buffer == true -> [delayed_write];
-                true -> []
+            case  Buffer of
+                {Size, Interval} when is_integer(Interval), Interval >= 0, is_integer(Size), Size >= 0 ->
+                    [{delayed_write, Size, Interval}];
+                _ -> []
             end,
             case file:open(Name, Options) of
                 {ok, FD} ->
@@ -107,9 +178,14 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
 
 %% returns localtime with milliseconds included
 localtime_ms() ->
-    {_, _, Micro} = Now = os:timestamp(),
+    Now = os:timestamp(),
+    localtime_ms(Now).
+
+localtime_ms(Now) ->
+    {_, _, Micro} = Now,
     {Date, {Hours, Minutes, Seconds}} = calendar:now_to_local_time(Now),
     {Date, {Hours, Minutes, Seconds, Micro div 1000 rem 1000}}.
+
 
 maybe_utc({Date, {H, M, S, Ms}}) ->
     case lager_stdlib:maybe_utc({Date, {H, M, S}}) of
@@ -119,16 +195,18 @@ maybe_utc({Date, {H, M, S, Ms}}) ->
             {Date1, {H1, M1, S1, Ms}}
     end.
 
-%% renames and deletes failing are OK
+%% renames failing are OK
 rotate_logfile(File, 0) ->
-    _ = file:delete(File),
-    ok;
+    file:delete(File);
 rotate_logfile(File, 1) ->
-    _ = file:rename(File, File++".0"),
-    rotate_logfile(File, 0);
+    case file:rename(File, File++".0") of
+        ok ->
+            ok;
+        _ ->
+            rotate_logfile(File, 0)
+    end;
 rotate_logfile(File, Count) ->
-    _ =file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++
-        integer_to_list(Count - 1)),
+    _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
     rotate_logfile(File, Count - 1).
 
 format_time() ->
@@ -275,23 +353,34 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
     NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
     calculate_next_rotation(T, NewNow).
 
-validate_trace({Filter, Level, {Destination, ID}}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
+
+trace_filter(Query) ->
+    trace_filter(?DEFAULT_TRACER, Query).
+
+%% TODO: Support multiple trace modules 
+trace_filter(Module, Query) when Query == none; Query == [] ->
+    trace_filter(Module, glc:null(false));
+trace_filter(Module, Query) when is_list(Query) ->
+    trace_filter(Module, glc_lib:reduce(trace_any(Query)));
+trace_filter(Module, Query) ->
+    {ok, _} = glc:compile(Module, Query).
+
+validate_trace({Filter, Level, {Destination, ID}}) when is_tuple(Filter); is_list(Filter), is_atom(Level), is_atom(Destination) ->
     case validate_trace({Filter, Level, Destination}) of
         {ok, {F, L, D}} ->
             {ok, {F, L, {D, ID}}};
         Error ->
             Error
     end;
-validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level), is_atom(Destination) ->
-    try level_to_num(Level) of
+validate_trace({Filter, Level, Destination}) when is_tuple(Filter); is_list(Filter), is_atom(Level), is_atom(Destination) ->
+    ValidFilter = validate_trace_filter(Filter),
+    try config_to_mask(Level) of
+        _ when not ValidFilter ->
+            {error, invalid_trace};
+        L when is_list(Filter)  ->
+            {ok, {trace_all(Filter), L, Destination}};
         L ->
-            case lists:all(fun({Key, _Value}) when is_atom(Key) -> true; (_) ->
-                            false end, Filter) of
-                true ->
-                    {ok, {Filter, L, Destination}};
-                _ ->
-                    {error, invalid_filter}
-            end
+            {ok, {Filter, L, Destination}}
     catch
         _:_ ->
             {error, invalid_level}
@@ -299,37 +388,74 @@ validate_trace({Filter, Level, Destination}) when is_list(Filter), is_atom(Level
 validate_trace(_) ->
     {error, invalid_trace}.
 
+validate_trace_filter(Filter) when is_tuple(Filter), is_atom(element(1, Filter)) =:= false ->
+    false;
+validate_trace_filter(Filter) ->
+        case lists:all(fun({Key, '*'}) when is_atom(Key) -> true; 
+                          ({Key, _Value})      when is_atom(Key) -> true;
+                          ({Key, '=', _Value}) when is_atom(Key) -> true;
+                          ({Key, '<', _Value}) when is_atom(Key) -> true;
+                          ({Key, '>', _Value}) when is_atom(Key) -> true;
+                          (_) -> false end, Filter) of
+            true ->
+                true;
+            _ ->
+                false
+        end.
+
+trace_all(Query) -> 
+	glc:all(trace_acc(Query)).
+
+trace_any(Query) -> 
+	glc:any(Query).
+
+trace_acc(Query) ->
+    trace_acc(Query, []).
+
+trace_acc([], Acc) -> 
+	lists:reverse(Acc);
+trace_acc([{Key, '*'}|T], Acc) ->
+	trace_acc(T, [glc:wc(Key)|Acc]);
+trace_acc([{Key, Val}|T], Acc) ->
+	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+trace_acc([{Key, '=', Val}|T], Acc) ->
+	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+trace_acc([{Key, '>', Val}|T], Acc) ->
+	trace_acc(T, [glc:gt(Key, Val)|Acc]);
+trace_acc([{Key, '<', Val}|T], Acc) ->
+	trace_acc(T, [glc:lt(Key, Val)|Acc]).
+	
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
-check_traces(Attrs, Level, [{_, FilterLevel, _}|Flows], Acc) when Level > FilterLevel ->
+check_traces(Attrs, Level, [{_, {mask, FilterLevel}, _}|Flows], Acc) when (Level band FilterLevel) == 0 ->
     check_traces(Attrs, Level, Flows, Acc);
 check_traces(Attrs, Level, [{Filter, _, _}|Flows], Acc) when length(Attrs) < length(Filter) ->
     check_traces(Attrs, Level, Flows, Acc);
 check_traces(Attrs, Level, [Flow|Flows], Acc) ->
     check_traces(Attrs, Level, Flows, [check_trace(Attrs, Flow)|Acc]).
 
-check_trace(Attrs, {Filter, _Level, Dest}) ->
-    case check_trace_iter(Attrs, Filter) of
-        true ->
-            Dest;
-        false ->
-            []
+check_trace(Attrs, {Filter, _Level, Dest}) when is_list(Filter) ->
+    check_trace(Attrs, {trace_all(Filter), _Level, Dest});
+
+check_trace(Attrs, {Filter, _Level, Dest}) when is_tuple(Filter) ->
+    Made = gre:make(Attrs, [list]),
+    glc:handle(?DEFAULT_TRACER, Made),
+    Match = glc_lib:matches(Filter, Made),
+    case Match of
+	true ->
+	    Dest;
+	false ->
+	    []
     end.
 
-check_trace_iter(_, []) ->
-    true;
-check_trace_iter(Attrs, [{Key, Match}|T]) ->
-    case lists:keyfind(Key, 1, Attrs) of
-        {Key, _} when Match == '*' ->
-            check_trace_iter(Attrs, T);
-        {Key, Match} ->
-            check_trace_iter(Attrs, T);
-        _ ->
-            false
-    end.
-
--spec is_loggable(lager_msg:lager_msg(),integer(),term()) -> boolean().
+-spec is_loggable(lager_msg:lager_msg(), non_neg_integer()|{'mask', non_neg_integer()}, term()) -> boolean().
+is_loggable(Msg, {mask, Mask}, MyName) ->
+    %% using syslog style comparison flags
+    %S = lager_msg:severity_as_int(Msg),
+    %?debugFmt("comparing masks ~.2B and ~.2B -> ~p~n", [S, Mask, S band Mask]),
+    (lager_msg:severity_as_int(Msg) band Mask) /= 0 orelse
+    lists:member(MyName, lager_msg:destinations(Msg));
 is_loggable(Msg ,SeverityThreshold,MyName) ->
     lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
     lists:member(MyName, lager_msg:destinations(Msg)).
@@ -439,40 +565,76 @@ rotate_file_test() ->
                 rotate_logfile("rotation.log", 10)
     end || N <- lists:seq(0, 20)].
 
+rotate_file_fail_test() ->
+    %% make sure the directory exists
+    ?assertEqual(ok, filelib:ensure_dir("rotation/rotation.log")),
+    %% fix the permissions on it
+    os:cmd("chown -R u+rwx rotation"),
+    %% delete any old files
+    [ok = file:delete(F) || F <- filelib:wildcard("rotation/*")],
+    %% write a file
+    file:write_file("rotation/rotation.log", "hello"),
+    %% hose up the permissions
+    os:cmd("chown u-w rotation"),
+    ?assertMatch({error, _}, rotate_logfile("rotation.log", 10)),
+    ?assert(filelib:is_regular("rotation/rotation.log")),
+    os:cmd("chown u+w rotation"),
+    ?assertMatch(ok, rotate_logfile("rotation/rotation.log", 10)),
+    ?assert(filelib:is_regular("rotation/rotation.log.0")),
+    ?assertEqual(false, filelib:is_regular("rotation/rotation.log")),
+    ok.
+
 check_trace_test() ->
-    ?assertEqual([foo], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE}],
-                    0, foo},
-                {[{module, test}], 0, bar}], [])),
-    ?assertEqual([], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
-                        {foo, bar}], 0, foo},
-                {[{module, test}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, ?MODULE},
-                        {foo, bar}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
-                        {foo, bar}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar], check_traces([{module, ?MODULE}], 0, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([bar, foo], check_traces([{module, ?MODULE}, {foo, bar}], 0, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
-                        {foo, '*'}], 0, foo},
-                {[{module, '*'}], 0, bar}], [])),
-    ?assertEqual([foo], check_traces([{module, ?MODULE}, {foo, bar}], 6, [{[{module, '*'},
-                        {foo, '*'}], 7, foo},
-                {[{module, '*'}], 0, bar}], [])),
+    trace_filter(none),
+    %% match by module
+    ?assertEqual([foo], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}], config_to_mask(emergency), foo},
+                {[{module, test}], config_to_mask(emergency), bar}], [])),
+    %% match by module, but other unsatisfyable attribute
+    ?assertEqual([], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, test}], config_to_mask(emergency), bar}], [])),
+    %% match by wildcard module
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, ?MODULE}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcard module, one trace with unsatisfyable attribute
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, bar}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcard but not present custom trace attribute
+    ?assertEqual([bar], check_traces([{module, ?MODULE}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% wildcarding a custom attribute works when it is present
+    ?assertEqual([bar, foo], check_traces([{module, ?MODULE}, {foo, bar}], ?EMERGENCY, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% denied by level
+    ?assertEqual([], check_traces([{module, ?MODULE}, {foo, bar}], ?INFO, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(emergency), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    %% allowed by level
+    ?assertEqual([foo], check_traces([{module, ?MODULE}, {foo, bar}], ?INFO, [
+                {[{module, '*'}, {foo, '*'}], config_to_mask(debug), foo},
+                {[{module, '*'}], config_to_mask(emergency), bar}], [])),
+    ?assertEqual([anythingbutnotice, infoandbelow, infoonly], check_traces([{module, ?MODULE}], ?INFO, [
+                {[{module, '*'}], config_to_mask('=debug'), debugonly},
+                {[{module, '*'}], config_to_mask('=info'), infoonly},
+                {[{module, '*'}], config_to_mask('<=info'), infoandbelow},
+                {[{module, '*'}], config_to_mask('!=info'), anythingbutinfo},
+                {[{module, '*'}], config_to_mask('!=notice'), anythingbutnotice}
+                ], [])),
+
     ok.
 
 is_loggable_test_() ->
     [
-        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], []),2,me))},
-        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], []),1,me))},
-        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("",{"",""}, alert, [], [you]),2,me))},
-        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("",{"",""}, critical, [], [you]),1,me))},
-        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("",{"",""}, critical, [], [me]),1,me))}
+        {"Loggable by severity only", ?_assert(is_loggable(lager_msg:new("", alert, [], []),2,me))},
+        {"Not loggable by severity only", ?_assertNot(is_loggable(lager_msg:new("", critical, [], []),1,me))},
+        {"Loggable by severity with destination", ?_assert(is_loggable(lager_msg:new("", alert, [], [you]),2,me))},
+        {"Not loggable by severity with destination", ?_assertNot(is_loggable(lager_msg:new("", critical, [], [you]),1,me))},
+        {"Loggable by destination overriding severity", ?_assert(is_loggable(lager_msg:new("", critical, [], [me]),1,me))}
     ].
 
 format_time_test_() ->
@@ -503,5 +665,42 @@ format_time_test_() ->
                 lists:flatten([D,$ ,T])
             end)
     ].
+
+config_to_levels_test() ->
+    ?assertEqual([none], config_to_levels('none')),
+    ?assertEqual({mask, 0}, config_to_mask('none')),
+    ?assertEqual([debug], config_to_levels('=debug')),
+    ?assertEqual([debug], config_to_levels('<info')),
+    ?assertEqual(levels() -- [debug], config_to_levels('!=debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('>debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('>=info')),
+    ?assertEqual(levels() -- [debug], config_to_levels('=>info')),
+    ?assertEqual([debug, info, notice], config_to_levels('<=notice')),
+    ?assertEqual([debug, info, notice], config_to_levels('=<notice')),
+    ?assertEqual([debug], config_to_levels('<info')),
+    ?assertEqual([debug], config_to_levels('!info')),
+    ?assertError(badarg, config_to_levels(ok)),
+    ?assertError(badarg, config_to_levels('<=>info')),
+    ?assertError(badarg, config_to_levels('=<=info')),
+    ?assertError(badarg, config_to_levels('<==>=<=>info')),
+    %% double negatives DO work, however
+    ?assertEqual([debug], config_to_levels('!!=debug')),
+    ?assertEqual(levels() -- [debug], config_to_levels('!!!=debug')),
+    ok.
+
+config_to_mask_test() ->
+    ?assertEqual({mask, 0}, config_to_mask('none')),
+    ?assertEqual({mask, ?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('debug')),
+    ?assertEqual({mask, ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('warning')),
+    ?assertEqual({mask, ?DEBUG bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY}, config_to_mask('!=info')),
+    ok.
+
+mask_to_levels_test() ->
+    ?assertEqual([], mask_to_levels(0)),
+    ?assertEqual([debug], mask_to_levels(2#10000000)),
+    ?assertEqual([debug, info], mask_to_levels(2#11000000)),
+    ?assertEqual([debug, info, emergency], mask_to_levels(2#11000001)),
+    ?assertEqual([debug, notice, error], mask_to_levels(?DEBUG bor ?NOTICE bor ?ERROR)),
+    ok.
 
 -endif.

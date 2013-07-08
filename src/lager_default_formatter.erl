@@ -27,7 +27,7 @@
 %%
 %% Exported Functions
 %%
--export([format/2]).
+-export([format/2, format/3]).
 
 %%
 %% API Functions
@@ -53,30 +53,36 @@
 %%
 %%    `[{pid, ["My pid is ", pid], "Unknown Pid"}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
 %% @end
--spec format(lager_msg:lager_msg(),list()) -> any().
-format(Msg,[]) ->
-    format(Msg, [{eol, "\n"}]);
-format(Msg,[{eol, EOL}]) ->
+-spec format(lager_msg:lager_msg(),list(),list()) -> any().
+format(Msg,[], Colors) ->
+    format(Msg, [{eol, "\n"}], Colors);
+format(Msg,[{eol, EOL}], Colors) ->
     format(Msg,
-        [date, " ", time, " [", severity, "] ",
+        [date, " ", time, " ", color, "[", severity, "] ",
             {pid, ""},
             {module, [
                     {pid, ["@"], ""},
                     module,
                     {function, [":", function], ""},
                     {line, [":",line], ""}], ""},
-            " ", message, EOL]);
-format(Message,Config) ->
-    [ output(V,Message) || V <- Config ].
+            " ", message, EOL], Colors);
+format(Message,Config,Colors) ->
+    [ case V of
+        color -> output_color(Message,Colors);
+        _ -> output(V,Message) 
+      end || V <- Config ].
 
+-spec format(lager_msg:lager_msg(),list()) -> any().
+format(Msg, Config) ->
+    format(Msg, Config, []).
 
 -spec output(term(),lager_msg:lager_msg()) -> iolist().
 output(message,Msg) -> lager_msg:message(Msg);
 output(date,Msg) ->
-    {D, _T} = lager_msg:timestamp(Msg),
+    {D, _T} = lager_msg:datetime(Msg),
     D;
 output(time,Msg) ->
-    {_D, T} = lager_msg:timestamp(Msg),
+    {_D, T} = lager_msg:datetime(Msg),
     T;
 output(node,Msg) ->
     atom_to_list(node());
@@ -99,6 +105,14 @@ output({Prop, Present, Absent}, Msg) when is_atom(Prop) ->
     end;
 output(Other,_) -> make_printable(Other).
 
+output_color(_Msg,[]) -> [];
+output_color(Msg,Colors) ->
+    Level = lager_msg:severity(Msg),
+    case lists:keyfind(Level, 1, Colors) of
+        {_, Color} -> Color;
+        _ -> []
+    end.
+
 -spec make_printable(any()) -> iolist().
 make_printable(A) when is_atom(A) -> atom_to_list(A);
 make_printable(P) when is_pid(P) -> pid_to_list(P);
@@ -117,11 +131,17 @@ get_metadata(Key, Metadata, Default) ->
     end.
 
 -ifdef(TEST).
+date_time_now() ->
+    Now = os:timestamp(),
+    {Date, Time} = lager_util:format_time(lager_util:maybe_utc(lager_util:localtime_ms(Now))),
+    {Date, Time, Now}.
+
 basic_test_() ->
+    {Date, Time, Now} = date_time_now(),
     [{"Default formatting test",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time,  " [error] ", pid_to_list(self()), " Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -130,16 +150,16 @@ basic_test_() ->
         {"Basic Formatting",
             ?_assertEqual(<<"Simplist Format">>,
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
                         ["Simplist Format"])))
         },
         {"Default equivalent formatting test",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] ">>, pid_to_list(self()), <<" Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] ", pid_to_list(self()), " Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -147,9 +167,9 @@ basic_test_() ->
                     )))
         },
         {"Non existant metadata can default to string",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, self()}],
                             []),
@@ -157,9 +177,9 @@ basic_test_() ->
                     )))
         },
         {"Non existant metadata can default to other metadata",
-            ?_assertEqual(iolist_to_binary([<<"Day Time [error] Fallback Message\n">>]),
+            ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
-                            {"Day", "Time"},
+                            Now,
                             error,
                             [{pid, "Fallback"}],
                             []),

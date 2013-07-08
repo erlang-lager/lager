@@ -207,7 +207,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],
                     NodeSuffix = other_node_suffix(Pid),
                     Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
-                    case file:write(NewFD, Msg) of
+                    case file:write(NewFD, unicode:characters_to_binary(Msg)) of
                         {error, Reason} when Flap == false ->
                             ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
                                 [Name, file:format_error(Reason)]),
@@ -241,8 +241,6 @@ filesystem_test_() ->
                 application:set_env(lager, handlers, [{lager_test_backend, info}]),
                 application:set_env(lager, error_logger_redirect, true),
                 application:unset_env(lager, crash_log),
-                application:start(compiler),
-                application:start(syntax_tools),
                 application:start(lager),
                 timer:sleep(100),
                 lager_test_backend:flush()

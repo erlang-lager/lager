@@ -32,6 +32,8 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
+    %% set up the config, is safe even during relups
+    lager_config:new(),
     Children = [
         {lager, {gen_event, start_link, [{local, lager_event}]},
             permanent, 5000, worker, [dynamic]},
@@ -41,6 +43,8 @@ init([]) ->
     %% check if the crash log is enabled
     Crash = case application:get_env(lager, crash_log) of
         {ok, undefined} ->
+            [];
+        {ok, false} ->
             [];
         {ok, File} ->
             MaxBytes = case application:get_env(lager, crash_log_msg_size) of
