@@ -388,20 +388,17 @@ validate_trace({Filter, Level, Destination}) when is_tuple(Filter); is_list(Filt
 validate_trace(_) ->
     {error, invalid_trace}.
 
-validate_trace_filter(Filter) when is_tuple(Filter), is_atom(element(1, Filter)) =:= false ->
-    false;
-validate_trace_filter(Filter) ->
-        case lists:all(fun({Key, '*'}) when is_atom(Key) -> true; 
-                          ({Key, _Value})      when is_atom(Key) -> true;
-                          ({Key, '=', _Value}) when is_atom(Key) -> true;
-                          ({Key, '<', _Value}) when is_atom(Key) -> true;
-                          ({Key, '>', _Value}) when is_atom(Key) -> true;
-                          (_) -> false end, Filter) of
-            true ->
-                true;
-            _ ->
-                false
-        end.
+validate_trace_filter(Filter) when is_list(Filter) ->
+    lists:all(fun validate_trace_filter/1, Filter);
+validate_trace_filter({Key, '*'}) when is_atom(Key) -> true;
+validate_trace_filter({any, L}) when is_list(L) -> lists:all(fun validate_trace_filter/1, L);
+validate_trace_filter({all, L}) when is_list(L) -> lists:all(fun validate_trace_filter/1, L);
+validate_trace_filter({null, Bool}) when is_boolean(Bool) -> true;
+validate_trace_filter({Key, _Value})      when is_atom(Key) -> true;
+validate_trace_filter({Key, '=', _Value}) when is_atom(Key) -> true;
+validate_trace_filter({Key, '<', _Value}) when is_atom(Key) -> true;
+validate_trace_filter({Key, '>', _Value}) when is_atom(Key) -> true;
+validate_trace_filter(_) -> false.
 
 trace_all(Query) -> 
 	glc:all(trace_acc(Query)).
@@ -413,18 +410,23 @@ trace_acc(Query) ->
     trace_acc(Query, []).
 
 trace_acc([], Acc) -> 
-	lists:reverse(Acc);
+    lists:reverse(Acc);
+trace_acc([{any, L}|T], Acc) ->
+    trace_acc(T, [glc:any(L)|Acc]);
+trace_acc([{all, L}|T], Acc) ->
+    trace_acc(T, [glc:all(L)|Acc]);
+trace_acc([{null, Bool}|T], Acc) ->
+    trace_acc(T, [glc:null(Bool)|Acc]);
 trace_acc([{Key, '*'}|T], Acc) ->
-	trace_acc(T, [glc:wc(Key)|Acc]);
+    trace_acc(T, [glc:wc(Key)|Acc]);
 trace_acc([{Key, Val}|T], Acc) ->
-	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+    trace_acc(T, [glc:eq(Key, Val)|Acc]);
 trace_acc([{Key, '=', Val}|T], Acc) ->
-	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+    trace_acc(T, [glc:eq(Key, Val)|Acc]);
 trace_acc([{Key, '>', Val}|T], Acc) ->
-	trace_acc(T, [glc:gt(Key, Val)|Acc]);
+    trace_acc(T, [glc:gt(Key, Val)|Acc]);
 trace_acc([{Key, '<', Val}|T], Acc) ->
-	trace_acc(T, [glc:lt(Key, Val)|Acc]).
-	
+    trace_acc(T, [glc:lt(Key, Val)|Acc]).
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
