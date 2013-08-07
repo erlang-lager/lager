@@ -178,6 +178,9 @@ trace_console(Filter, Level) ->
 trace(Backend, Filter) ->
     trace(Backend, Filter, debug).
 
+trace({lager_file_backend, File}, Filter, Level) ->
+    trace_file(File, Filter, Level);
+
 trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
