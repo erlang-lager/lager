@@ -702,6 +702,18 @@ filesystem_test_() ->
                         {ok, Bin3} = file:read_file("foo.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
+            },
+            {"tracing with options should work",
+                fun() ->
+                        file:delete("foo.log"),
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
+                        lager:error("Test message"),
+                        lager:error("Test message"),
+                        ?assertNot(filelib:is_regular("foo.log.0")),
+                        lager:error("Test message"),
+                        timer:sleep(10),
+                        ?assert(filelib:is_regular("foo.log.0"))
+                end
             }
         ]
     }.
