@@ -132,7 +132,7 @@ is_new_style_console_available() ->
     %%    about log events being blocked by the old-style shell.
     %% 2. Windows doesn't support the new shell, so all windows users
     %%    have is the oldshell.
-    %% 3. If the user_drv process iss registered, all is OK.
+    %% 3. If the user_drv process is registered, all is OK.
     %%    'user_drv' is a registered proc name used by the "new"
     %%    console driver.
     init:get_argument(noshell) /= error orelse
