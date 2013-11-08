@@ -1,3 +1,4 @@
+%% -*- coding: latin-1 -*-
 %% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
