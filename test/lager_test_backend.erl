@@ -109,7 +109,7 @@ print_bad_state() ->
 has_line_numbers() ->
     %% are we R15 or greater
     Rel = erlang:system_info(otp_release),
-    {match, [Major]} = re:run(Rel, "^R(\\d+)[A|B](|0(\\d))$", [{capture, [1], list}]),
+    {match, [Major]} = re:run(Rel, "^R(\\d+)[A|B](|0(\\d))", [{capture, [1], list}]),
     list_to_integer(Major) >= 15.
 
 not_running_test() ->
@@ -555,7 +555,7 @@ setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
-    application:start(lager),
+    lager:start(),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
