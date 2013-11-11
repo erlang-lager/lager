@@ -414,8 +414,7 @@ supervisor_name(Name) -> Name.
 t0() ->
     application:stop(lager),
     application:stop(sasl),
-    application:start(sasl),
-    application:start(lager),
+    lager:start(),
     set_high_water(5),
     [error_logger:warning_msg("Foo ~p!", [X]) || X <- lists:seq(1,10)],
     timer:sleep(1000),
