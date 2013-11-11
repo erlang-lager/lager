@@ -469,7 +469,7 @@ filesystem_test_() ->
                 application:set_env(lager, handlers, [{lager_test_backend, info}]),
                 application:set_env(lager, error_logger_redirect, false),
                 application:set_env(lager, async_threshold, undefined),
-                application:start(lager)
+                lager:start()
         end,
         fun(_) ->
                 file:delete("test.log"),
@@ -716,7 +716,7 @@ formatting_test_() ->
                 application:load(lager),
                 application:set_env(lager, handlers, [{lager_test_backend, info}]),
                 application:set_env(lager, error_logger_redirect, false),
-                application:start(lager)
+                lager:start()
         end,
         fun(_) ->
                 file:delete("test.log"),

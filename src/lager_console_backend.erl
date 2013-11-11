@@ -165,7 +165,7 @@ console_log_test_() ->
                 application:load(lager),
                 application:set_env(lager, handlers, []),
                 application:set_env(lager, error_logger_redirect, false),
-                application:start(lager),
+                lager:start(),
                 whereis(user)
         end,
         fun(User) ->
@@ -381,7 +381,7 @@ set_loglevel_test_() ->
                 application:load(lager),
                 application:set_env(lager, handlers, [{lager_console_backend, info}]),
                 application:set_env(lager, error_logger_redirect, false),
-                application:start(lager)
+                lager:start()
         end,
         fun(_) ->
                 application:stop(lager),
