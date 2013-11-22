@@ -62,6 +62,8 @@ start(_StartType, _StartArgs) ->
             throw({error, bad_config})
     end,
 
+    lager_util:trace_filter(none),
+
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, info},
@@ -112,8 +114,6 @@ start(_StartType, _StartArgs) ->
                         []
                 end
         end,
-
-    lager_util:trace_filter(none), 
 
     {ok, Pid, SavedHandlers}.
 
