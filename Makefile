@@ -1,4 +1,5 @@
-.PHONY: rel stagedevrel deps test
+.PHONY: all compile deps clean distclean test check_plt build_plt dialyzer \
+	    cleanplt
 
 all: deps compile
 
