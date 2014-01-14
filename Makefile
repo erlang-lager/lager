@@ -24,30 +24,35 @@ test:
 docs:
 	./rebar doc
 
-APPS = kernel stdlib sasl erts ssl tools os_mon runtime_tools crypto inets \
-	xmerl webtool snmp public_key mnesia eunit
+APPS = kernel stdlib erts sasl eunit syntax_tools compiler crypto
 PLT ?= $(HOME)/.riak_combo_dialyzer_plt
+LOCAL_PLT = .lager_combo_dialyzer_plt
 
-check_plt: compile
-	dialyzer --check_plt --plt $(PLT) --apps $(APPS)
+${PLT}: compile
+ifneq (,$(wildcard $(PLT)))
+	dialyzer --check_plt --plt $(PLT) --apps $(APPS) && \
+		dialyzer --add_to_plt --plt $(PLT) --output_plt $(PLT) --apps $(APPS) ; test $$? -ne 1
+else
+	dialyzer --build_plt --output_plt $(PLT) --apps $(APPS); test $$? -ne 1
+endif
 
-build_plt: compile
-	dialyzer --build_plt --output_plt $(PLT) --apps $(APPS)
+${LOCAL_PLT}: compile
+ifneq (,$(wildcard $(LOCAL_PLT)))
+	dialyzer --check_plt --plt $(LOCAL_PLT) deps/*/ebin  && \
+		dialyzer --add_to_plt --plt $(LOCAL_PLT) --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1
+else
+	dialyzer --build_plt --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1
+endif
 
-dialyzer: compile
-	@echo
-	@echo Use "'make check_plt'" to check PLT prior to using this target.
-	@echo Use "'make build_plt'" to build PLT prior to using this target.
-	@echo
-	@sleep 1
-	dialyzer -Wunmatched_returns --plt $(PLT) ebin | \
-	    fgrep -v -f ./dialyzer.ignore-warnings
+dialyzer: ${PLT} ${LOCAL_PLT}
+	dialyzer -Wunmatched_returns --plts $(PLT) $(LOCAL_PLT) -c ebin
 
 cleanplt:
 	@echo 
-	@echo "Are you sure?  It takes about 1/2 hour to re-build."
-	@echo Deleting $(PLT) in 5 seconds.
+	@echo "Are you sure?  It takes several minutes to re-build."
+	@echo Deleting $(PLT) and $(LOCAL_PLT) in 5 seconds.
 	@echo 
 	sleep 5
 	rm $(PLT)
+	rm $(LOCAL_PLT)
 
