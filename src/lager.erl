@@ -191,7 +191,7 @@ trace(Backend, Filter, Level) ->
 stop_trace({_Filter, _Level, Target} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
-    lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
+    _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
     lager_config:set(loglevel, {Level, NewTraces}),
     case get_loglevel(Target) of
@@ -210,7 +210,7 @@ stop_trace({_Filter, _Level, Target} = Trace) ->
 
 clear_all_traces() ->
     {Level, _Traces} = lager_config:get(loglevel),
-    lager_util:trace_filter(none),
+    _ = lager_util:trace_filter(none),
     lager_config:set(loglevel, {Level, []}),
     lists:foreach(fun(Handler) ->
           case get_loglevel(Handler) of
@@ -319,7 +319,7 @@ add_trace_to_loglevel_config(Trace) ->
     case lists:member(Trace, Traces) of
         false ->
             NewTraces = [Trace|Traces],
-            lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
+            _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
             lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
         _ ->
             ok

@@ -113,7 +113,7 @@ start(_StartType, _StartArgs) ->
                 end
         end,
 
-    lager_util:trace_filter(none), 
+    _ = lager_util:trace_filter(none), 
 
     {ok, Pid, SavedHandlers}.
 

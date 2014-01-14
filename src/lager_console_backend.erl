@@ -24,7 +24,10 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, formatter,format_config,colors=[]}).
+-record(state, {level :: {'mask', integer()},
+                formatter :: atom(),
+                format_config :: any(),
+                colors=[] :: list()}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

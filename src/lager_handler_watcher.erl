@@ -36,9 +36,9 @@
 -export([start_link/3, start/3]).
 
 -record(state, {
-        module,
-        config,
-        event
+        module :: atom(),
+        config :: any(),
+        event :: pid() | atom()
     }).
 
 start_link(Event, Module, Config) ->
