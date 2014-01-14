@@ -1,4 +1,5 @@
-.PHONY: rel stagedevrel deps test
+.PHONY: all compile deps clean distclean test check_plt build_plt dialyzer \
+	    cleanplt
 
 all: deps compile
 
@@ -25,13 +26,13 @@ docs:
 
 APPS = kernel stdlib sasl erts ssl tools os_mon runtime_tools crypto inets \
 	xmerl webtool snmp public_key mnesia eunit
-COMBO_PLT = $(HOME)/.riak_combo_dialyzer_plt
+PLT ?= $(HOME)/.riak_combo_dialyzer_plt
 
 check_plt: compile
-	dialyzer --check_plt --plt $(COMBO_PLT) --apps $(APPS)
+	dialyzer --check_plt --plt $(PLT) --apps $(APPS)
 
 build_plt: compile
-	dialyzer --build_plt --output_plt $(COMBO_PLT) --apps $(APPS)
+	dialyzer --build_plt --output_plt $(PLT) --apps $(APPS)
 
 dialyzer: compile
 	@echo
@@ -39,14 +40,14 @@ dialyzer: compile
 	@echo Use "'make build_plt'" to build PLT prior to using this target.
 	@echo
 	@sleep 1
-	dialyzer -Wunmatched_returns --plt $(COMBO_PLT) ebin | \
+	dialyzer -Wunmatched_returns --plt $(PLT) ebin | \
 	    fgrep -v -f ./dialyzer.ignore-warnings
 
 cleanplt:
 	@echo 
 	@echo "Are you sure?  It takes about 1/2 hour to re-build."
-	@echo Deleting $(COMBO_PLT) in 5 seconds.
+	@echo Deleting $(PLT) in 5 seconds.
 	@echo 
 	sleep 5
-	rm $(COMBO_PLT)
+	rm $(PLT)
 
