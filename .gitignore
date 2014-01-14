@@ -7,3 +7,4 @@ erl_crash.dump
 .project
 log
 deps
+.local_dialyzer_plt
