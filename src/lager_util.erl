@@ -392,6 +392,7 @@ validate_trace_filter(Filter) when is_tuple(Filter), is_atom(element(1, Filter))
     false;
 validate_trace_filter(Filter) ->
         case lists:all(fun({Key, '*'}) when is_atom(Key) -> true; 
+                          ({Key, '!'}) when is_atom(Key) -> true;
                           ({Key, _Value})      when is_atom(Key) -> true;
                           ({Key, '=', _Value}) when is_atom(Key) -> true;
                           ({Key, '<', _Value}) when is_atom(Key) -> true;
@@ -416,6 +417,8 @@ trace_acc([], Acc) ->
 	lists:reverse(Acc);
 trace_acc([{Key, '*'}|T], Acc) ->
 	trace_acc(T, [glc:wc(Key)|Acc]);
+trace_acc([{Key, '!'}|T], Acc) ->
+	trace_acc(T, [glc:nf(Key)|Acc]);
 trace_acc([{Key, Val}|T], Acc) ->
 	trace_acc(T, [glc:eq(Key, Val)|Acc]);
 trace_acc([{Key, '=', Val}|T], Acc) ->
