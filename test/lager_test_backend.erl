@@ -388,10 +388,15 @@ lager_test_() ->
                         lager:info([{requestid, 8}], "hello world"),
                         lager:info([{requestid, 9}, {foo, bar}], "hello world"),
                         lager:info([{requestid, 10}], "hello world"),
-                        ?assertEqual(7, count()),
+                        lager:trace(?MODULE, [{fu, '!'}]),
+                        lager:info([{foo, bar}], "hello world"),
+                        lager:info([{ooh, car}], "hello world"),
+                        lager:trace(?MODULE, [{fu, '*'}]),
+                        lager:info([{fu, bar}], "hello world"),
+                        ?assertEqual(10, count()),
                         lager:clear_all_traces(),
                         lager:info([{requestid, 6}], "hello world"),
-                        ?assertEqual(7, count()),
+                        ?assertEqual(10, count()),
                         ok
                 end
             },
