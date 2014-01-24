@@ -391,6 +391,7 @@ lager_test_() ->
                         lager:trace(?MODULE, [{fu, '!'}]),
                         lager:info([{foo, bar}], "hello world"),
                         lager:info([{ooh, car}], "hello world"),
+                        lager:info([{fu, bar}], "hello world"),
                         lager:trace(?MODULE, [{fu, '*'}]),
                         lager:info([{fu, bar}], "hello world"),
                         ?assertEqual(10, count()),
