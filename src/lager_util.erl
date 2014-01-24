@@ -353,17 +353,16 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
     NewNow = calendar:gregorian_seconds_to_datetime(Seconds),
     calculate_next_rotation(T, NewNow).
 
-
+-spec trace_filter(Query :: 'none' | [tuple()]) -> {ok, any()}.
 trace_filter(Query) ->
     trace_filter(?DEFAULT_TRACER, Query).
 
 %% TODO: Support multiple trace modules 
+%-spec trace_filter(Module :: atom(), Query :: 'none' | [tuple()]) -> {ok, any()}.
 trace_filter(Module, Query) when Query == none; Query == [] ->
-    trace_filter(Module, glc:null(false));
+    {ok, _} = glc:compile(Module, glc:null(false));
 trace_filter(Module, Query) when is_list(Query) ->
-    trace_filter(Module, glc_lib:reduce(trace_any(Query)));
-trace_filter(Module, Query) ->
-    {ok, _} = glc:compile(Module, Query).
+    {ok, _} = glc:compile(Module, glc_lib:reduce(trace_any(Query))).
 
 validate_trace({Filter, Level, {Destination, ID}}) when is_tuple(Filter); is_list(Filter), is_atom(Level), is_atom(Destination) ->
     case validate_trace({Filter, Level, Destination}) of

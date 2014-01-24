@@ -62,15 +62,15 @@
         inode :: integer(),
         flap=false :: boolean(),
         size = 0 :: integer(),
-        date,
-        count = 10,
-        formatter,
-        formatter_config,
-        sync_on,
-        check_interval = ?DEFAULT_CHECK_INTERVAL,
-        sync_interval = ?DEFAULT_SYNC_INTERVAL,
-        sync_size = ?DEFAULT_SYNC_SIZE,
-        last_check = os:timestamp()
+        date :: undefined | string(),
+        count = 10 :: integer(),
+        formatter :: atom(),
+        formatter_config :: any(),
+        sync_on :: {'mask', integer()},
+        check_interval = ?DEFAULT_CHECK_INTERVAL :: non_neg_integer(),
+        sync_interval = ?DEFAULT_SYNC_INTERVAL :: non_neg_integer(),
+        sync_size = ?DEFAULT_SYNC_SIZE :: non_neg_integer(),
+        last_check = os:timestamp() :: erlang:timestamp()
     }).
 
 -type option() :: {file, string()} | {level, lager:log_level()} |
@@ -147,7 +147,7 @@ handle_event(_Event, State) ->
 
 %% @private
 handle_info({rotate, File}, #state{name=File,count=Count,date=Date} = State) ->
-    lager_util:rotate_logfile(File, Count),
+    _ = lager_util:rotate_logfile(File, Count),
     schedule_rotation(File, Date),
     {ok, State};
 handle_info(_Info, State) ->

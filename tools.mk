@@ -17,16 +17,22 @@ else
 endif
 
 ${LOCAL_PLT}: compile
+ifneq (,$(wildcard deps/*))
 ifneq (,$(wildcard $(LOCAL_PLT)))
 	dialyzer --check_plt --plt $(LOCAL_PLT) deps/*/ebin  && \
 		dialyzer --add_to_plt --plt $(LOCAL_PLT) --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1
 else
 	dialyzer --build_plt --output_plt $(LOCAL_PLT) deps/*/ebin ; test $$? -ne 1
 endif
+endif
 
 dialyzer: ${PLT} ${LOCAL_PLT}
 	@echo "==> $(shell basename $(shell pwd)) (dialyzer)"
-	dialyzer $(DIALYZER_FLAGS) --plts $(PLT) $(LOCAL_PLT) -c ebin
+	@if [ -f $(LOCAL_PLT) ]; then \
+		dialyzer $(DIALYZER_FLAGS) --plts $(PLT) $(LOCAL_PLT) -c ebin; \
+	else \
+		dialyzer $(DIALYZER_FLAGS) --plts $(PLT) -c ebin; \
+	fi
 
 cleanplt:
 	@echo 

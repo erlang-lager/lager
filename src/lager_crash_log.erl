@@ -45,14 +45,14 @@
 -export([start_link/5, start/5]).
 
 -record(state, {
-        name,
-        fd,
-        inode,
-        fmtmaxbytes,
-        size,
-        date,
-        count,
-        flap=false
+        name :: string(),
+        fd :: pid(),
+        inode :: integer(),
+        fmtmaxbytes :: integer(),
+        size :: integer(),
+        date :: undefined | string(),
+        count :: integer(),
+        flap=false :: boolean()
 }).
 
 %% @private
@@ -95,7 +95,7 @@ handle_cast(_Request, State) ->
 
 %% @private
 handle_info(rotate, #state{name=Name, count=Count, date=Date} = State) ->
-    lager_util:rotate_logfile(Name, Count),
+    _ = lager_util:rotate_logfile(Name, Count),
     schedule_rotation(Date),
     {noreply, State};
 handle_info(_Info, State) ->
@@ -199,7 +199,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
         true ->
             case lager_util:ensure_logfile(Name, FD, Inode, false) of
                 {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
-                    lager_util:rotate_logfile(Name, Count),
+                    _ = lager_util:rotate_logfile(Name, Count),
                     handle_cast({log, Event}, State);
                 {ok, {NewFD, NewInode, _Size}} ->
                     {Date, TS} = lager_util:format_time(

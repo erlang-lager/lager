@@ -23,7 +23,7 @@
 -export([format/3, format/4]).
 
 -record(options, {
-        chomp = false
+        chomp = false :: boolean()
     }).
 
 format(FmtStr, Args, MaxLen) ->

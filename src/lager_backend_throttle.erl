@@ -30,9 +30,9 @@
         code_change/3]).
 
 -record(state, {
-        hwm,
-        window_min,
-        async = true
+        hwm :: non_neg_integer(),
+        window_min :: non_neg_integer(),
+        async = true :: boolean()
     }).
 
 init([Hwm, Window]) ->
