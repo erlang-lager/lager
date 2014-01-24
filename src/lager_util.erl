@@ -588,6 +588,7 @@ rotate_file_fail_test() ->
     ok.
 
 check_trace_test() ->
+    lager:start(),
     trace_filter(none),
     %% match by module
     ?assertEqual([foo], check_traces([{module, ?MODULE}], ?EMERGENCY, [
@@ -628,7 +629,7 @@ check_trace_test() ->
                 {[{module, '*'}], config_to_mask('!=info'), anythingbutinfo},
                 {[{module, '*'}], config_to_mask('!=notice'), anythingbutnotice}
                 ], [])),
-
+    application:stop(lager),
     ok.
 
 is_loggable_test_() ->
