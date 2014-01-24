@@ -127,13 +127,10 @@ print(Atom, _Max, #print_options{force_strings=NoQuote}) when is_atom(Atom) ->
     end,
     {R, length(R)};
 
-print(Bin, _Max, O = #print_options{depth=1}) when is_binary(Bin) ->
-    case O#print_options.lists_as_strings of
-        true when Bin == <<>>  ->
-            {"<<>>", 4};
-        _ ->
-            {"<<...>>", 7}
-    end;
+print(<<>>, _Max, #print_options{depth=1}) ->
+    {"<<>>", 4};
+print(Bin, _Max, #print_options{depth=1}) when is_binary(Bin) ->
+    {"<<...>>", 7};
 print(<<>>, _Max, Options) ->
     case Options#print_options.force_strings of
         true ->
@@ -766,7 +763,7 @@ depth_limit_test() ->
 
     %% I don't even know...
     ?assertEqual("<<>>", lists:flatten(format("~P", [<<>>, 1], 50))),
-    ?assertEqual("<<...>>", lists:flatten(format("~W", [<<>>, 1], 50))),
+    ?assertEqual("<<>>", lists:flatten(format("~W", [<<>>, 1], 50))),
 
     ?assertEqual("{abc,<<\"abc\\\"\">>}", lists:flatten(format("~P", [{abc,<<"abc\"">>}, 4], 50))),
 
