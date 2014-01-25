@@ -1,4 +1,4 @@
-%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2012, 2014 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -44,7 +44,7 @@ init([Level,false]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]);
 init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
     Colors = case application:get_env(lager, colored) of
-        {ok, true} -> 
+        {ok, true} ->
             {ok, LagerColors} = application:get_env(lager, colors),
             LagerColors;
         _ -> []
@@ -65,7 +65,7 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
             {error, {fatal, old_shell}};
         {true, Levels} ->
             {ok, #state{level=Levels,
-                    formatter=Formatter, 
+                    formatter=Formatter,
                     format_config=FormatterConfig,
                     colors=Colors}}
     catch
@@ -119,7 +119,7 @@ eol() ->
     case application:get_env(lager, colored) of
         {ok, true}  ->
             "\e[0m\r\n";
-        _ -> 
+        _ ->
             "\r\n"
     end.
 
@@ -139,7 +139,7 @@ is_new_style_console_available() ->
     %%    'user_drv' is a registered proc name used by the "new"
     %%    console driver.
     init:get_argument(noshell) /= error orelse
-        element(1, os:type()) == win32 orelse
+        element(1, os:type()) /= win32 orelse
         is_pid(whereis(user_drv)).
 -endif.
 
@@ -224,7 +224,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        gen_event:add_handler(lager_event, lager_console_backend, 
+                        gen_event:add_handler(lager_event, lager_console_backend,
                           [info, {lager_default_formatter, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
                                                             module,"#",function,"#",file,"#",line,"#",message,"\r\n"]}]),
                         lager_config:set(loglevel, {?INFO, []}),
@@ -235,7 +235,7 @@ console_log_test_() ->
                         receive
                             {io_request, _, _, {put_chars, unicode, Msg}} ->
                                 TestMsg = "Test message" ++ eol(),
-                                ?assertMatch([_, _, "info", NodeStr, PidStr, ModuleStr, _, _, _, TestMsg], 
+                                ?assertMatch([_, _, "info", NodeStr, PidStr, ModuleStr, _, _, _, TestMsg],
                                              re:split(Msg, "#", [{return, list}, {parts, 10}]))
                         after
                             500 ->
