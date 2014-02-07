@@ -406,6 +406,8 @@ print_val(Val) ->
     Str.
 
 
+%% @doc Faster than proplists, but with the same API as long as you don't need to
+%% handle bare atom keys
 get_value(Key, Value) ->
     get_value(Key, Value, undefined).
 

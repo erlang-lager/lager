@@ -137,7 +137,7 @@ gen_pid() ->
 gen_port() ->
     ?LAZY(begin
               Port = erlang:open_port({spawn, "true"}, []),
-              erlang:port_close(Port),
+              catch(erlang:port_close(Port)),
               Port
           end).
 
