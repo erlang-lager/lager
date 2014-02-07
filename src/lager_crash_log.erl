@@ -188,7 +188,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
         {error, _GL, {Pid1, Fmt, Args}} ->
             {"ERROR REPORT", Pid1, limited_fmt(Fmt, Args, FmtMaxBytes), true};
         {error_report, _GL, {Pid1, std_error, Rep}} ->
-            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes), true};
+            {"ERROR REPORT", Pid1, limited_str(Rep, FmtMaxBytes) ++ "\n", true};
         {error_report, _GL, Other} ->
             perhaps_a_sasl_report(error_report, Other, FmtMaxBytes);
         _ ->
