@@ -235,8 +235,8 @@ log_event(Event, State) ->
                     ?LOGFMT(info, P, "Application ~w started on node ~w",
                         [App, Node]);
                 [{started, Started}, {supervisor, Name}] ->
-                    MFA = format_mfa(proplists:get_value(mfargs, Started)),
-                    Pid = proplists:get_value(pid, Started),
+                    MFA = format_mfa(get_value(mfargs, Started)),
+                    Pid = get_value(pid, Started),
                     ?LOGFMT(debug, P, "Supervisor ~w started ~s at pid ~w",
                         [supervisor_name(Name), MFA, Pid]);
                 _ ->
@@ -248,13 +248,13 @@ log_event(Event, State) ->
     {ok, State}.
 
 format_crash_report(Report, Neighbours) ->
-    Name = case proplists:get_value(registered_name, Report, []) of
+    Name = case get_value(registered_name, Report, []) of
         [] ->
             %% process_info(Pid, registered_name) returns [] for unregistered processes
-            proplists:get_value(pid, Report);
+            get_value(pid, Report);
         Atom -> Atom
     end,
-    {Class, Reason, Trace} = proplists:get_value(error_info, Report),
+    {Class, Reason, Trace} = get_value(error_info, Report),
     ReasonStr = format_reason({Reason, Trace}),
     Type = case Class of
         exit -> "exited";
@@ -264,17 +264,17 @@ format_crash_report(Report, Neighbours) ->
         [Name, length(Neighbours), Type, ReasonStr]).
 
 format_offender(Off) ->
-    case proplists:get_value(mfargs, Off) of
+    case get_value(mfargs, Off) of
         undefined ->
             %% supervisor_bridge
             io_lib:format("at module ~w at ~w",
-                [proplists:get_value(mod, Off), proplists:get_value(pid, Off)]);
+                [get_value(mod, Off), get_value(pid, Off)]);
         MFArgs ->
             %% regular supervisor
             MFA = format_mfa(MFArgs),
-            Name = proplists:get_value(name, Off),
+            Name = get_value(name, Off),
             io_lib:format("~p started with ~s at ~w",
-                [Name, MFA, proplists:get_value(pid, Off)])
+                [Name, MFA, get_value(pid, Off)])
     end.
 
 format_reason({'function not exported', [{M, F, A},MFA|_]}) ->
@@ -361,7 +361,7 @@ format_mfa({M, F, A}) when is_list(A) ->
 format_mfa({M, F, A}) when is_integer(A) ->
     io_lib:format("~w:~w/~w", [M, F, A]);
 format_mfa({M, F, A, Props}) when is_list(Props) ->
-    case proplists:get_value(line, Props) of
+    case get_value(line, Props) of
         undefined ->
             format_mfa({M, F, A});
         Line ->
@@ -404,6 +404,18 @@ print_silly_list([H|T], Fmt, Acc) ->
 print_val(Val) ->
     {Str, _} = lager_trunc_io:print(Val, 500),
     Str.
+
+
+%% @doc Faster than proplists, but with the same API as long as you don't need to
+%% handle bare atom keys
+get_value(Key, Value) ->
+    get_value(Key, Value, undefined).
+
+get_value(Key, List, Default) ->
+    case lists:keyfind(Key, 1, List) of
+        false -> Default;
+        {Key, Value} -> Value
+    end.
 
 supervisor_name({local, Name}) -> Name;
 supervisor_name(Name) -> Name.
