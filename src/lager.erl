@@ -378,8 +378,10 @@ pr(Record, _) ->
     Record.
 
 zip([FieldName|RecordFields], [FieldValue|Record], Module, ToReturn) ->
-    case  is_tuple(FieldValue) andalso is_atom(element(1, FieldValue))
-           andalso is_record_known(FieldValue, Module) of
+    case   is_tuple(FieldValue) andalso
+           tuple_size(FieldValue) > 0 andalso
+           is_atom(element(1, FieldValue)) andalso
+           is_record_known(FieldValue, Module) of
         false ->
             zip(RecordFields, Record, Module, [{FieldName, FieldValue}|ToReturn]);
         _Else ->
