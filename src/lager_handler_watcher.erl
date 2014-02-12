@@ -134,6 +134,7 @@ reinstall_on_initial_failure_test_() ->
                       ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
                     after
                       application:stop(lager),
+                      application:stop(goldrush),
                       error_logger:tty(true)
                     end
             end
@@ -162,6 +163,7 @@ reinstall_on_runtime_failure_test_() ->
                         ?assertEqual(false, lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
                     after
                        application:stop(lager),
+                       application:stop(goldrush),
                        error_logger:tty(true)
                    end
             end

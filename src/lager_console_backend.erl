@@ -175,6 +175,7 @@ console_log_test_() ->
                 unregister(user),
                 register(user, User),
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [
@@ -388,6 +389,7 @@ set_loglevel_test_() ->
         end,
         fun(_) ->
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [

@@ -629,6 +629,7 @@ check_trace_test() ->
                 {[{module, '*'}], config_to_mask('!=notice'), anythingbutnotice}
                 ], [])),
     application:stop(lager),
+    application:stop(goldrush),
     ok.
 
 is_loggable_test_() ->
