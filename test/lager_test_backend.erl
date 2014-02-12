@@ -1204,6 +1204,62 @@ collect_workers(Workers) ->
             collect_workers(lists:keydelete(Ref, 2, Workers))
     end.
 
+produce_n_error_logger_msgs(N) ->
+    lists:foreach(fun (K) ->
+            error_logger:error_msg("Foo ~p!", [K])
+        end,
+        lists:seq(0, N-1)
+    ).
+
+high_watermark_test_() ->
+    {foreach,
+        fun() ->
+            error_logger:tty(false),
+            application:load(lager),
+            application:set_env(lager, error_logger_redirect, true),
+            application:set_env(lager, handlers, [{lager_test_backend, info}]),
+            application:set_env(lager, async_threshold, undefined),
+            lager:start()
+        end,
+        fun(_) ->
+            application:stop(lager),
+            error_logger:tty(true)
+        end,
+        [
+            {"Nothing dropped when error_logger high watermark is undefined",
+                fun () ->
+                    ok = error_logger_lager_h:set_high_water(undefined),
+                    timer:sleep(100),
+                    produce_n_error_logger_msgs(10),
+                    timer:sleep(500),
+                    ?assert(count() >= 10)
+                end
+            },
+            {"Mostly dropped according to error_logger high watermark",
+                fun () ->
+                    ok = error_logger_lager_h:set_high_water(5),
+                    timer:sleep(100),
+                    produce_n_error_logger_msgs(50),
+                    timer:sleep(1000),
+                    ?assert(count() < 20)
+                end
+            },
+            {"Non-notifications are not dropped",
+                fun () ->
+                    ok = error_logger_lager_h:set_high_water(2),
+                    timer:sleep(100),
+                    spawn(fun () -> produce_n_error_logger_msgs(300) end),
+                    timer:sleep(50),
+                    %% if everything were dropped, this call would be dropped
+                    %% too, so lets hope it's not
+                    ?assert(is_integer(count())),
+                    timer:sleep(1000),
+                    ?assert(count() < 10)
+                end
+            }
+        ]
+    }.
+
 -endif.
 
 

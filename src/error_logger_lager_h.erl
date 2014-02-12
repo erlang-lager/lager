@@ -131,7 +131,12 @@ discard_messages(Second, Count) ->
     case Second of
         {M, S, _} ->
             receive
-                _Msg ->
+                %% we only discard gen_event notifications, because
+                %% otherwise we might discard gen_event internal
+                %% messages, such as trapped EXITs
+                {notify, _Event} ->
+                    discard_messages(Second, Count+1);
+                {_From, _Tag, {sync_notify, _Event}} ->
                     discard_messages(Second, Count+1)
             after 0 ->
                     Count
@@ -419,20 +424,3 @@ get_value(Key, List, Default) ->
 
 supervisor_name({local, Name}) -> Name;
 supervisor_name(Name) -> Name.
--ifdef(TEST).
-
-%% Not intended to be a fully paranoid EUnit test....
-
-t0() ->
-    application:stop(lager),
-    application:stop(sasl),
-    lager:start(),
-    set_high_water(5),
-    [error_logger:warning_msg("Foo ~p!", [X]) || X <- lists:seq(1,10)],
-    timer:sleep(1000),
-    [error_logger:warning_msg("Bar ~p!", [X]) || X <- lists:seq(1,10)],
-    timer:sleep(1000),
-    error_logger:warning_msg("Baz!"),
-    ok.
-
--endif. % TEST
