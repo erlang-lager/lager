@@ -476,6 +476,7 @@ filesystem_test_() ->
                 file:delete("test.log.0"),
                 file:delete("test.log.1"),
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [
@@ -607,7 +608,7 @@ filesystem_test_() ->
                         ?assertEqual({ok, <<>>}, file:read_file("test.log")),
                         lager:log(info, self(), "Test message1"),
                         ?assertEqual({ok, <<>>}, file:read_file("test.log")),
-                        timer:sleep(1000),
+                        timer:sleep(2000),
                         {ok, Bin} = file:read_file("test.log"),
                         ?assert(<<>> /= Bin)
                 end
@@ -722,6 +723,7 @@ formatting_test_() ->
                 file:delete("test.log"),
                 file:delete("test2.log"),
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
             [{"Should have two log files, the second prefixed with 2>",

@@ -253,6 +253,7 @@ filesystem_test_() ->
                 end,
                 file:delete("crash_test.log"),
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [

@@ -511,7 +511,7 @@ lager_test_() ->
             {"record printing fails gracefully when module is invalid",
                 fun() ->
                         spawn(fun() -> lager:info("State ~p", [lager:pr({state, 1}, not_a_module)]) end),
-                        timer:sleep(100),
+                        timer:sleep(1000),
                         {Level, _Time, Message, _Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(info)),
                         ?assertEqual("State {state,1}", lists:flatten(Message)),
@@ -566,6 +566,7 @@ setup() ->
 
 cleanup(_) ->
     application:stop(lager),
+    application:stop(goldrush),
     error_logger:tty(true).
 
 
@@ -620,6 +621,7 @@ error_logger_redirect_crash_test_() ->
 
         fun(_) ->
                 application:stop(lager),
+                application:stop(goldrush),
                 case whereis(crash) of
                     undefined -> ok;
                     Pid -> exit(Pid, kill)
@@ -669,6 +671,7 @@ error_logger_redirect_test_() ->
 
         fun(_) ->
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [
@@ -1158,13 +1161,15 @@ async_threshold_test_() ->
                 error_logger:tty(false),
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, false),
-                application:set_env(lager, async_threshold, 10),
+                application:set_env(lager, async_threshold, 2),
+                application:set_env(lager, async_threshold_window, 1),
                 application:set_env(lager, handlers, [{?MODULE, info}]),
                 lager:start()
         end,
         fun(_) ->
                 application:unset_env(lager, async_threshold),
                 application:stop(lager),
+                application:stop(goldrush),
                 error_logger:tty(true)
         end,
         [
@@ -1186,7 +1191,9 @@ async_threshold_test_() ->
                         %% serialize ont  the mailbox again
                         _ = gen_event:which_handlers(lager_event),
                         %% just in case...
-                        timer:sleep(100),
+                        timer:sleep(1000),
+                        lager:info("hello world"),
+                        _ = gen_event:which_handlers(lager_event),
 
                         %% async is true again now that the mailbox has drained
                         ?assertEqual(true, lager_config:get(async)),
