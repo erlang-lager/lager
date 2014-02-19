@@ -1,7 +1,7 @@
 Overview
 --------
 
-Blah.
+Blah. Ska.
 
 Lager (as in the beer) is a logging framework for Erlang. Its purpose is
 to provide a more traditional way to perform logging in an erlang application
