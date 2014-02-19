@@ -408,3 +408,4 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 wtf
 wtf
 wtf
+wtf
