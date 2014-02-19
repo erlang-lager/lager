@@ -1,5 +1,8 @@
 Overview
 --------
+
+Blah.
+
 Lager (as in the beer) is a logging framework for Erlang. Its purpose is
 to provide a more traditional way to perform logging in an erlang application
 that plays nicely with traditional UNIX logging tools like logrotate and
