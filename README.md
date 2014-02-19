@@ -405,3 +405,4 @@ You can also pass it to erlc, if you prefer:
 ```
 erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
 ```
+wtf
