@@ -143,29 +143,50 @@ log(Level, Metadata, Format, Args) when is_list(Metadata) ->
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug).
 
-trace_file(File, Filter, Level) ->
-    Trace0 = {Filter, Level, {lager_file_backend, File}},
-    case lager_util:validate_trace(Trace0) of
-        {ok, Trace} ->
-            Handlers = gen_event:which_handlers(lager_event),
-            %% check if this file backend is already installed
-            Res = case lists:member({lager_file_backend, File}, Handlers) of
-                false ->
-                    %% install the handler
-                    supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, {File, none}]);
-                _ ->
-                    {ok, exists}
-            end,
-            case Res of
-              {ok, _} ->
-                add_trace_to_loglevel_config(Trace),
-                {ok, Trace};
-              {error, _} = E ->
-                E
+trace_file(File, Filter, Level) when is_atom(Level) orelse is_integer(Level) ->
+    trace_file(File, Filter, [{level, Level}]);
+trace_file(File, Filter, Config) when is_list(Config) ->
+    case proplists:get_value(file, Config, File) of
+        File ->
+            Level = proplists:get_value(level, Config, debug),
+            Trace0 = {Filter, Level, {lager_file_backend, File}},
+            case lager_util:validate_trace(Trace0) of
+                {ok, Trace} ->
+                    Handlers = gen_event:which_handlers(lager_event),
+                    %% check if this file backend is already installed
+                    Res = case lists:member({lager_file_backend, File}, Handlers) of
+                              false ->
+                                  %% install the handler
+                                  supervisor:start_child(lager_handler_watcher_sup,
+                                                         [lager_event, {lager_file_backend, File},
+                                                          [{file, File},
+                                                           {level, none}
+                                                           |proplists:delete(level, Config)]]);
+                              _ ->
+                                  case lists:foldl(fun proplists:delete/2,
+                                                   Config, [file, level]) of
+                                      [] ->
+                                          % if there are no other config values
+                                          % it is ok to trace into an existing logfile
+                                          {ok, exists};
+                                      _ ->
+                                          % otherwise not since we cannot (and mustn't)
+                                          % change other parameters on the fly
+                                          {error, exists}
+                                  end
+                          end,
+                    case Res of
+                        {ok, _} ->
+                            add_trace_to_loglevel_config(Trace),
+                            {ok, Trace};
+                        {error, _} = E ->
+                            E
+                    end;
+                Error ->
+                    Error
             end;
-        Error ->
-            Error
+        _ ->
+            {error, file_mismatch}
     end.
 
 

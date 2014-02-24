@@ -704,9 +704,67 @@ filesystem_test_() ->
                         {ok, Bin3} = file:read_file("foo.log"),
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
-            }
+            },
+         {"tracing to a dedicated file with internal rotation should work",
+              fun() ->
+                        [ok = file:delete(F)||F <- filelib:wildcard("foo.log*")],
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}],
+                                                   [{level, error},
+                                                    {size, 10},
+                                                    {count, 1},
+                                                    {check_interval, always}]),
+                        lager:error("Test message1"),
+                        lager:error("Test message2"),
+                        % log file indeed rotated
+                        ?assert(filelib:is_regular("foo.log.0")),
+                        {ok, Bin} = file:read_file("foo.log"),
+                        {ok, Bin2} = file:read_file("foo.log.0"),
+                        Split = fun(B) -> re:split(B, " ", [{return, list}, {parts, 5}]) end,
+                        ?assertMatch([_, _, "[error]", _, "Test message2\n"], Split(Bin)),
+                        ?assertMatch([_, _, "[error]", _, "Test message1\n"], Split(Bin2)),
+                        % log file count indeed limited
+                        lager:error("Test message3"),
+                        ?assertNot(filelib:is_regular("foo.log.1")),
+                        {ok, Bin3} = file:read_file("foo.log"),
+                        {ok, Bin4} = file:read_file("foo.log.0"),
+                        ?assertMatch([_, _, "[error]", _, "Test message3\n"], Split(Bin3)),
+                        ?assertMatch([_, _, "[error]", _, "Test message2\n"], Split(Bin4))
+                end
+         }
         ]
     }.
+
+trace_file_invalid_config_test_() ->
+    {foreach,
+        fun() ->
+                file:write_file("test.log", ""),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers,
+                                    [{lager_file_backend, [{"test.log", info}]}]),
+                application:set_env(lager, error_logger_redirect, false),
+                application:start(lager)
+        end,
+        fun(_) ->
+                file:delete("test.log"),
+                application:stop(lager),
+                error_logger:tty(true)
+        end,
+        [{"tracing with rotation to an existing log should fail",
+          fun() ->
+                  ?assertEqual({error, exists},
+                               lager:trace_file("test.log", [{module, ?MODULE}],
+                                                [{level, error}, {size, 10}]))
+          end
+         },
+         {"tracing with different filename in config should fail",
+          fun() ->
+                  ?assertEqual({error, file_mismatch},
+                               lager:trace_file("test.log", [{module, ?MODULE}],
+                                                [{file, "test2.log"}, {level, error}]))
+          end
+         }
+        ]}.
 
 formatting_test_() ->
     {foreach,
