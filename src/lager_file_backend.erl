@@ -1,4 +1,3 @@
-%% -*- coding: latin-1 -*-
 %% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
@@ -502,7 +501,7 @@ filesystem_test_() ->
                 fun() ->
                         %% XXX if this test fails, check that this file is encoded latin-1, not utf-8!
                         gen_event:add_handler(lager_event, lager_file_backend, [{"test.log", info}, {lager_default_formatter}]),
-                        lager:log(error, self(),"~ts", ["LÆÝÎN-ï"]),
+                        lager:log(error, self(),"~ts", [[76, 198, 221, 206, 78, $-, 239]]),
                         {ok, Bin} = file:read_file("test.log"),
                         Pid = pid_to_list(self()),
                         Res = re:split(Bin, " ", [{return, list}, {parts, 5}]),
