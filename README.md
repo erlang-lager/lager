@@ -1,5 +1,8 @@
 Overview
 --------
+
+Blah. Ska.
+
 Lager (as in the beer) is a logging framework for Erlang. Its purpose is
 to provide a more traditional way to perform logging in an erlang application
 that plays nicely with traditional UNIX logging tools like logrotate and
@@ -402,3 +405,11 @@ You can also pass it to erlc, if you prefer:
 ```
 erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
 ```
+wtf
+wtf
+wtf
+wtf
+wtf
+wtf
+wtf
+wtf
