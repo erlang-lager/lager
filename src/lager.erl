@@ -26,7 +26,7 @@
 -export([start/0,
         log/3, log/4,
         md/0, md/1,
-        trace/2, trace/3, trace_file/2, trace_file/3, trace_console/1, trace_console/2,
+        trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0, 
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
@@ -141,19 +141,26 @@ log(Level, Metadata, Format, Args) when is_list(Metadata) ->
     dispatch_log(Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
 
 trace_file(File, Filter) ->
-    trace_file(File, Filter, debug).
+    trace_file(File, Filter, debug, []).
 
-trace_file(File, Filter, Level) ->
+trace_file(File, Filter, Level) when is_atom(Level) ->
+    trace_file(File, Filter, Level, []);
+
+trace_file(File, Filter, Options) when is_list(Options) ->
+    trace_file(File, Filter, debug, Options).
+    
+trace_file(File, Filter, Level, Options) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             Handlers = gen_event:which_handlers(lager_event),
             %% check if this file backend is already installed
             Res = case lists:member({lager_file_backend, File}, Handlers) of
-                false ->
-                    %% install the handler
+               false ->
+                     %% install the handler
+                    LogFileConfig = lists:keystore(level, 1, lists:keystore(file, 1, Options, {file, File}), {level, none}),
                     supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, {File, none}]);
+                        [lager_event, {lager_file_backend, File}, LogFileConfig]);
                 _ ->
                     {ok, exists}
             end,
