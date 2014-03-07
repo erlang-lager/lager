@@ -463,6 +463,9 @@ filesystem_test_() ->
     {foreach,
         fun() ->
                 file:write_file("test.log", ""),
+                file:delete("foo.log"),
+                file:delete("foo.log.0"),
+                file:delete("foo.log.1"),
                 error_logger:tty(false),
                 application:load(lager),
                 application:set_env(lager, handlers, [{lager_test_backend, info}]),
@@ -708,7 +711,6 @@ filesystem_test_() ->
                 fun() ->
                         file:delete("foo.log"),
                         {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
-                        lager:error("Test message"),
                         lager:error("Test message"),
                         ?assertNot(filelib:is_regular("foo.log.0")),
                         lager:error("Test message"),
