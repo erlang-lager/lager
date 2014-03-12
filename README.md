@@ -382,7 +382,7 @@ are:
 * '>' - greater than
 
 ```erlang
-lager:trace_console([{request, '>' 117}, {request, '<' 120}])
+lager:trace_console([{request, '>', 117}, {request, '<', 120}])
 ```
 
 Using '=' is equivalent to the 2-tuple form.
