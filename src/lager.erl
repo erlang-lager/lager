@@ -22,7 +22,7 @@
 
 -define(LAGER_MD_KEY, '__lager_metadata').
 
-bla90 ->
+bla ->
 	ok.
 
 %% API
