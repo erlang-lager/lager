@@ -22,6 +22,9 @@
 
 -define(LAGER_MD_KEY, '__lager_metadata').
 
+bla90 ->
+	ok.
+
 %% API
 -export([start/0,
         log/3, log/4,
