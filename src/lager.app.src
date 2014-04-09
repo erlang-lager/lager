@@ -13,14 +13,9 @@
   {registered, [lager_sup, lager_event, lager_crash_log, lager_handler_watcher_sup]},
   {mod, {lager_app, []}},
   {env, [
-            %% What handlers to install with what arguments
-            {handlers, [
-                {lager_console_backend, info},
-                {lager_file_backend, [
-                    {file, "log/error.log"}, {level, error}, {size, 10485760}, {date, "$D0"}, {count, 5}]},
-                {lager_file_backend, [
-                    {file, "log/console.log"}, {level, info}, {size, 10485760}, {date, "$D0"}, {count, 5}]}
-            ]},
+            %% Note: application:start(lager) overwrites previously defined environment variables 
+            %%       thus declaration of default handlers is done at lager_app.erl
+  
             %% What colors to use with what log levels
             {colored, false},
             {colors, [
