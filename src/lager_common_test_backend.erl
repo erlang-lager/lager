@@ -15,10 +15,12 @@
 
 %% holds the log messages for retreival on terminate
 -record(state, {level :: {mask, integer()},
-                verbose :: boolean(),
+                formatter :: atom(),
+                format_config :: any(),
                 log = [] :: list()}).
 
--include_lib("lager/include/lager.hrl").
+-include("lager.hrl").
+-define(TERSE_FORMAT,[time, " ", color, "[", severity,"] ", message]).
 
 %% @doc Before every test, just
 %% lager_common_test_backend:bounce(Level) with the log level of your
@@ -46,62 +48,33 @@ bounce(Level) ->
 -spec(init(integer()|atom()|[term()]) -> {ok, #state{}} | {error, atom()}).
 %% @private
 %% @doc Initializes the event handler
-init(Level) when is_atom(Level) ->
+init([Level, true]) -> % for backwards compatibility
+    init([Level,{lager_default_formatter,[{eol, "\n"}]}]);
+init([Level,false]) -> % for backwards compatibility
+    init([Level,{lager_default_formatter,?TERSE_FORMAT ++ ["\n"]}]);
+init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=false}};
+            {ok, #state{level=lager_util:config_to_mask(Level),
+                    formatter=Formatter,
+                    format_config=FormatterConfig}};
         _ ->
             {error, bad_log_level}
     end;
-init([Level, Verbose]) ->
-    case lists:member(Level, ?LEVELS) of
-        true ->
-            {ok, #state{level=lager_util:level_to_num(Level), verbose=Verbose}};
-        _ ->
-            {error, bad_log_level}
-    end.
+init(Level) ->
+    init([Level,{lager_default_formatter,?TERSE_FORMAT ++ ["\n"]}]).
 
 -spec(handle_event(tuple(), #state{}) -> {ok, #state{}}).
 %% @private
-%% @doc handles the event, adding the log message to the gen_event's state.
-%%      this function attempts to handle logging events in both the simple tuple
-%%      and new record (introduced after lager 1.2.1) formats.
-handle_event({log, Dest, Level, {Date, Time}, [LevelStr, Location, Message]}, %% lager 1.2.1
-    #state{level=L, verbose=Verbose, log = Logs} = State) when Level > L ->
-    case lists:member(lager_common_test_backend, Dest) of
+handle_event({log, Message},
+    #state{level=L,formatter=Formatter,format_config=FormatConfig,log=Logs} = State) ->
+    case lager_util:is_loggable(Message,L,?MODULE) of
         true ->
-            Log = case Verbose of
-                true ->
-                    [Date, " ", Time, " ", LevelStr, Location, Message];
-                _ ->
-                    [Time, " ", LevelStr, Message]
-            end,
+            Log = Formatter:format(Message,FormatConfig),
             ct:pal(Log),
             {ok, State#state{log=[Log|Logs]}};
         false ->
             {ok, State}
-    end;
-handle_event({log, Level, {Date, Time}, [LevelStr, Location, Message]}, %% lager 1.2.1
-  #state{level=LogLevel, verbose=Verbose, log = Logs} = State) when Level =< LogLevel ->
-    Log = case Verbose of
-        true ->
-            [Date, " ", Time, " ", LevelStr, Location, Message];
-        _ ->
-            [Time, " ", LevelStr, Message]
-        end,
-    ct:pal(Log),
-    {ok, State#state{log=[Log|Logs]}};
-handle_event({log, {lager_msg, Dest, _Meta, Level, DateTime, _Timestamp, Message}},
-             State) -> %% lager 2.0.0
-    case lager_util:level_to_num(Level) of
-        L when L =< State#state.level ->
-            handle_event({log, L, DateTime,
-                          [["[",atom_to_list(Level),"] "], " ", Message]},
-                         State);
-        L ->
-            handle_event({log, Dest, L, DateTime,
-                          [["[",atom_to_list(Level),"] "], " ", Message]},
-                         State)
     end;
 handle_event(Event, State) ->
     ct:pal(Event),
