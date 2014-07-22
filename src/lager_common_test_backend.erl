@@ -20,6 +20,15 @@
 
 -include_lib("lager/include/lager.hrl").
 
+%% @doc Before every test, just
+%% lager_common_test_backend:bounce(Level) with the log level of your
+%% choice. Every message will be passed along to ct:pal for your
+%% viewing in the common_test reports. Also, you can call
+%% lager_common_test_backend:get_logs/0 to get a list of all log
+%% messages this backend has received during your test. You can then
+%% search that list for expected log messages.
+
+
 -spec get_logs() -> [iolist()] | {error, term()}.
 get_logs() ->
     gen_event:call(lager_event, ?MODULE, get_logs, infinity).
