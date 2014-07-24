@@ -82,6 +82,8 @@ handle_call({set_high_water, N}, State) ->
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
+handle_event({_Type, GL, _Msg}, State) when node(GL) =/= node() ->
+    {ok, State};
 handle_event(Event, State) ->
     case check_hwm(State) of
         {true, NewState} ->
