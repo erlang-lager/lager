@@ -36,6 +36,12 @@
 -export([format/3, format/4, print/2, print/3, fprint/2, fprint/3, safe/2]). % interface functions
 -version("$Id: trunc_io.erl,v 1.11 2009-02-23 12:01:06 matthias Exp $").
 
+-ifdef(maps_supported).
+-define(is_map(Term), is_map(Term)).
+-else.
+-define(is_map(Term), false).
+-endif.
+
 -ifdef(TEST).
 -export([perf/0, perf/3, perf1/0, test/0, test/2]). % testing functions
 -include_lib("eunit/include/eunit.hrl").
@@ -269,7 +275,7 @@ print(Tuple, Max, Options) when is_tuple(Tuple) ->
     {TC, Len} = tuple_contents(Tuple, Max-2, Options),
     {[${, TC, $}], Len + 2};
 
-print(Map, Max, Options) when is_map(Map) ->
+print(Map, Max, Options) when ?is_map(Map) ->
     {MC, Len} = map_contents(Map, Max - 3, Options),
     {["#{", MC, "}"], Len + 3};
 
