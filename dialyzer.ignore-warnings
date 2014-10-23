@@ -1,0 +1,5 @@
+lager_trunc_io.erl:283: Call to missing or unexported function erlang:is_map/1
+lager_trunc_io.erl:335: Call to missing or unexported function erlang:map_size/1
+Unknown functions:
+  lager_default_tracer:info/1
+  maps:to_list/1
