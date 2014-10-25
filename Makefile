@@ -15,6 +15,7 @@ clean:
 distclean: clean
 	./rebar delete-deps
 
-DIALYZER_APPS = kernel stdlib erts sasl eunit syntax_tools compiler crypto
+DIALYZER_APPS = kernel stdlib erts sasl eunit syntax_tools compiler crypto \
+				common_test
 
 include tools.mk

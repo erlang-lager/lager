@@ -39,7 +39,7 @@ bounce() ->
     bounce(error).
 
 bounce(Level) ->
-    application:stop(lager),
+    _ = application:stop(lager),
     lager:start(),
     gen_event:add_handler(lager_event, lager_common_test_backend, [Level, false]),
     %lager:set_loglevel(lager_common_test_backend, Level),
@@ -88,7 +88,7 @@ handle_call(get_loglevel, #state{level=Level} = State) ->
 handle_call({set_loglevel, Level}, State) ->
     case lists:member(Level, ?LEVELS) of
         true ->
-            {ok, ok, State#state{level=lager_util:level_to_num(Level)}};
+            {ok, ok, State#state{level=lager_util:config_to_mask(Level)}};
         _ ->
             {ok, {error, bad_log_level}, State}
     end;
