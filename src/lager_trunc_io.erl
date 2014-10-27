@@ -189,11 +189,11 @@ print(Binary, Max, Options) when is_binary(Binary) ->
                             {L0, Len0} = alist_start(string:substr(In, 1, Index - 1), Max - 1, Options),
                             {L0++"...", Len0+3};
                         false ->
-                            list_body(In, Max-4, dec_depth(Options), true)
+                            list_body(In, Max-4, dec_depth(Options), binary)
                     end
             end;
         _ ->
-            list_body(B, Max-4, dec_depth(Options), true)
+            list_body(B, Max-4, dec_depth(Options), binary)
     end,
     case Options#print_options.force_strings of
         true ->
@@ -224,7 +224,7 @@ print(BitString, Max, Options) when is_bitstring(BitString) ->
             %% list_body calls print again
             BL = Bytes ++ [{inline_bitstring, Bits}]
     end,
-    {X, Len0} = list_body(BL, Max - 4, dec_depth(Options), true),
+    {X, Len0} = list_body(BL, Max - 4, dec_depth(Options), bitstring),
     {["<<", X, ">>"], Len0 + 4};
 
 print(Float, _Max, _Options) when is_float(Float) ->
@@ -269,13 +269,17 @@ print(Tuple, Max, Options) when is_tuple(Tuple) ->
     {TC, Len} = tuple_contents(Tuple, Max-2, Options),
     {[${, TC, $}], Len + 2};
 
+print(Map, Max, Options) when is_map(Map) ->
+    {MC, Len} = map_contents(Map, Max - 3, Options),
+    {["#{", MC, "}"], Len + 3};
+
 print(List, Max, Options) when is_list(List) ->
     case Options#print_options.lists_as_strings orelse
         Options#print_options.force_strings of
         true ->
             alist_start(List, Max, dec_depth(Options));
         _ ->
-            {R, Len} = list_body(List, Max - 2, dec_depth(Options), false),
+            {R, Len} = list_body(List, Max - 2, dec_depth(Options), list),
             {[$[, R, $]], Len + 2}
     end;
 
@@ -289,45 +293,61 @@ print(Map, Max, Options) ->
     end.
 
 %% Returns {List, Length}
+map_contents(Map, Max, Options) ->
+    list_body(maps:to_list(Map), Max, dec_depth(Options), map).
+
 tuple_contents(Tuple, Max, Options) ->
-    L = tuple_to_list(Tuple),
-    list_body(L, Max, dec_depth(Options), true).
+    list_body(tuple_to_list(Tuple), Max, dec_depth(Options), tuple).
 
 %% Format the inside of a list, i.e. do not add a leading [ or trailing ].
 %% Returns {List, Length}
-list_body([], _Max, _Options, _Tuple) -> {[], 0};
-list_body(_, Max, _Options, _Tuple) when Max < 4 -> {"...", 3};
-list_body(_, _Max, #print_options{depth=0}, _Tuple) -> {"...", 3};
-list_body([H], Max, Options=#print_options{depth=1}, _Tuple) ->
+list_body([], _Max, _Options, _) ->
+    {[], 0};
+list_body(_, Max, _Options, _) when Max < 4 ->
+    {"...", 3};
+list_body(_, _Max, #print_options{depth=0}, _) ->
+    {"...", 3};
+list_body([H], Max, Options=#print_options{depth=1}, _) ->
     print(H, Max, Options);
-list_body([H|_], Max, Options=#print_options{depth=1}, Tuple) ->
+list_body([H|_], Max, Options=#print_options{depth=1}, Type) ->
     {List, Len} = print(H, Max-4, Options),
-    Sep = case Tuple of
-        true -> $,;
-        false -> $|
-    end,
+    Sep = case Type of
+              list -> $|;
+              _ -> $,
+          end,
     {[List ++ [Sep | "..."]], Len + 4};
-list_body([H|T], Max, Options, Tuple) -> 
+list_body([{K, V}|T], Max, Options, map) ->
+    {L1, N1} = print(K, Max - 4, Options),
+    {L2, N2} = print(V, Max - 4 - N1, Options),
+    {Final, FLen} = list_bodyc(T, Max - N1 - 4 - N2, Options, map),
+    {[L1, " => ", L2|Final], N1 + 4 + N2 + FLen};
+list_body([H|T], Max, Options, Type) ->
     {List, Len} = print(H, Max, Options),
-    {Final, FLen} = list_bodyc(T, Max - Len, Options, Tuple),
+    {Final, FLen} = list_bodyc(T, Max - Len, Options, Type),
     {[List|Final], FLen + Len};
-list_body(X, Max, Options, _Tuple) ->  %% improper list
+list_body(X, Max, Options, _) ->  %% improper list
     {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
-list_bodyc([], _Max, _Options, _Tuple) -> {[], 0};
-list_bodyc(_, Max, _Options, _Tuple) when Max < 5 -> {",...", 4};
-list_bodyc(_, _Max, #print_options{depth=1}, true) -> {",...", 4};
-list_bodyc(_, _Max, #print_options{depth=1}, false) -> {"|...", 4};
-list_bodyc([H|T], Max, #print_options{depth=Depth} = Options, Tuple) -> 
+list_bodyc([], _Max, _Options, _) ->
+    {[], 0};
+list_bodyc(_, Max, _Options, _) when Max < 5 ->
+    {",...", 4};
+list_bodyc(_, _Max, #print_options{depth=1}, list) ->
+    {"|...", 4};
+list_bodyc(_, _Max, #print_options{depth=1}, _) ->
+    {",...", 4};
+list_bodyc([{K, V}|T], Max, Options, map) ->
+    Options1 = dec_depth(Options),
+    {L1, N1} = print(K, Max - 4 - 1, Options1),
+    {L2, N2} = print(V, Max - 4 - N1 - 1, Options1),
+    {Final, FLen} = list_bodyc(T, Max - N1 - 4 - N2 - 1, Options1, map),
+    {[$,, L1, " => ", L2|Final], N1 + 4 + N2 + FLen + 1};
+list_bodyc([H|T], Max, Options, Type) ->
     {List, Len} = print(H, Max, dec_depth(Options)),
-    {Final, FLen} = list_bodyc(T, Max - Len - 1, dec_depth(Options), Tuple),
-    Sep = case Depth == 1 andalso not Tuple of
-        true -> $|;
-        _ -> $,
-    end,
-    {[Sep, List|Final], FLen + Len + 1};
-list_bodyc(X, Max, Options, _Tuple) ->  %% improper list
+    {Final, FLen} = list_bodyc(T, Max - Len - 1, dec_depth(Options), Type),
+    {[$,, List|Final], FLen + Len + 1};
+list_bodyc(X, Max, Options, _) ->  %% improper list
     {List, Len} = print(X, Max - 1, Options),
     {[$|,List], Len + 1}.
 
@@ -381,7 +401,7 @@ alist_start([H|T], Max, Options) when is_integer(H), H >= 16#20, H =< 16#7e ->  
             {[$"|L], Len + 1}
     catch
         throw:{unprintable, _} ->
-            {R, Len} = list_body([H|T], Max-2, Options, false),
+            {R, Len} = list_body([H|T], Max-2, Options, list),
             {[$[, R, $]], Len + 2}
     end;
 alist_start([H|T], Max, Options) when is_integer(H), H >= 16#a0, H =< 16#ff ->  % definitely printable
@@ -390,7 +410,7 @@ alist_start([H|T], Max, Options) when is_integer(H), H >= 16#a0, H =< 16#ff ->  
             {[$"|L], Len + 1}
     catch
         throw:{unprintable, _} ->
-            {R, Len} = list_body([H|T], Max-2, Options, false),
+            {R, Len} = list_body([H|T], Max-2, Options, list),
             {[$[, R, $]], Len + 2}
     end;
 alist_start([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v; H =:= $\e; H=:= $\f; H=:= $\b ->
@@ -399,11 +419,11 @@ alist_start([H|T], Max, Options) when H =:= $\t; H =:= $\n; H =:= $\r; H =:= $\v
             {[$"|L], Len + 1}
     catch
         throw:{unprintable, _} ->
-            {R, Len} = list_body([H|T], Max-2, Options, false),
+            {R, Len} = list_body([H|T], Max-2, Options, list),
             {[$[, R, $]], Len + 2}
     end;
 alist_start(L, Max, Options) ->
-    {R, Len} = list_body(L, Max-2, Options, false),
+    {R, Len} = list_body(L, Max-2, Options, list),
     {[$[, R, $]], Len + 2}.
 
 alist([], _Max, #print_options{force_strings=true}) -> {"", 0};
