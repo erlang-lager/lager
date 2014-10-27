@@ -8,3 +8,5 @@ erl_crash.dump
 log
 deps
 .local_dialyzer_plt
+dialyzer_unhandled_warnings
+dialyzer_warnings
