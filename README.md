@@ -22,6 +22,7 @@ Features
 * Supports internal time and date based rotation, as well as external rotation tools
 * Syslog style log level comparison flags
 * Colored terminal output (requires R16+)
+* Map support (requires 17+)
 
 Usage
 -----
