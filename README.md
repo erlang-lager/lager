@@ -77,6 +77,7 @@ your app.config):
 
 ```erlang
 {lager, [
+  {log_root, "/var/log/hello"},
   {handlers, [
     {lager_console_backend, info},
     {lager_file_backend, [{file, "error.log"}, {level, error}]},
@@ -84,6 +85,8 @@ your app.config):
   ]}
 ]}.
 ```
+
+```log_root``` variable is optional, by default file paths are relative to CWD.
 
 The available configuration options for each backend are listed in their
 module's documentation.
