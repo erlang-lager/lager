@@ -40,9 +40,10 @@ bounce() ->
 
 bounce(Level) ->
     _ = application:stop(lager),
-    application:set_env(lager, handlers, []),
-    lager:start(),
-    gen_event:add_handler(lager_event, lager_common_test_backend, [Level, false]),
+    application:set_env(lager, handlers, [
+        {lager_common_test_backend, [Level, false]}
+    ]),
+    ok = lager:start(),
     ok.
 
 -spec(init(integer()|atom()|[term()]) -> {ok, #state{}} | {error, atom()}).
