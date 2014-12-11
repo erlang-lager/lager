@@ -348,10 +348,10 @@ a wildcard to match any message that has that attribute, regardless of its
 value.
 
 Tracing to an existing logfile is also supported, if you wanted to log
-warnings from a particular module to the default error.log:
+warnings from a particular function in a particular module to the default error.log:
 
 ```erlang
-lager:trace_file("log/error.log", [{module, mymodule}], warning)
+lager:trace_file("log/error.log", [{module, mymodule}, {function, myfunction}], warning)
 ```
 
 To view the active log backends and traces, you can use the lager:status()
