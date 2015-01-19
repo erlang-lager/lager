@@ -22,7 +22,7 @@
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-        trace_filter/1, trace_filter/2]).
+        trace_filter/1, trace_filter/2, check_hwm/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -466,6 +466,46 @@ i2l(I) when I < 10  -> [$0, $0+I];
 i2l(I)              -> integer_to_list(I).
 i3l(I) when I < 100 -> [$0 | i2l(I)];
 i3l(I)              -> integer_to_list(I).
+
+%% Log rate limit, i.e. high water mark for incoming messages
+
+check_hwm(Shaper = #lager_shaper{hwm = undefined}) ->
+    {true, 0, Shaper};
+check_hwm(Shaper = #lager_shaper{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
+    %% haven't hit high water mark yet, just log it
+    {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
+    %% are we still in the same second?
+    {M, S, _} = Now = os:timestamp(),
+    case Last of
+        {M, S, _} ->
+            %% still in same second, but have exceeded the high water mark
+            NewDrops = discard_messages(Now, 0),
+            {false, 0, Shaper#lager_shaper{dropped=Drop+NewDrops}};
+        _ ->
+            %% different second, reset all counters and allow it
+            {true, Drop, Shaper#lager_shaper{dropped = 0, mps=1, lasttime = Now}}
+    end.
+
+discard_messages(Second, Count) ->
+    {M, S, _} = os:timestamp(),
+    case Second of
+        {M, S, _} ->
+            receive
+                %% we only discard gen_event notifications, because
+                %% otherwise we might discard gen_event internal
+                %% messages, such as trapped EXITs
+                {notify, _Event} ->
+                    discard_messages(Second, Count+1);
+                {_From, _Tag, {sync_notify, _Event}} ->
+                    discard_messages(Second, Count+1)
+            after 0 ->
+                    Count
+            end;
+        _ ->
+            Count
+    end.
+
 
 -ifdef(TEST).
 

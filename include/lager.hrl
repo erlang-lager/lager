@@ -100,3 +100,15 @@
     end)).
 -endif.
 
+-record(lager_shaper, {
+		  %% how many messages per second we try to deliver
+		  hwm = undefined :: 'undefined' | pos_integer(),
+		  %% how many messages we've received this second
+		  mps = 0 :: non_neg_integer(),
+		  %% the current second
+		  lasttime = os:timestamp() :: erlang:timestamp(),
+		  %% count of dropped messages this second
+		  dropped = 0 :: non_neg_integer()
+		 }).
+
+-type lager_shaper() :: #lager_shaper{}.
