@@ -132,6 +132,15 @@ handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
     end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
+handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
+	case validate_logfile_proplist([{file, Name}, {high_water_mark, Hwm}]) of
+        false ->
+            {ok, {error, bad_log_hwm}, State};
+        _ ->
+			NewShaper = Shaper#lager_shaper{hwm=Hwm},
+			?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
+			{ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
+	end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 

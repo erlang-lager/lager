@@ -29,7 +29,7 @@
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, status/0, 
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        update_loglevel_config/0, posix_error/1,
+        update_loglevel_config/0, posix_error/1, set_loghwm/2, set_loghwm/3,		
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
         do_log/9, pr/2]).
 
@@ -319,6 +319,14 @@ posix_error(Error) ->
 get_loglevels() ->
     [gen_event:call(lager_event, Handler, get_loglevel, infinity) ||
         Handler <- gen_event:which_handlers(lager_event)].
+
+%% @doc Set the loghwm for a particular backend.
+set_loghwm(Handler, Hwm) when is_integer(Hwm) ->
+    gen_event:call(lager_event, Handler, {set_loghwm, Hwm}, infinity).
+
+%% @doc Set the loghwm (log high water mark) for file backends with multiple identifiers
+set_loghwm(Handler, Ident, Hwm) when is_integer(Hwm) ->
+    gen_event:call(lager_event, {Handler, Ident}, {set_loghwm, Hwm}, infinity).
 
 %% @private
 add_trace_to_loglevel_config(Trace) ->
