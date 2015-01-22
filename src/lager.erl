@@ -27,7 +27,7 @@
         log/3, log/4,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/3, status/0, 
+        clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
@@ -190,7 +190,7 @@ trace(Backend, Filter, Level) ->
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             add_trace_to_loglevel_config(Trace),
-            {ok, Trace};
+            {ok, {Backend, Filter, Level}};
         Error ->
             Error
     end.
@@ -199,12 +199,15 @@ stop_trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
-            stop_trace(Trace);
+            stop_trace_int(Trace);
         Error ->
             Error
     end.
 
-stop_trace({Backend, _Filter, _Level} = Trace) ->
+stop_trace({Backend, Filter, Level}) ->
+    stop_trace(Backend, Filter, Level).
+
+stop_trace_int({Backend, _Filter, _Level} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
