@@ -219,7 +219,7 @@ use internal rotation, use the 'size', 'date' and 'count' values in the file
 backend's config:
 
 ```erlang
-[{name, "error.log"}, {level, error}, {size, 10485760}, {date, "$D0"}, {count, 5}]
+[{file, "error.log"}, {level, error}, {size, 10485760}, {date, "$D0"}, {count, 5}]
 ```
 
 This tells lager to log error and above messages to "error.log" and to
