@@ -305,6 +305,17 @@ add
 To lager's application environment config. If you don't like the default colors, they are
 also configurable, see the app.src file for more details.
 
+The output will be colored from the first occurrence of the atom color
+in the formatting configuration. For example:
+
+```erlang
+{lager_console_backend, [info, {lager_default_formatter, [time, color, " [",severity,"] ", message, "\e[0m\r\n"]}]}
+```
+
+This will make the entire log message, except time, colored. The
+escape sequence before the line break is needed in order to reset the
+color after each log message.
+
 Tracing
 -------
 Lager supports basic support for redirecting log messages based on log message
