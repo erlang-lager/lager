@@ -148,7 +148,7 @@ trace_file(File, Filter, Level) when is_atom(Level) ->
 
 trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
-    
+
 trace_file(File, Filter, Level, Options) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
     case lager_util:validate_trace(Trace0) of
@@ -167,14 +167,13 @@ trace_file(File, Filter, Level, Options) ->
             case Res of
               {ok, _} ->
                 add_trace_to_loglevel_config(Trace),
-                {ok, Trace};
+                {ok, {{lager_file_backend, File}, Filter, Level}};
               {error, _} = E ->
                 E
             end;
         Error ->
             Error
     end.
-
 
 trace_console(Filter) ->
     trace_console(Filter, debug).
