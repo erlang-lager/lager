@@ -226,8 +226,13 @@ log_event(Event, State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    ?LOGFMT(info, Pid, "Application ~w exited with reason: ~s",
-                        [App, format_reason(Reason)]);
+                    case application:get_env(lager, suppress_application_start_stop) of
+                        {ok, true} when Reason == stopped ->
+                            ok;
+                        _ ->
+                            ?LOGFMT(info, Pid, "Application ~w exited with reason: ~s",
+                                    [App, format_reason(Reason)])
+                    end;
                 _ ->
                     ?LOGMSG(info, Pid, print_silly_list(D))
             end;
@@ -237,8 +242,13 @@ log_event(Event, State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {started_at, Node}] ->
-                    ?LOGFMT(info, P, "Application ~w started on node ~w",
-                        [App, Node]);
+                    case application:get_env(lager, suppress_application_start_stop) of
+                        {ok, true} ->
+                            ok;
+                        _ ->
+                            ?LOGFMT(info, P, "Application ~w started on node ~w",
+                                    [App, Node])
+                    end;
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(get_value(mfargs, Started)),
                     Pid = get_value(pid, Started),

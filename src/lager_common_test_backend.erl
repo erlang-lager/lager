@@ -40,10 +40,15 @@ bounce() ->
 
 bounce(Level) ->
     _ = application:stop(lager),
-    application:set_env(lager, handlers, [
-        {lager_common_test_backend, [Level, false]}
-    ]),
+    application:set_env(lager, suppress_application_start_stop, true),
+    application:set_env(lager, handlers,
+                        [
+                         {lager_common_test_backend, [Level, false]}
+                        ]),
     ok = lager:start(),
+    %% we care more about getting all of our messages here than being
+    %% careful with the amount of memory that we're using.
+    error_logger_lager_h:set_high_water(100000),
     ok.
 
 -spec(init(integer()|atom()|[term()]) -> {ok, #state{}} | {error, atom()}).
