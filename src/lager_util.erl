@@ -496,8 +496,6 @@ discard_messages(Second, Count) ->
                 %% otherwise we might discard gen_event internal
                 %% messages, such as trapped EXITs
                 {notify, _Event} ->
-                    discard_messages(Second, Count+1);
-                {_From, _Tag, {sync_notify, _Event}} ->
                     discard_messages(Second, Count+1)
             after 0 ->
                     Count
