@@ -66,7 +66,8 @@ start(Filename, MaxBytes, Size, Date, Count) ->
             Date, Count], []).
 
 %% @private
-init([Filename, MaxBytes, Size, Date, Count]) ->
+init([RelFilename, MaxBytes, Size, Date, Count]) ->
+    Filename = lager_util:expand_path(RelFilename),
     case lager_util:open_logfile(Filename, false) of
         {ok, {FD, Inode, _}} ->
             schedule_rotation(Date),

@@ -102,8 +102,9 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
             {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever
-            [Name, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
+            [RelName, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
               [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
+            Name = lager_util:expand_path(RelName),
             schedule_rotation(Name, Date),
             State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, formatter=Formatter,
                 formatter_config=FormatterConfig, sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize,
