@@ -118,7 +118,7 @@ The properties pid, file, line, module, function, and node will always exist if 
 ["Foo"] -> "Foo", regardless of message content.
 [message] -> The content of the logged message, alone.
 [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
-[{pid, ["My pid is ", pid], "Unknown Pid"}] -> if pid is in the metadata print "My pid is <?.?.?>", otherwise print "Unknown Pid"
+[{pid, ["My pid is ", pid], ["Unknown Pid"]}] -> if pid is in the metadata print "My pid is <?.?.?>", otherwise print "Unknown Pid"
 ```
 
 Optionally, a tuple of {atom(),semi-iolist()}
