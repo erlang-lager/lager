@@ -113,7 +113,7 @@ start(_StartType, _StartArgs) ->
                 end
         end,
 
-    _ = lager_util:trace_filter(none), 
+    _ = lager_util:trace_filter(none),
 
     {ok, Pid, SavedHandlers}.
 
@@ -153,7 +153,7 @@ add_configured_traces() ->
 
 maybe_make_handler_id(Mod, Config) ->
     %% Allow the backend to generate a gen_event handler id, if it wants to.
-    %% We don't use erlang:function_exported here because that requires the module 
+    %% We don't use erlang:function_exported here because that requires the module
     %% already be loaded, which is unlikely at this phase of startup. Using code:load
     %% caused undesireable side-effects with generating code-coverage reports.
     try Mod:config_to_id(Config) of
