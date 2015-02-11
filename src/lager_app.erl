@@ -72,8 +72,10 @@ start(_StartType, _StartArgs) ->
     end,
 
     %% handlers failing to start are handled in the handler_watcher
-    _ = [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
-        {Module, Config} <- expand_handlers(Handlers)],
+    ok = lists:foreach(fun({Module, Config}) ->
+                           supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config])
+           end,
+                  expand_handlers(Handlers)),
 
     ok = add_configured_traces(),
 
