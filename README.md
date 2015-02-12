@@ -129,8 +129,8 @@ Examples:
 ["Foo"] -> "Foo", regardless of message content.
 [message] -> The content of the logged message, alone.
 [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
-[{pid, ["My pid is ", pid], "Unknown Pid"}] -> if pid is in the metadata print "My pid is <?.?.?>", otherwise print "Unknown Pid"
-[{server,[$(,{pid,"Unknown Server"},$)]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
+[{pid, ["My pid is ", pid], ["Unknown Pid"]}] -> if pid is in the metadata print "My pid is <?.?.?>", otherwise print "Unknown Pid"
+[{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
 ```
 
 Error logger integration

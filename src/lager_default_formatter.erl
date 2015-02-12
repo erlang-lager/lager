@@ -51,7 +51,7 @@
 %%
 %%    `[{pid,"Unknown Pid"}]' -> "?.?.?" if pid is in the metadata, "Unknown Pid" if not.
 %%
-%%    `[{pid, ["My pid is ", pid], "Unknown Pid"}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
+%%    `[{pid, ["My pid is ", pid], ["Unknown Pid"]}]' -> if pid is in the metada print "My pid is ?.?.?", otherwise print "Unknown Pid"
 %% @end
 -spec format(lager_msg:lager_msg(),list(),list()) -> any().
 format(Msg,[], Colors) ->
@@ -182,6 +182,56 @@ basic_test_() ->
                             [{pid, "Fallback"}],
                             []),
                         [date, " ", time," [",severity,"] ",{does_not_exist,pid}, " ", message, "\n"]
+                    )))
+        },
+        {"Non existant metadata can default to a string2",
+            ?_assertEqual(iolist_to_binary(["Unknown Pid"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [],
+                            []),
+                        [{pid, ["My pid is ", pid], ["Unknown Pid"]}]
+                    )))
+        },
+        {"Metadata can have extra formatting",
+            ?_assertEqual(iolist_to_binary(["My pid is hello"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{pid, hello}],
+                            []),
+                        [{pid, ["My pid is ", pid], ["Unknown Pid"]}]
+                    )))
+        },
+        {"Metadata can have extra formatting1",
+            ?_assertEqual(iolist_to_binary(["servername"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{pid, hello}, {server, servername}],
+                            []),
+                        [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}]
+                    )))
+        },
+        {"Metadata can have extra formatting2",
+            ?_assertEqual(iolist_to_binary(["(hello)"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{pid, hello}],
+                            []),
+                        [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}]
+                    )))
+        },
+        {"Metadata can have extra formatting3",
+            ?_assertEqual(iolist_to_binary(["(Unknown Server)"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [],
+                            []),
+                        [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}]
                     )))
         }
     ].
