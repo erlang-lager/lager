@@ -27,7 +27,7 @@
         log/3, log/4,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/1, status/0, 
+        clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
         update_loglevel_config/0, posix_error/1,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
@@ -148,7 +148,7 @@ trace_file(File, Filter, Level) when is_atom(Level) ->
 
 trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
-    
+
 trace_file(File, Filter, Level, Options) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
     case lager_util:validate_trace(Trace0) of
@@ -167,14 +167,13 @@ trace_file(File, Filter, Level, Options) ->
             case Res of
               {ok, _} ->
                 add_trace_to_loglevel_config(Trace),
-                {ok, Trace};
+                {ok, {{lager_file_backend, File}, Filter, Level}};
               {error, _} = E ->
                 E
             end;
         Error ->
             Error
     end.
-
 
 trace_console(Filter) ->
     trace_console(Filter, debug).
@@ -185,28 +184,43 @@ trace_console(Filter, Level) ->
 trace(Backend, Filter) ->
     trace(Backend, Filter, debug).
 
+trace({lager_file_backend, File}, Filter, Level) ->
+    trace_file(File, Filter, Level);
+
 trace(Backend, Filter, Level) ->
     Trace0 = {Filter, Level, Backend},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             add_trace_to_loglevel_config(Trace),
-            {ok, Trace};
+            {ok, {Backend, Filter, Level}};
         Error ->
             Error
     end.
 
-stop_trace({_Filter, _Level, Target} = Trace) ->
+stop_trace(Backend, Filter, Level) ->
+    Trace0 = {Filter, Level, Backend},
+    case lager_util:validate_trace(Trace0) of
+        {ok, Trace} ->
+            stop_trace_int(Trace);
+        Error ->
+            Error
+    end.
+
+stop_trace({Backend, Filter, Level}) ->
+    stop_trace(Backend, Filter, Level).
+
+stop_trace_int({Backend, _Filter, _Level} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
     lager_config:set(loglevel, {Level, NewTraces}),
-    case get_loglevel(Target) of
+    case get_loglevel(Backend) of
         none ->
             %% check no other traces point here
-            case lists:keyfind(Target, 3, NewTraces) of
+            case lists:keyfind(Backend, 3, NewTraces) of
                 false ->
-                    gen_event:delete_handler(lager_event, Target, []);
+                    gen_event:delete_handler(lager_event, Backend, []);
                 _ ->
                     ok
             end;
