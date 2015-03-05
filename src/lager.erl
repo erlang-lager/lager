@@ -24,7 +24,7 @@
 
 %% API
 -export([start/0,
-        log/3, log/4,
+        log/3, log/4, log/5,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
@@ -81,11 +81,15 @@ md(NewMD) when is_list(NewMD) ->
 md(_) ->
     erlang:error(badarg).
 
--spec dispatch_log(log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
-%% this is the same check that the parse transform bakes into the module at compile time
+
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
+    dispatch_log(lager_event, Severity, Metadata, Format, Args, Size).
+
+-spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
+%% this is the same check that the parse transform bakes into the module at compile time
+dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     SeverityAsInt=lager_util:level_to_num(Severity),
-    case {whereis(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
+    case {whereis(Sink), lager_config:get(Sink, loglevel, {?LOG_NONE, []})} of
         {undefined, _} ->
             {error, lager_not_running};
         {Pid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
@@ -126,6 +130,11 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
 dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, Size) ->
     dispatch_log(Severity, Metadata, Format, Args, Size).
 
+
+%% TODO:
+%% Consider making log2/4 that takes the Level, Pid and Message params of log/3
+%% along with a Sink param??
+
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(log_level(), pid() | atom() | [tuple(),...], list()) -> ok | {error, lager_not_running}.
 log(Level, Pid, Message) when is_pid(Pid); is_atom(Pid) ->
@@ -140,6 +149,13 @@ log(Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
 log(Level, Metadata, Format, Args) when is_list(Metadata) ->
     dispatch_log(Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
 
+%% @doc Manually log a message into lager without using the parse transform.
+-spec log(atom(), log_level(), pid() | atom() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
+log(Sink, Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
+    dispatch_log(Sink, Level, [{pid,Pid}], Format, Args, ?DEFAULT_TRUNCATION);
+log(Sink, Level, Metadata, Format, Args) when is_list(Metadata) ->
+    dispatch_log(Sink, Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
+
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug, []).
 
@@ -148,6 +164,10 @@ trace_file(File, Filter, Level) when is_atom(Level) ->
 
 trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
+
+%% FIXME: All of this code assumes a single event handler
+%% In fact anywhere there's `lager_event' assume that the code
+%% should be generalized to support multiple sinks.
 
 trace_file(File, Filter, Level, Options) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
@@ -294,21 +314,34 @@ status() ->
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, Handler, {set_loglevel, Level}, infinity),
-    update_loglevel_config(),
-    Reply.
+    set_loglevel(lager_event, Handler, undefined, Level).
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    Reply = gen_event:call(lager_event, {Handler, Ident}, {set_loglevel, Level}, infinity),
+    set_loglevel(lager_event, Handler, Ident, Level).
+
+%% @doc Set the loglevel for a particular sink's backend that potentially has
+%% multiple identifiers. (Use `undefined' if it doesn't have any.)
+set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level) ->
+    HandlerArg = case Ident of
+	undefined -> Handler;
+	_ -> {Handler, Ident}
+    end,
+    Reply = gen_event:call(Sink, HandlerArg, {set_loglevel, Level}, infinity),
     update_loglevel_config(),
     Reply.
 
-%% @doc Get the loglevel for a particular backend. In the case that the backend
-%% has multiple identifiers, the lowest is returned
+
+%% @doc Get the loglevel for a particular backend on the default sink. In the case that the backend
+%% has multiple identifiers, the lowest is returned.
 get_loglevel(Handler) ->
-    case gen_event:call(lager_event, Handler, get_loglevel, infinity) of
+    get_loglevel(lager_event, Handler).
+
+%% @doc Get the loglevel for a particular sink's backend. In the case that the backend
+%% has multiple identifiers, the lowest is returned.
+get_loglevel(Sink, Handler) ->
+    case gen_event:call(Sink, Handler, get_loglevel, infinity) of
         {mask, Mask} ->
             case lager_util:mask_to_levels(Mask) of
                 [] -> none;
