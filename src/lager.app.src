@@ -44,13 +44,16 @@
             %% current one - default is 0
             {crash_log_count, 5},
             %% Whether to redirect error_logger messages into lager - defaults to true
-            {error_logger_redirect, true},
+            {error_logger_redirect, lager_event}, %% <-- sink name
             %% How many messages per second to allow from error_logger before we start dropping them
             {error_logger_hwm, 50},
             %% How big the gen_event mailbox can get before it is switched into sync mode
-            {async_threshold, 20},
+            {async_threshold, 20}, %% <-- per sink
             %% Switch back to async mode, when gen_event mailbox size decrease from `async_threshold'
             %% to async_threshold - async_threshold_window
-            {async_threshold_window, 5}
+            {async_threshold_window, 5}, %% <-- per sink
+            {sinks, [
+                     {lager_event, [{async_threshold, 20}, {async_threshold_window, 5}]}
+            ]},
         ]}
  ]}.

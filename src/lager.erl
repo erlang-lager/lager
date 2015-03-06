@@ -116,7 +116,7 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
             end,
             LagerMsg = lager_msg:new(Msg,
                 Severity, Metadata, Destinations),
-            case lager_config:get(async, false) of
+            case lager_config:get(Sink, async, false) of %% this needs to be able to get value from a non-default sink
                 true ->
                     gen_event:notify(Pid, {log, LagerMsg});
                 false ->
