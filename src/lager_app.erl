@@ -62,6 +62,9 @@ start(_StartType, _StartArgs) ->
             throw({error, bad_config})
     end,
 
+    %% TODO:
+    %% Read config for other event sinks here and start them appropriately
+
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
             [{lager_console_backend, info},

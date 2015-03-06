@@ -28,9 +28,9 @@
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
-        get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/0,
-        update_loglevel_config/0, posix_error/1,
-        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/9, 
+        get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/1,
+        update_loglevel_config/1, posix_error/1,
+        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9, 
         do_log/9, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
@@ -329,7 +329,7 @@ set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level) ->
 	_ -> {Handler, Ident}
     end,
     Reply = gen_event:call(Sink, HandlerArg, {set_loglevel, Level}, infinity),
-    update_loglevel_config(),
+    update_loglevel_config(Sink),
     Reply.
 
 
@@ -363,9 +363,9 @@ posix_error(Error) ->
     safe_format_chop("~p", [Error], ?DEFAULT_TRUNCATION).
 
 %% @private
-get_loglevels() ->
-    [gen_event:call(lager_event, Handler, get_loglevel, infinity) ||
-        Handler <- gen_event:which_handlers(lager_event)].
+get_loglevels(Sink) ->
+    [gen_event:call(Handler, get_loglevel, infinity) ||
+        Handler <- gen_event:which_handlers(Sink)].
 
 %% @private
 add_trace_to_loglevel_config(Trace) ->
@@ -374,16 +374,16 @@ add_trace_to_loglevel_config(Trace) ->
         false ->
             NewTraces = [Trace|Traces],
             _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
-            lager_config:set(loglevel, {MinLevel, [Trace|Traces]});
+            lager_config:set(lager_event, loglevel, {MinLevel, [Trace|Traces]});
         _ ->
             ok
     end.
 
 %% @doc recalculate min log level
-update_loglevel_config() ->
-    {_, Traces} = lager_config:get(loglevel),
-    MinLog = minimum_loglevel(get_loglevels()),
-    lager_config:set(loglevel, {MinLog, Traces}).
+update_loglevel_config(Sink) ->
+    {_, Traces} = lager_config:get(Sink, loglevel),
+    MinLog = minimum_loglevel(get_loglevels(Sink)),
+    lager_config:set(Sink, loglevel, {MinLog, Traces}).
 
 %% @private
 minimum_loglevel(Levels) ->

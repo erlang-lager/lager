@@ -20,9 +20,14 @@
 
 -include("lager.hrl").
 
--export([new/0, get/1, get/2, set/2]).
+-export([new/0, get/1, get/2, get/3, set/2, set/3]).
 
 -define(TBL, lager_config).
+
+%% For multiple sinks, the key is now the registered event name and the old key
+%% as a tuple. 
+%%
+%% {{lager_event, loglevel}, Value} instead of {loglevel, Value}
 
 new() ->
     %% set up the ETS configuration table
@@ -36,29 +41,31 @@ new() ->
     %% use insert_new here so that if we're in an appup we don't mess anything up
     %%
     %% until lager is completely started, allow all messages to go through
-    ets:insert_new(?TBL, {loglevel, {element(2, lager_util:config_to_mask(debug)), []}}),
+    ets:insert_new(?TBL, {{lager_event, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}}),
     ok.
 
-
 get(Key) ->
-    case ets:lookup(?TBL, Key) of
-        [] ->
-            undefined;
-        [{Key, Res}] ->
-            Res
-    end.
+    get(lager_event, Key, undefined).
 
 get(Key, Default) ->
-    try ?MODULE:get(Key) of
-        undefined ->
+    get(lager_event, Key, Default).
+
+get(Sink, Key, Default) ->
+    try
+    case ets:lookup(?TBL, {Sink, Key}) of
+        [] ->
             Default;
-        Res ->
+        [{{Sink, Key}, Res}] ->
             Res
+    end
     catch
         _:_ ->
             Default
     end.
 
 set(Key, Value) ->
-    ets:insert(?TBL, {Key, Value}).
+    set(lager_event, Key, Value).
+
+set(Sink, Key, Value) ->
+    ets:insert(?TBL, {{Sink, Key}, Value}).
 
