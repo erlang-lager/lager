@@ -45,10 +45,10 @@ new() ->
     ok.
 
 get(Key) ->
-    get(lager_event, Key, undefined).
+    get(?DEFAULT_SINK, Key, undefined).
 
 get(Key, Default) ->
-    get(lager_event, Key, Default).
+    get(?DEFAULT_SINK, Key, Default).
 
 get(Sink, Key, Default) ->
     try
@@ -64,8 +64,7 @@ get(Sink, Key, Default) ->
     end.
 
 set(Key, Value) ->
-    set(lager_event, Key, Value).
+    set(?DEFAULT_SINK, Key, Value).
 
 set(Sink, Key, Value) ->
     ets:insert(?TBL, {{Sink, Key}, Value}).
-

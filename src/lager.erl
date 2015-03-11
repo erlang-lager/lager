@@ -83,7 +83,7 @@ md(_) ->
 
 
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
-    dispatch_log(lager_event, Severity, Metadata, Format, Args, Size).
+    dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
 
 -spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
 %% this is the same check that the parse transform bakes into the module at compile time
@@ -336,7 +336,7 @@ set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level) ->
 %% @doc Get the loglevel for a particular backend on the default sink. In the case that the backend
 %% has multiple identifiers, the lowest is returned.
 get_loglevel(Handler) ->
-    get_loglevel(lager_event, Handler).
+    get_loglevel(?DEFAULT_SINK, Handler).
 
 %% @doc Get the loglevel for a particular sink's backend. In the case that the backend
 %% has multiple identifiers, the lowest is returned.
