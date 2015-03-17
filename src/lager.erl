@@ -314,12 +314,12 @@ status() ->
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
-    set_loglevel(lager_event, Handler, undefined, Level).
+    set_loglevel(?DEFAULT_SINK, Handler, undefined, Level).
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
 set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
-    set_loglevel(lager_event, Handler, Ident, Level).
+    set_loglevel(?DEFAULT_SINK, Handler, Ident, Level).
 
 %% @doc Set the loglevel for a particular sink's backend that potentially has
 %% multiple identifiers. (Use `undefined' if it doesn't have any.)
