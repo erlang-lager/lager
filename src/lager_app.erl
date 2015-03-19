@@ -27,6 +27,7 @@
 -endif.
 -export([start/0,
          start/2,
+         start_handler/3,
          stop/1]).
 
 -define(?THROTTLE, lager_backend_throttle).
@@ -75,10 +76,18 @@ start_handlers(_Sink, {ok, Handlers}) when not is_list(Handlers) ->
     throw({error, bad_config});
 start_handlers(Sink, {ok, Handlers}) ->
     %% handlers failing to start are handled in the handler_watcher
-    _ = [supervisor:start_child(lager_handler_watcher_sup,
-                                [Sink, Module, Config]) ||
-            {Module, Config} <- expand_handlers(Handlers)],
+    lager_config:global_set(handlers,
+                            lists:map(fun({Module, Config}) ->
+                                              start_handler(Sink, Module, Config)
+                                      end,
+                                      expand_handlers(Handlers))),
     ok.
+
+start_handler(Sink, Module, Config) ->
+    {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
+                                           [Sink, Module, Config]),
+    BackendId = Module:config_to_id(Config),
+    {BackendId, Watcher}.
 
 interpret_hwm(undefined) ->
     undefined;

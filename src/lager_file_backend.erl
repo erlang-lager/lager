@@ -164,7 +164,7 @@ terminate(_Reason, #state{fd=FD}) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% @private convert the config into a gen_event handler ID
+%% Convert the config into a gen_event handler ID
 config_to_id({Name,_Severity}) when is_list(Name) ->
     {?MODULE, Name};
 config_to_id({Name,_Severity,_Size,_Rotation,_Count}) ->

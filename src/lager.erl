@@ -21,6 +21,7 @@
 -include("lager.hrl").
 
 -define(LAGER_MD_KEY, '__lager_metadata').
+-define(TRACE_SINK, '__trace_sink').
 
 %% API
 -export([start/0,
@@ -173,16 +174,24 @@ trace_file(File, Filter, Level, Options) ->
     Trace0 = {Filter, Level, {lager_file_backend, File}},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
-            Handlers = gen_event:which_handlers(lager_event),
+            Handlers = lager_config:global_get(handlers, []),
             %% check if this file backend is already installed
-            Res = case lists:member({lager_file_backend, File}, Handlers) of
-               false ->
-                     %% install the handler
-                    LogFileConfig = lists:keystore(level, 1, lists:keystore(file, 1, Options, {file, File}), {level, none}),
-                    supervisor:start_child(lager_handler_watcher_sup,
-                        [lager_event, {lager_file_backend, File}, LogFileConfig]);
-                _ ->
-                    {ok, exists}
+            Res = case lists:keyfind({lager_file_backend, File}, 2, Handlers) of
+                      false ->
+                          %% install the handler
+                          LogFileConfig =
+                              lists:keystore(level, 1,
+                                             lists:keystore(file, 1,
+                                                            Options,
+                                                            {file, File}),
+                                             {level, none}),
+                          HandlerInfo =
+                              lager_app:start_handler(?TRACE_SINK, lager_file_backend,
+                                                      LogFileConfig),
+                          lager_config:global_set(handlers, [HandlerInfo|Handlers]);
+                     {Watcher, _Handler} ->
+                          lager_handler_watcher:add_sink(Watcher, ?TRACE_SINK),
+                          {ok, exists}
             end,
             case Res of
               {ok, _} ->
@@ -250,17 +259,17 @@ stop_trace_int({Backend, _Filter, _Level} = Trace) ->
     ok.
 
 clear_all_traces() ->
-    {Level, _Traces} = lager_config:get(loglevel),
+    Handlers = lager_config:global_get(handlers, []),
     _ = lager_util:trace_filter(none),
-    lager_config:set(loglevel, {Level, []}),
-    lists:foreach(fun(Handler) ->
+    lists:foreach(fun({Watcher, Handler}) ->
           case get_loglevel(Handler) of
             none ->
-              gen_event:delete_handler(lager_event, Handler, []);
+              gen_event:delete_handler(?TRACE_SINK, Handler, []),
+              langer_handler_watcher:remove_sink(Watcher, ?TRACE_SINK)
             _ ->
               ok
           end
-      end, gen_event:which_handlers(lager_event)).
+      end, Handlers).
 
 status() ->
     Handlers = gen_event:which_handlers(lager_event),
