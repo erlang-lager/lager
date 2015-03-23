@@ -33,12 +33,12 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([start_link/3, start/3, add_sink/2, remove_sink/2]).
+-export([start_link/3, start/3]).
 
 -record(state, {
         module :: atom(),
         config :: any(),
-        sinks :: list(pid() | atom())
+        sink :: pid() | atom()
     }).
 
 start_link(Sink, Module, Config) ->
@@ -47,23 +47,12 @@ start_link(Sink, Module, Config) ->
 start(Sink, Module, Config) ->
     gen_server:start(?MODULE, [Sink, Module, Config], []).
 
-remove_sink(Pid, Sink) ->
-    gen_server:call(Pid, {remove_sink, Sink}).
-
-add_sink(Pid, Sink) ->
-    gen_server:call(Pid, {add_sink, Sink}).
-
 init([Sink, Module, Config]) ->
     install_handler(Sink, Module, Config),
     {ok, #state{sink=Sink, module=Module, config=Config}}.
 
-handle_call({remove_sink, Sink}, _From, #state{sinks=Sinks}=State) ->
-    {reply, ok, State#{sinks=lists:delete(Sink, Sinks)}};
-handle_call({add_sink, Sink}, _From, #state{sinks=Sinks}=State) ->
-    {reply, ok, State#{sinks=[Sink|Sinks]}};
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
-
 
 handle_cast(_Request, State) ->
     {noreply, State}.
