@@ -30,8 +30,8 @@
          start_handler/3,
          stop/1]).
 
--define(?THROTTLE, lager_backend_throttle).
--define(?DEFAULT_HANDLER_CONF,
+-define(THROTTLE, lager_backend_throttle).
+-define(DEFAULT_HANDLER_CONF,
         [{lager_console_backend, info},
          {lager_file_backend,
           [{file, "log/error.log"}, {level, error},
@@ -59,7 +59,7 @@ determine_async_behavior(_Sink, {ok, Threshold}, _Window) when not is_integer(Th
     error_logger:error_msg("Invalid value for 'async_threshold': ~p~n",
                            [Threshold]),
     throw({error, bad_config});
-determine_async_behavior(Sink, {ok, Threshold}, undefined)
+determine_async_behavior(Sink, {ok, Threshold}, undefined) ->
     start_throttle(Sink, Threshold, erlang:trunc(Threshold * 0.2));
 determine_async_behavior(_Sink, {ok, Threshold}, {ok, Window}) when not is_integer(Window) orelse Window > Threshold orelse Window < 0 ->
     error_logger:error_msg(
