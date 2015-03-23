@@ -123,7 +123,7 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
                 false ->
                     gen_event:sync_notify(SinkPid, {log, LagerMsg})
             end,
-            case TraceSinkPid =/ undefined of
+            case TraceSinkPid /= undefined of
                 true ->
                     gen_event:notify(TraceSinkPid, {log, LagerMsg});
                 false ->
@@ -200,9 +200,9 @@ trace_file(File, Filter, Level, Options) ->
                               lager_app:start_handler(Sink, lager_file_backend,
                                                       LogFileConfig),
                           lager_config:global_set(handlers, [HandlerInfo|Handlers]);
-                      {Watcher, _Handler, Sink} ->
+                      {_Watcher, _Handler, Sink} ->
                           {ok, exists};
-                      {Watcher, _Handler, OtherSink} ->
+                      {_Watcher, _Handler, _OtherSink} ->
                           {error, file_in_use}
             end,
             case Res of
@@ -272,10 +272,10 @@ stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
 clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
     _ = lager_util:trace_filter(none),
-    lists:foreach(fun({Watcher, Handler, Sink}) ->
+    lists:foreach(fun({_Watcher, Handler, Sink}) ->
           case get_loglevel(Handler) of
             none ->
-              gen_event:delete_handler(Sink, Handler, []),
+              gen_event:delete_handler(Sink, Handler, []);
             _ ->
               ok
           end
