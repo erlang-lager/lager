@@ -31,8 +31,8 @@
         clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, get_loglevels/1,
         update_loglevel_config/1, posix_error/1,
-        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9, 
-        do_log/9, pr/2]).
+        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
+        do_log/10, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -93,19 +93,19 @@ dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity
     case {whereis(Sink), lager_config:get(Sink, loglevel, {?LOG_NONE, []})} of
         {undefined, _} ->
             {error, lager_not_running};
-        {Pid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
-            do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Pid);
+        {SinkPid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+            do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Sink, SinkPid);
         _ ->
             ok
     end.
 
 %% @private Should only be called externally from code generated from the parse transform
-do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Pid) when is_atom(Severity) ->
-    Destinations = case TraceFilters of
+do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid) when is_atom(Severity) ->
+    {Destinations, TraceSinkPid} = case TraceFilters of
         [] ->
-            [];
+            {[], undefined};
         _ ->
-            lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[])
+            {lager_util:check_traces(Metadata,SeverityAsInt,TraceFilters,[]), whereis(?TRACE_SINK)}
     end,
     case (LevelThreshold band SeverityAsInt) /= 0 orelse Destinations /= [] of
         true ->
@@ -119,9 +119,15 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
                 Severity, Metadata, Destinations),
             case lager_config:get(Sink, async, false) of %% this needs to be able to get value from a non-default sink
                 true ->
-                    gen_event:notify(Pid, {log, LagerMsg});
+                    gen_event:notify(SinkPid, {log, LagerMsg});
                 false ->
-                    gen_event:sync_notify(Pid, {log, LagerMsg})
+                    gen_event:sync_notify(SinkPid, {log, LagerMsg})
+            end,
+            case TraceSinkPid =/ undefined of
+                true ->
+                    gen_event:notify(TraceSinkPid, {log, LagerMsg});
+                false ->
+                    ok
             end;
         false ->
             ok
@@ -312,7 +318,7 @@ status() ->
          ],
          [
           "Tracing Statistics:\n ",
-              [ begin 
+              [ begin
                     [" ", atom_to_list(Table), ": ",
                      integer_to_list(?DEFAULT_TRACER:info(Table) div TraceCount),
                      "\n"]
@@ -334,8 +340,8 @@ set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
 %% multiple identifiers. (Use `undefined' if it doesn't have any.)
 set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level) ->
     HandlerArg = case Ident of
-	undefined -> Handler;
-	_ -> {Handler, Ident}
+        undefined -> Handler;
+        _ -> {Handler, Ident}
     end,
     Reply = gen_event:call(Sink, HandlerArg, {set_loglevel, Level}, infinity),
     update_loglevel_config(Sink),
@@ -425,12 +431,12 @@ safe_format_chop(Fmt, Args, Limit) ->
 
 %% @doc Print a record lager found during parse transform
 pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
-    try 
+    try
         case is_record_known(Record, Module) of
             false ->
                 Record;
             {RecordName, RecordFields} ->
-                {'$lager_record', RecordName, 
+                {'$lager_record', RecordName,
                     zip(RecordFields, tl(tuple_to_list(Record)), Module, [])}
         end
     catch
@@ -454,15 +460,15 @@ zip([FieldName|RecordFields], [FieldValue|Record], Module, ToReturn) ->
 zip([], [], _Module, ToReturn) ->
     lists:reverse(ToReturn).
 
-is_record_known(Record, Module) -> 
+is_record_known(Record, Module) ->
     Name = element(1, Record),
     Attrs = Module:module_info(attributes),
     case lists:keyfind(lager_records, 1, Attrs) of
         false -> false;
-        {lager_records, Records} -> 
+        {lager_records, Records} ->
             case lists:keyfind(Name, 1, Records) of
                 false -> false;
-                {Name, RecordFields} -> 
+                {Name, RecordFields} ->
                     case (tuple_size(Record) - 1) =:= length(RecordFields) of
                         false -> false;
                         true -> {Name, RecordFields}
