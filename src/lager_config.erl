@@ -43,7 +43,7 @@ new() ->
     %% use insert_new here so that if we're in an appup we don't mess anything up
     %%
     %% until lager is completely started, allow all messages to go through
-    ets:insert_new(?TBL, {{?DEFAULT_SINK, loglevel}, {element(2, lager_util:config_to_mask(debug))}}),
+    ets:insert_new(?TBL, {{?DEFAULT_SINK, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}}),
     %% Need to be able to find the `lager_handler_watcher' for all handlers
     ets:insert_new(?TBL, {{?GLOBAL, handlers}, []}),
     ok.
@@ -58,6 +58,8 @@ global_set(Key, Value) ->
     set({?GLOBAL, Key}, Value).
 
 
+get({_Sink, _Key}=FullKey) ->
+    get(FullKey, undefined);
 get(Key) ->
     get({?DEFAULT_SINK, Key}, undefined).
 
