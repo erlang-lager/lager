@@ -90,7 +90,7 @@ dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
 %% this is the same check that the parse transform bakes into the module at compile time
 dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     SeverityAsInt=lager_util:level_to_num(Severity),
-    case {whereis(Sink), lager_config:get(Sink, loglevel, {?LOG_NONE, []})} of
+    case {whereis(Sink), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
         {undefined, _} ->
             {error, lager_not_running};
         {SinkPid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
@@ -117,7 +117,7 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
             end,
             LagerMsg = lager_msg:new(Msg,
                 Severity, Metadata, Destinations),
-            case lager_config:get(Sink, async, false) of %% this needs to be able to get value from a non-default sink
+            case lager_config:get({Sink, async}, false) of %% this needs to be able to get value from a non-default sink
                 true ->
                     gen_event:notify(SinkPid, {log, LagerMsg});
                 false ->
@@ -250,11 +250,11 @@ stop_trace({Backend, Filter, Level}) ->
     stop_trace(Backend, Filter, Level).
 
 stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
-    {Level, Traces} = lager_config:get(Sink, loglevel),
+    {Level, Traces} = lager_config:get({Sink, loglevel}),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
-    lager_config:set(Sink, loglevel, {Level, NewTraces}),
+    lager_config:set({Sink, loglevel}, {Level, NewTraces}),
     case get_loglevel(Sink, Backend) of
         none ->
             %% check no other traces point here
@@ -389,21 +389,21 @@ get_loglevels(Sink) ->
 
 %% @private
 add_trace_to_loglevel_config(Trace, Sink) ->
-    {MinLevel, Traces} = lager_config:get(Sink, loglevel),
+    {MinLevel, Traces} = lager_config:get({Sink, loglevel}),
     case lists:member(Trace, Traces) of
         false ->
             NewTraces = [Trace|Traces],
             _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
-            lager_config:set(Sink, loglevel, {MinLevel, [Trace|Traces]});
+            lager_config:set({Sink, loglevel}, {MinLevel, [Trace|Traces]});
         _ ->
             ok
     end.
 
 %% @doc recalculate min log level
 update_loglevel_config(Sink) ->
-    {_, Traces} = lager_config:get(Sink, loglevel),
+    {_, Traces} = lager_config:get({Sink, loglevel}),
     MinLog = minimum_loglevel(get_loglevels(Sink)),
-    lager_config:set(Sink, loglevel, {MinLog, Traces}).
+    lager_config:set({Sink, loglevel}, {MinLog, Traces}).
 
 %% @private
 minimum_loglevel(Levels) ->

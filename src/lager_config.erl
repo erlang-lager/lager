@@ -20,7 +20,7 @@
 
 -include("lager.hrl").
 
--export([new/0, get/1, get/2, get/3, set/2, set/3,
+-export([new/0, get/1, get/2, set/2,
          global_get/1, global_get/2, global_set/2]).
 
 -define(TBL, lager_config).
@@ -57,13 +57,11 @@ global_get(Key, Default) ->
 global_set(Key, Value) ->
     set(?GLOBAL, Key, Value).
 
+
 get(Key) ->
-    get(?DEFAULT_SINK, Key, undefined).
+    get({?DEFAULT_SINK, Key}, undefined).
 
-get(Key, Default) ->
-    get(?DEFAULT_SINK, Key, Default).
-
-get(Sink, Key, Default) ->
+get({Sink, Key}, Default) ->
     try
     case ets:lookup(?TBL, {Sink, Key}) of
         [] ->
@@ -74,10 +72,12 @@ get(Sink, Key, Default) ->
     catch
         _:_ ->
             Default
-    end.
+    end;
+get(Key, Default) ->
+    get({?DEFAULT_SINK, Key}, Default).
 
 set(Key, Value) ->
-    set(?DEFAULT_SINK, Key, Value).
+    set({?DEFAULT_SINK, Key}, Value).
 
-set(Sink, Key, Value) ->
+set({Sink, Key}, Value) ->
     ets:insert(?TBL, {{Sink, Key}, Value}).
