@@ -87,7 +87,7 @@ start_handler(Sink, Module, Config) ->
     {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
                                            [Sink, Module, Config]),
     BackendId = Module:config_to_id(Config),
-    {BackendId, Watcher}.
+    {BackendId, Watcher, Sink}.
 
 interpret_hwm(undefined) ->
     undefined;
@@ -199,7 +199,7 @@ add_configured_traces() ->
 
 maybe_make_handler_id(Mod, Config) ->
     %% Allow the backend to generate a gen_event handler id, if it wants to.
-    %% We don't use erlang:function_exported here because that requires the module 
+    %% We don't use erlang:function_exported here because that requires the module
     %% already be loaded, which is unlikely at this phase of startup. Using code:load
     %% caused undesireable side-effects with generating code-coverage reports.
     try Mod:config_to_id(Config) of

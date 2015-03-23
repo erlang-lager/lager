@@ -163,6 +163,16 @@ log(Sink, Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
 log(Sink, Level, Metadata, Format, Args) when is_list(Metadata) ->
     dispatch_log(Sink, Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
 
+validate_trace_filters(Filters, Level, Backend) ->
+    Sink = proplists:get_value(sink, Filters, ?DEFAULT_SINK),
+    {Sink,
+     lager_util:validate_trace({
+                                 proplists:delete(sink, Filters),
+                                 Level,
+                                 Backend
+                               })
+    }.
+
 trace_file(File, Filter) ->
     trace_file(File, Filter, debug, []).
 
@@ -172,14 +182,9 @@ trace_file(File, Filter, Level) when is_atom(Level) ->
 trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
 
-%% FIXME: All of this code assumes a single event handler
-%% In fact anywhere there's `lager_event' assume that the code
-%% should be generalized to support multiple sinks.
-
 trace_file(File, Filter, Level, Options) ->
-    Trace0 = {Filter, Level, {lager_file_backend, File}},
-    case lager_util:validate_trace(Trace0) of
-        {ok, Trace} ->
+    case validate_trace_filters(Filter, Level, {lager_file_backend, File}) of
+        {Sink, {ok, Trace}} ->
             Handlers = lager_config:global_get(handlers, []),
             %% check if this file backend is already installed
             Res = case lists:keyfind({lager_file_backend, File}, 2, Handlers) of
@@ -192,21 +197,23 @@ trace_file(File, Filter, Level, Options) ->
                                                             {file, File}),
                                              {level, none}),
                           HandlerInfo =
-                              lager_app:start_handler(?TRACE_SINK, lager_file_backend,
+                              lager_app:start_handler(Sink, lager_file_backend,
                                                       LogFileConfig),
                           lager_config:global_set(handlers, [HandlerInfo|Handlers]);
-                     {Watcher, _Handler} ->
-                          lager_handler_watcher:add_sink(Watcher, ?TRACE_SINK),
-                          {ok, exists}
+                      {Watcher, _Handler, Sink} ->
+                          {ok, exists};
+                      {Watcher, _Handler, OtherSink} ->
+                          {error, file_in_use}
             end,
             case Res of
               {ok, _} ->
-                add_trace_to_loglevel_config(Trace),
+                %% XXX Double-check this logic for {ok, exists}
+                add_trace_to_loglevel_config(Trace, Sink),
                 {ok, {{lager_file_backend, File}, Filter, Level}};
               {error, _} = E ->
                 E
             end;
-        Error ->
+        {_Sink, Error} ->
             Error
     end.
 
@@ -223,39 +230,37 @@ trace({lager_file_backend, File}, Filter, Level) ->
     trace_file(File, Filter, Level);
 
 trace(Backend, Filter, Level) ->
-    Trace0 = {Filter, Level, Backend},
-    case lager_util:validate_trace(Trace0) of
-        {ok, Trace} ->
-            add_trace_to_loglevel_config(Trace),
+    case validate_trace_filters(Filter, Level, Backend) of
+        {Sink, {ok, Trace}} ->
+            add_trace_to_loglevel_config(Trace, Sink),
             {ok, {Backend, Filter, Level}};
-        Error ->
+        {_Sink, Error} ->
             Error
     end.
 
 stop_trace(Backend, Filter, Level) ->
-    Trace0 = {Filter, Level, Backend},
-    case lager_util:validate_trace(Trace0) of
-        {ok, Trace} ->
-            stop_trace_int(Trace);
-        Error ->
+    case validate_trace_filters(Filter, Level, Backend) of
+        {Sink, {ok, Trace}} ->
+            stop_trace_int(Trace, Sink);
+        {_Sink, Error} ->
             Error
     end.
 
 stop_trace({Backend, Filter, Level}) ->
     stop_trace(Backend, Filter, Level).
 
-stop_trace_int({Backend, _Filter, _Level} = Trace) ->
-    {Level, Traces} = lager_config:get(loglevel),
+stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
+    {Level, Traces} = lager_config:get(Sink, loglevel),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
     %MinLevel = minimum_loglevel(get_loglevels() ++ get_trace_levels(NewTraces)),
-    lager_config:set(loglevel, {Level, NewTraces}),
-    case get_loglevel(Backend) of
+    lager_config:set(Sink, loglevel, {Level, NewTraces}),
+    case get_loglevel(Sink, Backend) of
         none ->
             %% check no other traces point here
             case lists:keyfind(Backend, 3, NewTraces) of
                 false ->
-                    gen_event:delete_handler(lager_event, Backend, []);
+                    gen_event:delete_handler(Sink, Backend, []);
                 _ ->
                     ok
             end;
@@ -267,18 +272,18 @@ stop_trace_int({Backend, _Filter, _Level} = Trace) ->
 clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
     _ = lager_util:trace_filter(none),
-    lists:foreach(fun({Watcher, Handler}) ->
+    lists:foreach(fun({Watcher, Handler, Sink}) ->
           case get_loglevel(Handler) of
             none ->
-              gen_event:delete_handler(?TRACE_SINK, Handler, []),
-              langer_handler_watcher:remove_sink(Watcher, ?TRACE_SINK)
+              gen_event:delete_handler(Sink, Handler, []),
             _ ->
               ok
           end
       end, Handlers).
 
+%% XXX Needs heavy revision
 status() ->
-    Handlers = gen_event:which_handlers(lager_event),
+    Handlers = lager_config:global_get(handlers, []),
     TraceCount = case length(element(2, lager_config:get(loglevel))) of
         0 -> 1;
         N -> N
@@ -383,13 +388,13 @@ get_loglevels(Sink) ->
         Handler <- gen_event:which_handlers(Sink)].
 
 %% @private
-add_trace_to_loglevel_config(Trace) ->
-    {MinLevel, Traces} = lager_config:get(loglevel),
+add_trace_to_loglevel_config(Trace, Sink) ->
+    {MinLevel, Traces} = lager_config:get(Sink, loglevel),
     case lists:member(Trace, Traces) of
         false ->
             NewTraces = [Trace|Traces],
             _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces]),
-            lager_config:set(lager_event, loglevel, {MinLevel, [Trace|Traces]});
+            lager_config:set(Sink, loglevel, {MinLevel, [Trace|Traces]});
         _ ->
             ok
     end.
