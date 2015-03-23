@@ -144,7 +144,7 @@ start(_StartType, _StartArgs) ->
                              application:get_env(lager, async_threshold),
                              application:get_env(lager, async_threshold_window)),
     start_handlers(?DEFAULT_SINK,
-                   application:get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
+                   application:get_env(lager, handlers, {ok, ?DEFAULT_HANDLER_CONF})),
 
     ok = add_configured_traces(),
 
