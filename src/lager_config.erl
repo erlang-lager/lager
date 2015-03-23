@@ -52,10 +52,10 @@ global_get(Key) ->
     global_get(Key, undefined).
 
 global_get(Key, Default) ->
-    get(?GLOBAL, Key, Default).
+    get({?GLOBAL, Key}, Default).
 
 global_set(Key, Value) ->
-    set(?GLOBAL, Key, Value).
+    set({?GLOBAL, Key}, Value).
 
 
 get(Key) ->
@@ -76,8 +76,7 @@ get({Sink, Key}, Default) ->
 get(Key, Default) ->
     get({?DEFAULT_SINK, Key}, Default).
 
+set({Sink, Key}, Value) ->
+    ets:insert(?TBL, {{Sink, Key}, Value});
 set(Key, Value) ->
     set({?DEFAULT_SINK, Key}, Value).
-
-set({Sink, Key}, Value) ->
-    ets:insert(?TBL, {{Sink, Key}, Value}).
