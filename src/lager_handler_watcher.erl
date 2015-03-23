@@ -92,7 +92,7 @@ install_handler(Sink, Module, Config) ->
     case gen_event:add_sup_handler(Sink, Module, Config) of
         ok ->
             ?INT_LOG(debug, "Lager installed handler ~p into ~p", [Module, Sink]),
-            lager:update_loglevel_config(),
+            lager:update_loglevel_config(Sink),
             ok;
         {error, {fatal, Reason}} ->
             ?INT_LOG(error, "Lager fatally failed to install handler ~p into"
