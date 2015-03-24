@@ -274,7 +274,7 @@ clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
     _ = lager_util:trace_filter(none),
     lists:foreach(fun({_Watcher, Handler, Sink}) ->
-          case get_loglevel(Handler) of
+          case get_loglevel(Sink, Handler) of
             none ->
               gen_event:delete_handler(Sink, Handler, []);
             _ ->
