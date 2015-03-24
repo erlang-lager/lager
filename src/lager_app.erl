@@ -119,6 +119,12 @@ wrap_proplist_value(Value) ->
 
 configure_sink(Sink, SinkDef) ->
     lager_config:new_sink(Sink),
+    ChildId = list_to_atom(atom_to_list(Sink) ++ "_event"),
+    supervisor:start_child(lager_sup,
+                           {ChildId,
+                            {gen_event, start_link,
+                             [{local, Sink}]},
+                            permanent, 5000, worker, [dynamic]}),
     determine_async_behavior(Sink,
                              wrap_proplist_value(
                                proplists:get_value(async_threshold, SinkDef)),
