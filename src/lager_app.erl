@@ -77,6 +77,7 @@ start_handlers(_Sink, {ok, Handlers}) when not is_list(Handlers) ->
 start_handlers(Sink, {ok, Handlers}) ->
     %% handlers failing to start are handled in the handler_watcher
     lager_config:global_set(handlers,
+                            lager_config:global_get(handlers, []) ++
                             lists:map(fun({Module, Config}) ->
                                               start_handler(Sink, Module, Config)
                                       end,
