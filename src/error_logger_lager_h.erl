@@ -74,7 +74,7 @@ set_high_water(N) ->
     gen_event:call(error_logger, ?MODULE, {set_high_water, N}, infinity).
 
 -spec init(any()) -> {ok, #state{}}.
-init([HighWaterMark]) ->
+init([{sink, Sink}, HighWaterMark]) ->
     {ok, #state{hwm=HighWaterMark}}.
 
 handle_call({set_high_water, N}, State) ->
@@ -318,7 +318,7 @@ format_reason({function_clause, [MFA|_]}) ->
 format_reason({if_clause, [MFA|_]}) ->
     ["no true branch found while evaluating if expression in ", format_mfa(MFA)];
 format_reason({{try_clause, Val}, [MFA|_]}) ->
-    ["no try clause matching ", print_val(Val), " in ", format_mfa(MFA)]; 
+    ["no try clause matching ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({badarith, [MFA|_]}) ->
     ["bad arithmetic expression in ", format_mfa(MFA)];
 format_reason({{badmatch, Val}, [MFA|_]}) ->

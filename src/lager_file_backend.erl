@@ -80,6 +80,8 @@
                   {formatter_config, term()}.
 
 -spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
+init([{sink, _Sink}|Options]) ->
+    init(Options);
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack
     init([{file, FileName}, {level, LogLevel}]);
@@ -237,7 +239,7 @@ do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
                     Flap
             end,
             State#state{flap=Flap2};
-        _ -> 
+        _ ->
             State
     end.
 
@@ -711,7 +713,7 @@ filesystem_test_() ->
             {"tracing with options should work",
                 fun() ->
                         file:delete("foo.log"),
-                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]),
                         lager:error("Test message"),
                         ?assertNot(filelib:is_regular("foo.log.0")),
                         lager:error("Test message"),
@@ -809,4 +811,3 @@ config_validation_test_() ->
 
 
 -endif.
-

@@ -53,11 +53,13 @@
             %% to async_threshold - async_threshold_window
             {async_threshold_window, 5}, %% <-- per sink
             {extra_sinks, [
-                     {audit, [{lager_file_backend,
+                     {audit,
+                      [{handlers,
+                        [{lager_file_backend,
                                [{file, "log/audit.log"}, {level, info},
                                 {size, 10485760}, {date, "$D0"}, {count, 10}]
                               }
-                             ]} %% Security audit sink has no async behavior
+                             ]}]} %% Security audit sink has no async behavior
             ]}
         ]}
  ]}.

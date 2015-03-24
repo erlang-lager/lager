@@ -47,8 +47,11 @@ start_link(Sink, Module, Config) ->
 start(Sink, Module, Config) ->
     gen_server:start(?MODULE, [Sink, Module, Config], []).
 
+init([Sink, Module, Config]) when is_list(Config) ->
+    install_handler(Sink, Module, [{sink, Sink}|Config]),
+    {ok, #state{sink=Sink, module=Module, config=Config}};
 init([Sink, Module, Config]) ->
-    install_handler(Sink, Module, Config),
+    install_handler(Sink, Module, [{sink, Sink}]++[Config]),
     {ok, #state{sink=Sink, module=Module, config=Config}}.
 
 handle_call(_Call, _From, State) ->

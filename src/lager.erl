@@ -384,7 +384,7 @@ posix_error(Error) ->
 
 %% @private
 get_loglevels(Sink) ->
-    [gen_event:call(Handler, get_loglevel, infinity) ||
+    [gen_event:call(Sink, Handler, get_loglevel, infinity) ||
         Handler <- gen_event:which_handlers(Sink)].
 
 %% @private
@@ -401,7 +401,7 @@ add_trace_to_loglevel_config(Trace, Sink) ->
 
 %% @doc recalculate min log level
 update_loglevel_config(Sink) ->
-    {_, Traces} = lager_config:get({Sink, loglevel}),
+    {_, Traces} = lager_config:get({Sink, loglevel}, {ignore_me, []}),
     MinLog = minimum_loglevel(get_loglevels(Sink)),
     lager_config:set({Sink, loglevel}, {MinLog, Traces}).
 

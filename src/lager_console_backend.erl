@@ -72,9 +72,8 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _:_ ->
             {error, {fatal, bad_log_level}}
     end;
-init(Level) ->
+init([{sink, _Sink}, Level]) ->
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]).
-
 
 %% @private
 handle_call(get_loglevel, #state{level=Level} = State) ->

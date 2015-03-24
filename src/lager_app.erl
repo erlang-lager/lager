@@ -86,7 +86,7 @@ start_handlers(Sink, {ok, Handlers}) ->
 start_handler(Sink, Module, Config) ->
     {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
                                            [Sink, Module, Config]),
-    BackendId = Module:config_to_id(Config),
+    BackendId = maybe_make_handler_id(Module, Config),
     {BackendId, Watcher, Sink}.
 
 interpret_hwm(undefined) ->
@@ -104,7 +104,7 @@ start_error_logger_handler({ok, false}, _HWM, _Whitelist) ->
 start_error_logger_handler(_, HWM, undefined) ->
     start_error_logger_handler(ignore_me, HWM, {ok, []});
 start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
-    case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM]]) of
+    case supervisor:start_child(lager_handler_watcher_sup, [?DEFAULT_SINK, error_logger_lager_h, [HWM]]) of
         {ok, _} ->
             [begin error_logger:delete_report_handler(X), X end ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
