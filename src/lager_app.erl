@@ -86,7 +86,7 @@ start_handlers(Sink, {ok, Handlers}) ->
 start_handler(Sink, Module, Config) ->
     {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
                                            [Sink, Module, Config]),
-    BackendId = maybe_make_handler_id(Module, Config),
+    {BackendId, _Config} = maybe_make_handler_id(Module, Config),
     {BackendId, Watcher, Sink}.
 
 interpret_hwm(undefined) ->
