@@ -20,7 +20,7 @@
 
 -include("lager.hrl").
 
--export([new/0, get/1, get/2, set/2,
+-export([new/0, new_sink/1, get/1, get/2, set/2,
          global_get/1, global_get/2, global_set/2]).
 
 -define(TBL, lager_config).
@@ -40,13 +40,16 @@ new() ->
         error:badarg ->
             ?INT_LOG(warning, "Table ~p already exists", [?TBL])
     end,
-    %% use insert_new here so that if we're in an appup we don't mess anything up
-    %%
-    %% until lager is completely started, allow all messages to go through
-    ets:insert_new(?TBL, {{?DEFAULT_SINK, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}}),
+    new_sink(?DEFAULT_SINK),
     %% Need to be able to find the `lager_handler_watcher' for all handlers
     ets:insert_new(?TBL, {{?GLOBAL, handlers}, []}),
     ok.
+
+new_sink(Sink) ->
+    %% use insert_new here so that if we're in an appup we don't mess anything up
+    %%
+    %% until lager is completely started, allow all messages to go through
+    ets:insert_new(?TBL, {{Sink, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}}).
 
 global_get(Key) ->
     global_get(Key, undefined).

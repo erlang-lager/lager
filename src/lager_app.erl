@@ -118,6 +118,7 @@ wrap_proplist_value(Value) ->
     {ok, Value}.
 
 configure_sink(Sink, SinkDef) ->
+    lager_config:new_sink(Sink),
     determine_async_behavior(Sink,
                              wrap_proplist_value(
                                proplists:get_value(async_threshold, SinkDef)),
