@@ -70,11 +70,11 @@ determine_async_behavior(Sink, {ok, Threshold}, {ok, Window}) ->
 
 start_handlers(_Sink, undefined) ->
     ok;
-start_handlers(_Sink, {ok, Handlers}) when not is_list(Handlers) ->
+start_handlers(_Sink, Handlers) when not is_list(Handlers) ->
     error_logger:error_msg(
       "Invalid value for 'handlers' (must be list): ~p~n", [Handlers]),
     throw({error, bad_config});
-start_handlers(Sink, {ok, Handlers}) ->
+start_handlers(Sink, Handlers) ->
     %% handlers failing to start are handled in the handler_watcher
     lager_config:global_set(handlers,
                             lager_config:global_get(handlers, []) ++
@@ -151,7 +151,7 @@ start(_StartType, _StartArgs) ->
                              application:get_env(lager, async_threshold),
                              application:get_env(lager, async_threshold_window)),
     start_handlers(?DEFAULT_SINK,
-                   application:get_env(lager, handlers, {ok, ?DEFAULT_HANDLER_CONF})),
+                   application:get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
 
     ok = add_configured_traces(),
 
