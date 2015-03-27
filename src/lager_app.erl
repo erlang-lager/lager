@@ -132,9 +132,7 @@ configure_sink(Sink, SinkDef) ->
                                proplists:get_value(async_threshold_window, SinkDef))
                             ),
     start_handlers(Sink,
-                   wrap_proplist_value(
-                     proplists:get_value(handlers, SinkDef, []))
-                  ),
+                   proplists:get_value(handlers, SinkDef, [])),
 
     lager:update_loglevel_config(Sink).
 
