@@ -180,6 +180,7 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, lager},
                                     {integer, Line, SeverityAsInt},
                                     {var, Line, LevelVar},
                                     {var, Line, TracesVar},
+                                    {atom, Line, lager_event},
                                     {var, Line, PidVar}
                                 ]
                             }
