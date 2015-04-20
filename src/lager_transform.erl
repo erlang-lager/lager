@@ -31,8 +31,10 @@
 parse_transform(AST, Options) ->
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     Enable = proplists:get_value(lager_print_records_flag, Options, true),
+    Sinks = [lager] ++ proplists:get_value(lager_extra_sinks, Options, []),
     put(print_records_flag, Enable),
     put(truncation_size, TruncSize),
+    put(sinks, Sinks),
     erlang:put(records, []),
     %% .app file should either be in the outdir, or the same dir as the source file
     guess_application(proplists:get_value(outdir, Options), hd(AST)),
@@ -75,7 +77,7 @@ walk_clauses(Acc, [{clause, Line, Arguments, Guards, Body}|T]) ->
 walk_body(Acc, []) ->
     lists:reverse(Acc);
 walk_body(Acc, [H|T]) ->
-    walk_body([transform_statement(H, [lager])|Acc], T).
+    walk_body([transform_statement(H, get(sinks))|Acc], T).
 
 transform_statement({call, Line, {remote, _Line1, {atom, _Line2, Module},
                                   {atom, _Line3, Function}}, Arguments0} = Stmt,
