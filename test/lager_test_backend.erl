@@ -709,6 +709,17 @@ error_logger_redirect_test_() ->
                         ?assertEqual(Expected, lists:flatten(Msg))
                 end
             },
+            {"error messages with unicode characters in Args are printed",
+                fun() ->
+                        sync_error_logger:error_msg("~ts", ["Привет!"]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(error),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Привет!", lists:flatten(Msg))
+                end
+            },
+
             {"error messages are truncated at 4096 characters",
                 fun() ->
                         sync_error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
@@ -806,6 +817,27 @@ error_logger_redirect_test_() ->
                         ?assertEqual(lager_util:level_to_num(info),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assert(length(lists:flatten(Msg)) < 5100)
+                end
+            },
+            {"info messages with unicode characters in Args are printed",
+                fun() ->
+                        sync_error_logger:info_msg("~ts", ["Привет!"]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(info),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Привет!", lists:flatten(Msg))
+                end
+            },
+            {"warning messages with unicode characters in Args are printed",
+                fun() ->
+                        sync_error_logger:warning_msg("~ts", ["Привет!"]),
+                        Map = error_logger:warning_map(),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg,Metadata} = pop(),
+                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(self(),proplists:get_value(pid,Metadata)),
+                        ?assertEqual("Привет!", lists:flatten(Msg))
                 end
             },
 
