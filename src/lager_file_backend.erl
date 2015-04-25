@@ -43,7 +43,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([config_to_id/1]).
+-export([config_to_id/1, get_log_name/1]).
 
 -define(DEFAULT_LOG_LEVEL, info).
 -define(DEFAULT_ROTATION_SIZE, 10485760). %% 10mb
@@ -180,6 +180,10 @@ config_to_id(Config) ->
         File ->
             {?MODULE, File}
     end.
+
+%% @private get log name by file name for later matches
+get_log_name(File) ->
+    lager_util:expand_path(File).
 
 
 write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,

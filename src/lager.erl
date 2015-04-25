@@ -150,12 +150,13 @@ trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
 
 trace_file(File, Filter, Level, Options) ->
-    Trace0 = {Filter, Level, {lager_file_backend, File}},
+    Id = lager_file_backend:get_log_name(File),
+    Trace0 = {Filter, Level, {lager_file_backend, Id}},
     case lager_util:validate_trace(Trace0) of
         {ok, Trace} ->
             Handlers = gen_event:which_handlers(lager_event),
             %% check if this file backend is already installed
-            Res = case lists:member({lager_file_backend, File}, Handlers) of
+            Res = case lists:member({lager_file_backend, Id}, Handlers) of
                false ->
                      %% install the handler
                     LogFileConfig = lists:keystore(level, 1, lists:keystore(file, 1, Options, {file, File}), {level, none}),
