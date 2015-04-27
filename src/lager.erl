@@ -300,25 +300,36 @@ clear_all_traces() ->
           end
       end, Handlers).
 
-%% XXX Needs heavy revision
+find_traces(Sinks) ->
+    lists:foldl(fun(S, Acc) ->
+                        {_Level, Traces} = lager_config:get({S, loglevel}),
+                        Acc ++ lists:map(fun(T) -> {S, T} end, Traces)
+                end,
+                [],
+                Sinks).
+
 status() ->
     Handlers = lager_config:global_get(handlers, []),
-    TraceCount = case length(element(2, lager_config:get(loglevel))) of
+    Sinks = lists:sort(name_all_sinks()),
+    Traces = find_traces(Sinks),
+    TraceCount = case length(Traces) of
         0 -> 1;
         N -> N
     end,
     Status = ["Lager status:\n",
         [begin
-                    Level = get_loglevel(Handler),
+                    Level = get_loglevel(Sink, Handler),
                     case Handler of
                         {lager_file_backend, File} ->
-                            io_lib:format("File ~s at level ~p\n", [File, Level]);
+                            io_lib:format("File ~s (~s) at level ~p\n", [File, Sink, Level]);
                         lager_console_backend ->
-                            io_lib:format("Console at level ~p\n", [Level]);
+                            io_lib:format("Console (~s) at level ~p\n", [Sink, Level]);
                         _ ->
                             []
                     end
-            end || Handler <- Handlers],
+            end || {Handler, _Watcher, Sink} <- lists:sort(fun({_, _, S1},
+                                                               {_, _, S2}) -> S1 =< S2 end,
+                                                           Handlers)],
         "Active Traces:\n",
         [begin
                     LevelName = case Level of
@@ -330,9 +341,9 @@ status() ->
                         Num ->
                             lager_util:num_to_level(Num)
                     end,
-                    io_lib:format("Tracing messages matching ~p at level ~p to ~p\n",
-                        [Filter, LevelName, Destination])
-            end || {Filter, Level, Destination} <- element(2, lager_config:get(loglevel))],
+                    io_lib:format("Tracing messages matching ~p (sink ~s) at level ~p to ~p\n",
+                        [Filter, Sink, LevelName, Destination])
+            end || {Sink, {Filter, Level, Destination}} <- Traces],
          [
          "Tracing Reductions:\n",
             case ?DEFAULT_TRACER:info('query') of
