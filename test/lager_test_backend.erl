@@ -114,7 +114,15 @@ print_bad_state() ->
 
 has_line_numbers() ->
     %% are we R15 or greater
-    otp_version() >= 15.
+    % this gets called a LOT - cache the answer
+    case erlang:get({?MODULE, has_line_numbers}) of
+        undefined ->
+            R = otp_version() >= 15,
+            erlang:put({?MODULE, has_line_numbers}, R),
+            R;
+        Bool ->
+            Bool
+    end.
 
 otp_version() ->
     otp_version(erlang:system_info(otp_release)).
@@ -593,20 +601,42 @@ crash(Type) ->
 test_body(Expected, Actual) ->
     case has_line_numbers() of
         true ->
-            FileLine = string:substr(Actual, length(Expected)+1),
-            Body = string:substr(Actual, 1, length(Expected)),
+            ExLen = length(Expected),
+            {Body, Rest} = case length(Actual) > ExLen of
+                true ->
+                    {string:substr(Actual, 1, ExLen),
+                        string:substr(Actual, (ExLen + 1))};
+                _ ->
+                    {Actual, []}
+            end,
             ?assertEqual(Expected, Body),
-            case string:substr(FileLine, 1, 6) of
+            % OTP-17 (and maybe later releases) may tack on additional info
+            % about the failure, so if Actual starts with Expected (already
+            % confirmed by having gotten past assertEqual above) and ends
+            % with " line NNN" we can ignore what's in-between. By extension,
+            % since there may not be line information appended at all, any
+            % text we DO find is reportable, but not a test failure.
+            case Rest of
                 [] ->
-                    %% sometimes there's no line information...
-                    ?assert(true);
-                " line " ->
-                    ?assert(true);
-                Other ->
-                    ?debugFmt("unexpected trailing data ~p", [Other]),
-                    ?assert(false)
+                    ok;
+                _ ->
+                    % isolate the extra data and report it if it's not just
+                    % a line number indicator
+                    case re:run(Rest, "^.*( line \\d+)$", [{capture, [1]}]) of
+                        nomatch ->
+                            ?debugFmt(
+                                "Trailing data \"~s\" following \"~s\"",
+                                [Rest, Expected]);
+                        {match, [{0, _}]} ->
+                            % the whole sting is " line NNN"
+                            ok;
+                        {match, [{Off, _}]} ->
+                            ?debugFmt(
+                                "Trailing data \"~s\" following \"~s\"",
+                                [string:substr(Rest, 1, Off), Expected])
+                    end
             end;
-        false ->
+        _ ->
             ?assertEqual(Expected, Actual)
     end.
 
