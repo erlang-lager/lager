@@ -1,4 +1,6 @@
-%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% -------------------------------------------------------------------
+%%
+%% Copyright (c) 2011-2015 Basho Technologies, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -13,6 +15,8 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
+%%
+%% -------------------------------------------------------------------
 
 -module(lager_test_backend).
 
@@ -108,9 +112,17 @@ print_bad_state() ->
 
 has_line_numbers() ->
     %% are we R15 or greater
-    Rel = erlang:system_info(otp_release),
-    {match, [Major]} = re:run(Rel, "(?|(^R(\\d+)[A|B](|0(\\d)))|(^(\\d+)$))", [{capture, [2], list}]),
-    list_to_integer(Major) >= 15.
+    otp_version() >= 15.
+
+otp_version() ->
+    otp_version(erlang:system_info(otp_release)).
+
+otp_version([$R | Rel]) ->
+    {Ver, _} = string:to_integer(Rel),
+    Ver;
+otp_version(Rel) ->
+    {Ver, _} = string:to_integer(Rel),
+    Ver.
 
 not_running_test() ->
     ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).
@@ -607,7 +619,7 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(Pid,proplists:get_value(pid,Metadata)),
                         ?assertEqual(lager_util:level_to_num(error),Level)
                 end
-            } 
+            }
     end,
     {foreach,
         fun() ->
@@ -1004,7 +1016,7 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 600)
                 end
             },
-            {"crash reports for 'special processes' should be handled right - function_clause", 
+            {"crash reports for 'special processes' should be handled right - function_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1017,7 +1029,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - case_clause", 
+            {"crash reports for 'special processes' should be handled right - case_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1030,7 +1042,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - exit", 
+            {"crash reports for 'special processes' should be handled right - exit",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1043,7 +1055,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - error", 
+            {"crash reports for 'special processes' should be handled right - error",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
