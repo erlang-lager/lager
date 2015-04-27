@@ -27,7 +27,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
-init([CrashBefore, CrashAfter]) ->
+init([{sink, _Sink}, CrashBefore, CrashAfter]) ->
     case is_tuple(CrashBefore) andalso (timer:now_diff(CrashBefore, os:timestamp()) > 0) of
         true ->
             %?debugFmt("crashing!~n", []),
