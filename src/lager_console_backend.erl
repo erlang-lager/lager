@@ -38,6 +38,10 @@
 -define(TERSE_FORMAT,[time, " ", color, "[", severity,"] ", message]).
 
 %% @private
+init([Level]) when is_atom(Level) ->
+    init(Level);
+init([{sink, _Sink}|T]) ->
+    init(T);
 init([Level, true]) -> % for backwards compatibility
     init([Level,{lager_default_formatter,[{eol, eol()}]}]);
 init([Level,false]) -> % for backwards compatibility
@@ -72,7 +76,7 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _:_ ->
             {error, {fatal, bad_log_level}}
     end;
-init([{sink, _Sink}, Level]) ->
+init(Level) ->
     init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]).
 
 %% @private
@@ -184,7 +188,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:log(info, self(), "Test message"),
                         receive
@@ -204,7 +208,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        gen_event:add_handler(lager_event, lager_console_backend, [info, true]),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info, true]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:info("Test message"),
                         PidStr = pid_to_list(self()),
@@ -225,7 +229,7 @@ console_log_test_() ->
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         gen_event:add_handler(lager_event, lager_console_backend,
-                          [info, {lager_default_formatter, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
+                          [{sink, lager_event}, info, {lager_default_formatter, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
                                                             module,"#",function,"#",file,"#",line,"#",message,"\r\n"]}]),
                         lager_config:set({lager_event, loglevel}, {?INFO, []}),
                         lager:info("Test message"),
@@ -248,7 +252,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info]),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:debug("Test message"),
@@ -278,7 +282,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager:debug("Test message"),
@@ -317,7 +321,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:set_loglevel(lager_console_backend, '!=info'),
                         erlang:group_leader(Pid, whereis(lager_event)),
@@ -348,7 +352,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{sink, lager_event}, info]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:set_loglevel(lager_console_backend, '=debug'),
                         erlang:group_leader(Pid, whereis(lager_event)),
