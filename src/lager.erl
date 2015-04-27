@@ -270,8 +270,26 @@ stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
     end,
     ok.
 
+name_all_sinks() ->
+    sets:to_list(
+      lists:foldl(fun({_Watcher, _Handler, Sink}, Set) ->
+                          sets:add_element(Sink, Set)
+                  end,
+                  sets:new(),
+                  lager_config:global_get(handlers, []))).
+
+clear_traces_by_sink(Sinks) ->
+    lists:foreach(fun(S) ->
+                          {Level, _Traces} =
+                              lager_config:get({S, loglevel}),
+                          lager_config:set({S, loglevel},
+                                           {Level, []})
+                  end,
+                  Sinks).
+
 clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
+    clear_traces_by_sink(name_all_sinks()),
     _ = lager_util:trace_filter(none),
     lists:foreach(fun({_Watcher, Handler, Sink}) ->
           case get_loglevel(Sink, Handler) of
