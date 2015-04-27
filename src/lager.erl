@@ -28,7 +28,7 @@
         log/3, log/4, log/5,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
-        clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
+        name_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
