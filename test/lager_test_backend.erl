@@ -32,6 +32,8 @@
 -export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
+init([{sink, _Sink}, Level]) ->
+    init(Level);
 init(Level) ->
     {ok, #state{level=lager_util:config_to_mask(Level), buffer=[], ignored=[]}}.
 
@@ -80,7 +82,7 @@ handle_event(_Event, State) ->
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(_Reason, _State) ->
+terminate(Reason, State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -607,7 +609,7 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(Pid,proplists:get_value(pid,Metadata)),
                         ?assertEqual(lager_util:level_to_num(error),Level)
                 end
-            } 
+            }
     end,
     {foreach,
         fun() ->
@@ -1004,7 +1006,7 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 600)
                 end
             },
-            {"crash reports for 'special processes' should be handled right - function_clause", 
+            {"crash reports for 'special processes' should be handled right - function_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1017,7 +1019,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - case_clause", 
+            {"crash reports for 'special processes' should be handled right - case_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1030,7 +1032,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - exit", 
+            {"crash reports for 'special processes' should be handled right - exit",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1043,7 +1045,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - error", 
+            {"crash reports for 'special processes' should be handled right - error",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1268,5 +1270,3 @@ high_watermark_test_() ->
     }.
 
 -endif.
-
-
