@@ -36,6 +36,8 @@
 -export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
+init([{sink, _Sink}, Level]) ->
+    init(Level);
 init(Level) ->
     {ok, #state{level=lager_util:config_to_mask(Level), buffer=[], ignored=[]}}.
 
@@ -1280,5 +1282,3 @@ high_watermark_test_() ->
     }.
 
 -endif.
-
-

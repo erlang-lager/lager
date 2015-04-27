@@ -80,6 +80,8 @@
                   {formatter_config, term()}.
 
 -spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
+init([{sink, _Sink}|Options]) ->
+    init(Options);
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack
     init([{file, FileName}, {level, LogLevel}]);
@@ -164,7 +166,7 @@ terminate(_Reason, #state{fd=FD}) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% @private convert the config into a gen_event handler ID
+%% Convert the config into a gen_event handler ID
 config_to_id({Name,_Severity}) when is_list(Name) ->
     {?MODULE, Name};
 config_to_id({Name,_Severity,_Size,_Rotation,_Count}) ->
@@ -237,7 +239,7 @@ do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
                     Flap
             end,
             State#state{flap=Flap2};
-        _ -> 
+        _ ->
             State
     end.
 
@@ -666,8 +668,8 @@ filesystem_test_() ->
                             {"test.log", critical}),
                         lager:error("Test message"),
                         ?assertEqual({ok, <<>>}, file:read_file("test.log")),
-                        {Level, _} = lager_config:get(loglevel),
-                        lager_config:set(loglevel, {Level, [{[{module,
+                        {Level, _} = lager_config:get({lager_event, loglevel}),
+                        lager_config:set({lager_event, loglevel}, {Level, [{[{module,
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:error("Test message"),
@@ -684,8 +686,8 @@ filesystem_test_() ->
                         {ok, Bin1} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin1, " ", [{return, list}, {parts, 5}])),
                         ok = file:delete("test.log"),
-                        {Level, _} = lager_config:get(loglevel),
-                        lager_config:set(loglevel, {Level, [{[{module,
+                        {Level, _} = lager_config:get({lager_event, loglevel}),
+                        lager_config:set({lager_event, loglevel}, {Level, [{[{module,
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:critical("Test message"),
@@ -711,9 +713,14 @@ filesystem_test_() ->
             {"tracing with options should work",
                 fun() ->
                         file:delete("foo.log"),
-                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]),
                         lager:error("Test message"),
                         ?assertNot(filelib:is_regular("foo.log.0")),
+                        %% rotation is sensitive to intervals between
+                        %% writes so we sleep to exceed the 1
+                        %% millisecond interval specified by
+                        %% check_interval above
+                        timer:sleep(2),
                         lager:error("Test message"),
                         timer:sleep(10),
                         ?assert(filelib:is_regular("foo.log.0"))
@@ -809,4 +816,3 @@ config_validation_test_() ->
 
 
 -endif.
-

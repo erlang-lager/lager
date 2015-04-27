@@ -30,14 +30,15 @@
         code_change/3]).
 
 -record(state, {
+        sink :: atom(),
         hwm :: non_neg_integer(),
         window_min :: non_neg_integer(),
         async = true :: boolean()
     }).
 
-init([Hwm, Window]) ->
-    lager_config:set(async, true),
-    {ok, #state{hwm=Hwm, window_min=Hwm - Window}}.
+init([{sink, Sink}, Hwm, Window]) ->
+    lager_config:set({Sink, async}, true),
+    {ok, #state{sink=Sink, hwm=Hwm, window_min=Hwm - Window}}.
 
 
 handle_call(get_loglevel, State) ->
@@ -52,11 +53,11 @@ handle_event({log, _Message},State) ->
     case {Len > State#state.hwm, Len < State#state.window_min, State#state.async} of
         {true, _, true} ->
             %% need to flip to sync mode
-            lager_config:set(async, false),
+            lager_config:set({State#state.sink, async}, false),
             {ok, State#state{async=false}};
         {_, true, false} ->
             %% need to flip to async mode
-            lager_config:set(async, true),
+            lager_config:set({State#state.sink, async}, true),
             {ok, State#state{async=true}};
         _ ->
             %% nothing needs to change
@@ -75,4 +76,3 @@ terminate(_Reason, _State) ->
 %% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
