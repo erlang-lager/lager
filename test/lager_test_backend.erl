@@ -1161,6 +1161,9 @@ async_threshold_test_() ->
     {foreach,
         fun() ->
                 error_logger:tty(false),
+                ets:new(async_threshold_test, [set, named_table, public]),
+                ets:insert_new(async_threshold_test, {sync_toggled, 0}),
+                ets:insert_new(async_threshold_test, {async_toggled, 0}),
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, false),
                 application:set_env(lager, async_threshold, 2),
@@ -1172,6 +1175,7 @@ async_threshold_test_() ->
                 application:unset_env(lager, async_threshold),
                 application:stop(lager),
                 application:stop(goldrush),
+                ets:delete(async_threshold_test),
                 error_logger:tty(true)
         end,
         [
@@ -1186,11 +1190,22 @@ async_threshold_test_() ->
                         %% serialize on mailbox
                         _ = gen_event:which_handlers(lager_event),
                         timer:sleep(500),
-                        %% there should be a ton of outstanding messages now, so async is false
-                        ?assertEqual(false, lager_config:get(async)),
-                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're in sync mode)
+
+                        %% By now the flood of messages will have
+                        %% forced the backend throttle to turn off
+                        %% async mode, but it's possible all
+                        %% outstanding requests have been processed,
+                        %% so checking the current status (sync or
+                        %% async) is an exercise in race control.
+
+                        %% Instead, we'll see whether the backend
+                        %% throttle has toggled into sync mode at any
+                        %% point in the past
+                        ?assertMatch([{sync_toggled, N}] when N > 0,
+                                                              ets:lookup(async_threshold_test, sync_toggled)),
+                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're definitely in sync mode at the end of the run)
                         collect_workers(Workers),
-                        %% serialize ont  the mailbox again
+                        %% serialize on the mailbox again
                         _ = gen_event:which_handlers(lager_event),
                         %% just in case...
                         timer:sleep(1000),

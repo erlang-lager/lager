@@ -29,6 +29,17 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
+%%
+%% Allow test code to verify that we're doing the needful.
+-ifdef(TEST).
+-define(ETS_TABLE, async_threshold_test).
+-define(TOGGLE_SYNC(), test_increment(sync_toggled)).
+-define(TOGGLE_ASYNC(), test_increment(async_toggled)).
+-else.
+-define(TOGGLE_SYNC(), true).
+-define(TOGGLE_ASYNC(), true).
+-endif.
+
 -record(state, {
         sink :: atom(),
         hwm :: non_neg_integer(),
@@ -53,10 +64,12 @@ handle_event({log, _Message},State) ->
     case {Len > State#state.hwm, Len < State#state.window_min, State#state.async} of
         {true, _, true} ->
             %% need to flip to sync mode
+            ?TOGGLE_SYNC(),
             lager_config:set({State#state.sink, async}, false),
             {ok, State#state{async=false}};
         {_, true, false} ->
             %% need to flip to async mode
+            ?TOGGLE_ASYNC(),
             lager_config:set({State#state.sink, async}, true),
             {ok, State#state{async=true}};
         _ ->
@@ -76,3 +89,17 @@ terminate(_Reason, _State) ->
 %% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+-ifdef(TEST).
+test_get(Key) ->
+    get_default(ets:lookup(?ETS_TABLE, Key)).
+
+test_increment(Key) ->
+    ets:insert(?ETS_TABLE,
+               {Key, test_get(Key) + 1}).
+
+get_default([]) ->
+    0;
+get_default([{_Key, Value}]) ->
+    Value.
+-endif.
