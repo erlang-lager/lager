@@ -197,7 +197,7 @@ trace_file(File, Filter, Level, Options) ->
                                                             {file, File}),
                                              {level, none}),
                           HandlerInfo =
-                              lager_app:start_handler(Sink, lager_file_backend,
+                              lager_app:start_handler(Sink, {lager_file_backend, File},
                                                       LogFileConfig),
                           lager_config:global_set(handlers, [HandlerInfo|Handlers]),
                           {ok, installed};
@@ -291,14 +291,17 @@ clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
     clear_traces_by_sink(name_all_sinks()),
     _ = lager_util:trace_filter(none),
-    lists:foreach(fun({Handler, _Watcher, Sink}) ->
-          case get_loglevel(Sink, Handler) of
-            none ->
-              gen_event:delete_handler(Sink, Handler, []);
-            _ ->
-              ok
-          end
-      end, Handlers).
+    lager_config:global_set(handlers,
+                            lists:filter(
+      fun({Handler, _Watcher, Sink}) ->
+              case get_loglevel(Sink, Handler) of
+                  none ->
+                      gen_event:delete_handler(Sink, Handler, []),
+                      false;
+                  _ ->
+                      true
+              end
+      end, Handlers)).
 
 find_traces(Sinks) ->
     lists:foldl(fun(S, Acc) ->
