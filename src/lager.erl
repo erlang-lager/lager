@@ -291,7 +291,7 @@ clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
     clear_traces_by_sink(name_all_sinks()),
     _ = lager_util:trace_filter(none),
-    lists:foreach(fun({_Watcher, Handler, Sink}) ->
+    lists:foreach(fun({Handler, _Watcher, Sink}) ->
           case get_loglevel(Sink, Handler) of
             none ->
               gen_event:delete_handler(Sink, Handler, []);
