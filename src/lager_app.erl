@@ -30,6 +30,7 @@
          start_handler/3,
          stop/1]).
 
+-define(FILENAMES, '__lager_file_backend_filenames').
 -define(THROTTLE, lager_backend_throttle).
 -define(DEFAULT_HANDLER_CONF,
         [{lager_console_backend, info},
@@ -79,6 +80,7 @@ start_handlers(Sink, Handlers) ->
     lager_config:global_set(handlers,
                             lager_config:global_get(handlers, []) ++
                             lists:map(fun({Module, Config}) ->
+                                              check_handler_config(Module, Config),
                                               start_handler(Sink, Module, Config)
                                       end,
                                       expand_handlers(Handlers))),
@@ -88,6 +90,28 @@ start_handler(Sink, Module, Config) ->
     {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
                                            [Sink, Module, Config]),
     {Module, Watcher, Sink}.
+
+check_handler_config({lager_file_backend, F}, _Config) ->
+    Fs = case get(?FILENAMES) of
+        undefined -> ordsets:new();
+        X -> X
+    end,
+    case ordsets:is_element(F, Fs) of
+        true ->
+            error_logger:error_msg(
+              "Cannot have same file (~p) in multiple file backends~n", [F]),
+            throw({error, bad_config});
+        false ->
+            put(?FILENAMES,
+                ordsets:add_element(F, Fs))
+    end,
+    ok;
+
+check_handler_config(_Other, _Config) ->
+    ok.
+
+clean_up_config_checks() ->
+    erase(?FILENAMES).
 
 interpret_hwm(undefined) ->
     undefined;
@@ -165,6 +189,8 @@ start(_StartType, _StartArgs) ->
 
     %% Now handle extra sinks
     configure_extra_sinks(application:get_env(lager, extra_sinks, [])),
+
+    clean_up_config_checks(),
 
     {ok, Pid, SavedHandlers}.
 
@@ -278,6 +304,20 @@ application_config_mangling_test_() ->
                         {lager_file_backend, [{formatter, lager_default_formatter},{file, "test3.log"}]}
                     ])
             )
+        }
+    ].
+
+check_handler_config_test_() ->
+    Good = expand_handlers(?DEFAULT_HANDLER_CONF),
+    Bad  = expand_handlers([{lager_console_backend, info},
+            {lager_file_backend, [{file, "same_file.log"}]},
+            {lager_file_backend, [{file, "same_file.log"}, {level, info}]}]),
+    [
+        {"lager_file_backend_good",
+         ?_assertEqual([ok, ok, ok], [ check_handler_config(M,C) || {M,C} <- Good ])
+        },
+        {"lager_file_backend_bad",
+         ?_assertThrow({error, bad_config}, [ check_handler_config(M,C) || {M,C} <- Bad ])
         }
     ].
 -endif.
