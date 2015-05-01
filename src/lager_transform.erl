@@ -169,11 +169,11 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
     TracesVar = make_varname("__Traces", Line),
     PidVar = make_varname("__Pid", Line),
     %% Wrap the call to lager_dispatch log in a case that will avoid doing any work if this message is not elegible for logging
-    %% case  {whereis(lager_event(lager_event), lager_config:get(loglevel, {?LOG_NONE, []})} of
+    %% case  {whereis(Sink), lager_config:get(Sink, loglevel, {?LOG_NONE, []})} of
     {'case', Line,
      {tuple, Line,
       [{call, Line, {atom, Line, whereis}, [{atom, Line, SinkName}]},
-       {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{atom, Line, loglevel}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
+       {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{atom, Line, SinkName}, {atom, Line, loglevel}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
      [
       %% {undefined, _} -> {error, lager_not_running}
       {clause, Line,
@@ -190,7 +190,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
           {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
           {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
        [
-        %% do the call to lager:dispatch_log
+        %% do the call to lager:dispatch_log/9
         {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, do_log}},
          [
           {atom,Line,Severity},
