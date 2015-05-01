@@ -86,13 +86,18 @@ md(_) ->
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
 
--spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running}.
+-spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, term()}}.
 %% this is the same check that the parse transform bakes into the module at compile time
 dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     SeverityAsInt=lager_util:level_to_num(Severity),
     case {whereis(Sink), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
         {undefined, _} ->
-            {error, lager_not_running};
+            case whereis(lager_event) of
+                false ->
+                    {error, lager_not_running};
+                true ->
+                    {error, {sink_not_configured, Sink}}
+            end;
         {SinkPid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
             do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Sink, SinkPid);
         _ ->
@@ -117,7 +122,7 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
             end,
             LagerMsg = lager_msg:new(Msg,
                 Severity, Metadata, Destinations),
-            case lager_config:get({Sink, async}, false) of %% this needs to be able to get value from a non-default sink
+            case lager_config:get({Sink, async}, false) of
                 true ->
                     gen_event:notify(SinkPid, {log, LagerMsg});
                 false ->
