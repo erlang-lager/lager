@@ -47,12 +47,14 @@
             {error_logger_redirect, true},
             %% How many messages per second to allow from error_logger before we start dropping them
             {error_logger_hwm, 50},
-            %% How big the gen_event mailbox can get before it is switched into sync mode
-            %% Can be reconfigured for extra sinks
+            %% How big the gen_event mailbox can get before it is
+            %% switched into sync mode.  This value only applies to
+            %% the default sink; extra sinks can supply their own.
             {async_threshold, 20},
-            %% Switch back to async mode, when gen_event mailbox size decrease from `async_threshold'
-            %% to async_threshold - async_threshold_window
-            %% Can be reconfigured for extra sinks
+            %% Switch back to async mode, when gen_event mailbox size
+            %% decrease from `async_threshold' to async_threshold -
+            %% async_threshold_window. This value only applies to the
+            %% default sink; extra sinks can supply their own.
             {async_threshold_window, 5}
         ]}
  ]}.
