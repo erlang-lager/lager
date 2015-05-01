@@ -47,19 +47,14 @@
             {error_logger_redirect, true},
             %% How many messages per second to allow from error_logger before we start dropping them
             {error_logger_hwm, 50},
-            %% How big the gen_event mailbox can get before it is switched into sync mode
-            {async_threshold, 20}, %% <-- per sink
-            %% Switch back to async mode, when gen_event mailbox size decrease from `async_threshold'
-            %% to async_threshold - async_threshold_window
-            {async_threshold_window, 5}, %% <-- per sink
-            {extra_sinks, [
-                     {audit_event,
-                      [{handlers,
-                        [{lager_file_backend,
-                               [{file, "log/audit.log"}, {level, info},
-                                {size, 10485760}, {date, "$D0"}, {count, 10}]
-                              }
-                             ]}]} %% Security audit sink has no async behavior
-            ]}
+            %% How big the gen_event mailbox can get before it is
+            %% switched into sync mode.  This value only applies to
+            %% the default sink; extra sinks can supply their own.
+            {async_threshold, 20},
+            %% Switch back to async mode, when gen_event mailbox size
+            %% decrease from `async_threshold' to async_threshold -
+            %% async_threshold_window. This value only applies to the
+            %% default sink; extra sinks can supply their own.
+            {async_threshold_window, 5}
         ]}
  ]}.

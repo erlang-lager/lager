@@ -136,6 +136,11 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
             []
     end.
 
+%% `determine_async_behavior/3' is called with the results from either
+%% `application:get_env/2' and `proplists:get_value/2'. Since
+%% `application:get_env/2' wraps a successful retrieval in an `{ok,
+%% Value}' tuple, do the same for the result from
+%% `proplists:get_value/2'.
 wrap_proplist_value(undefined) ->
     undefined;
 wrap_proplist_value(Value) ->
