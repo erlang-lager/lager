@@ -41,7 +41,9 @@
         %% the current second
         lasttime = os:timestamp() :: erlang:timestamp(),
         %% count of dropped messages this second
-        dropped = 0 :: non_neg_integer()
+        dropped = 0 :: non_neg_integer(),
+        %% group leader strategy
+        groupleader_strategy :: handle | ignore | mirror
     }).
 
 -define(LOGMSG(Level, Pid, Msg),
@@ -74,16 +76,24 @@ set_high_water(N) ->
     gen_event:call(error_logger, ?MODULE, {set_high_water, N}, infinity).
 
 -spec init(any()) -> {ok, #state{}}.
-init([HighWaterMark]) ->
-    {ok, #state{hwm=HighWaterMark}}.
+init([HighWaterMark, GlStrategy]) ->
+    {ok, #state{hwm=HighWaterMark, groupleader_strategy=GlStrategy}}.
 
 handle_call({set_high_water, N}, State) ->
     {ok, ok, State#state{hwm = N}};
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
-handle_event(Event, State) ->
+handle_event(Event, #state{groupleader_strategy=Strategy}=State) ->
+    GL = element(2, Event),
+    NL = is_pid(GL) andalso node(GL) =/= node(),
     case check_hwm(State) of
+        {true, _NewState} when NL, Strategy =:= ignore ->
+            gen_event:notify({error_logger, node(GL)}, Event),
+            {ok, State};
+        {true, NewState} when NL, Strategy =:= mirror ->
+            gen_event:notify({error_logger, node(GL)}, Event),
+            log_event(Event, NewState);
         {true, NewState} ->
             log_event(Event, NewState);
         {false, NewState} ->
