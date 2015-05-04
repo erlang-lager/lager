@@ -104,7 +104,22 @@ start(_StartType, _StartArgs) ->
                         WhiteList0
                 end,
 
-                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark]]) of
+                GlStrategy = case application:get_env(lager, error_logger_groupleader_strategy) of
+                    undefined ->
+                        handle;
+                    {ok, GlStrategy0} when 
+                            GlStrategy0 =:= handle;
+                            GlStrategy0 =:= ignore;
+                            GlStrategy0 =:= mirror ->
+                        GlStrategy0;
+                    {ok, BadGlStrategy} ->
+                        error_logger:error_msg(
+                          "Invalid value for 'error_logger_groupleader_strategy': ~p~n",
+                          [BadGlStrategy]),
+                        throw({error, bad_config})
+                end,
+
+                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark, GlStrategy]]) of
                     {ok, _} ->
                         [begin error_logger:delete_report_handler(X), X end ||
                             X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
