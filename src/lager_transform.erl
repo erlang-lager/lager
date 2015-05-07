@@ -175,13 +175,27 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
       [{call, Line, {atom, Line, whereis}, [{atom, Line, SinkName}]},
        {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{tuple, Line, [{atom, Line, SinkName}, {atom, Line, loglevel}]}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
      [
-      %% {undefined, _} -> {error, lager_not_running}
+      %% {undefined, _} -> 
       {clause, Line,
        [{tuple, Line, [{atom, Line, undefined}, {var, Line, '_'}]}],
        [],
-       %% trick the linter into avoiding a 'term constructed by not used' error:
-       %% (fun() -> {error, lager_not_running} end)();
-       [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]},
+       {'case', Line, %% case whereis(lager_event) of
+        {call, Line, {atom, Line, whereis}, [{atom, Line, lager_event}]},
+         [{clause, Line, % undefined -> {error, lager_not_running};
+          [{atom, Line, undefined}],
+          [],
+           %% trick the linter into avoiding a 'term constructed by not used' error:
+           %% (fun() -> {error, lager_not_running} end)();
+           [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
+         },
+         {clause, Line, % _ ->
+          [{var, Line, '_'}],
+          [],
+           %% same trick
+           %% (fun() -> {error, {sink_not_configured, SinkName}} end)();
+           [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error}, [{tuple, Line, [{atom, Line, lager_not_running}, {atom, Line, SinkName}]}]]}]}]}}}], []
+         }]
+       }},
       %% If we care about the loglevel, or there's any traces installed, we have do more checking
       %% {Level, Traces} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
       {clause, Line,
