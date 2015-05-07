@@ -16,6 +16,7 @@ Features
 * When no handler is consuming a log level (eg. debug) no event is sent
   to the log handler
 * Supports multiple backends, including console and file.
+* Supports multiple sinks (and eventually different sync/async policies per sink)
 * Rewrites common OTP error messages into more readable messages
 * Support for pretty printing records encountered at compile time
 * Tolerant in the face of large or many log messages, won't out of memory the node
@@ -91,6 +92,65 @@ your app.config):
 
 The available configuration options for each backend are listed in their
 module's documentation.
+
+Multiple sinks
+--------------
+Previously, lager supported a single sink `lager_event`. Lager can now support
+additional sinks with their own backend configurations. Eventually, the goal is
+to support different latency and sync/async message policies. (For example, if
+there were an `audit` sink, we might be willing to pay the latency costs to log
+all of those messages to disk and we don't want lager to drop them in an
+overload scenario.)
+
+To use multiple sinks (beyond the built in sink of lager and lager_event), you
+need to:
+
+1. Setup rebar.config
+2. Configure the backends in app.config
+
+### rebar.config
+
+In `rebar.config` for the containing project, include this tuple in `erl_opts`:
+
+`{lager_extra_sinks, [sink1, sink2, sink3]}`
+
+### Runtime requirements
+
+Sinks must be configured with backends (and possibly in the future behavioral differences).
+
+ app.config
+
+```erlang
+[{lager, [
+          {log_root, "/tmp"},
+
+          %% Default handlers for lager/lager_event
+          {handlers, [
+                      {lager_console_backend, info},
+                      {lager_file_backend, [{file, "error.log"}, {level, error}]},
+                      {lager_file_backend, [{file, "console.log"}, {level, info}]}
+                     ]},
+
+          %% Any other sinks
+          {extra_sinks,
+           [
+            {sink1_event,
+             [{handlers,
+               [{lager_file_backend,
+                 [{file, "sink1.log"},
+                  {level, info}
+                 ]
+                }]
+              }]
+            }]
+          }
+         ]
+ }
+].
+```
+
+In your application you can then use `sink1:info(...)` as you normally would, but the message
+will be routed into the sink handler(s) instead of the default `lager_event` handler.
 
 Custom Formatting
 -----------------
