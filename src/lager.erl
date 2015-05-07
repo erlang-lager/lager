@@ -93,9 +93,9 @@ dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity
     case {whereis(Sink), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
         {undefined, _} ->
             case whereis(lager_event) of
-                false ->
+                undefined ->
                     {error, lager_not_running};
-                true ->
+                _Pid ->
                     {error, {sink_not_configured, Sink}}
             end;
         {SinkPid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->

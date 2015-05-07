@@ -173,7 +173,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
     {'case', Line,
      {tuple, Line,
       [{call, Line, {atom, Line, whereis}, [{atom, Line, SinkName}]},
-       {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{atom, Line, SinkName}, {atom, Line, loglevel}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
+       {call, Line, {remote, Line, {atom, Line, lager_config}, {atom, Line, get}}, [{tuple, Line, [{atom, Line, SinkName}, {atom, Line, loglevel}]}, {tuple, Line, [{integer, Line, 0},{nil, Line}]}]}]},
      [
       %% {undefined, _} -> {error, lager_not_running}
       {clause, Line,
