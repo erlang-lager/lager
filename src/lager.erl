@@ -86,22 +86,17 @@ md(_) ->
 dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
 
--spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, term()}}.
+-spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, atom()}}.
 %% this is the same check that the parse transform bakes into the module at compile time
+%% see lager_transform (lines 173-216)
 dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
     SeverityAsInt=lager_util:level_to_num(Severity),
-    case {whereis(Sink), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
-        {undefined, _} ->
-            case whereis(lager_event) of
-                undefined ->
-                    {error, lager_not_running};
-                _Pid ->
-                    {error, {sink_not_configured, Sink}}
-            end;
-        {SinkPid, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+    case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
+         {undefined, undefined, _} -> {error, lager_not_running};
+         {undefined, _LagerEventPid0, _} -> {error, {sink_not_configured, Sink}};
+         {SinkPid, _LagerEventPid1, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
             do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Sink, SinkPid);
-        _ ->
-            ok
+         _ -> ok
     end.
 
 %% @private Should only be called externally from code generated from the parse transform
