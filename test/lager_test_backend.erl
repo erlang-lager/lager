@@ -23,12 +23,16 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, buffer, ignored}).
--record(test, {attrs, format, args}).
--compile([{parse_transform, lager_transform}]).
+-define(TEST_SINK, '__lager_test_sink').
+-define(TEST_SINK_H, '__lager_test_sink_event').
+
+-record(state, {level :: list(), buffer :: list(), ignored :: term()}).
+-compile({parse_transform, lager_transform}).
+%-compile([{parse_transform, lager_transform}]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-record(test, {attrs :: list(), format :: list(), args :: list()}).
 -export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
@@ -82,7 +86,7 @@ handle_event(_Event, State) ->
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(Reason, State) ->
+terminate(_Reason, _State) ->
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -91,22 +95,41 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 pop() ->
-    gen_event:call(lager_event, ?MODULE, pop).
+    pop(lager_event).
 
 count() ->
-    gen_event:call(lager_event, ?MODULE, count).
+    count(lager_event).
 
 count_ignored() ->
-    gen_event:call(lager_event, ?MODULE, count_ignored).
+    count_ignored(lager_event).
 
 flush() ->
-    gen_event:call(lager_event, ?MODULE, flush).
+    flush(lager_event).
 
 print_state() ->
-    gen_event:call(lager_event, ?MODULE, print_state).
+    print_state(lager_event).
 
 print_bad_state() ->
-    gen_event:call(lager_event, ?MODULE, print_bad_state).
+    print_bad_state(lager_event).
+
+pop(Sink) ->
+    gen_event:call(Sink, ?MODULE, pop).
+
+count(Sink) ->
+    gen_event:call(Sink, ?MODULE, count).
+
+count_ignored(Sink) ->
+    gen_event:call(Sink, ?MODULE, count_ignored).
+
+flush(Sink) ->
+    gen_event:call(Sink, ?MODULE, flush).
+
+print_state(Sink) ->
+    gen_event:call(Sink, ?MODULE, print_state).
+
+print_bad_state(Sink) ->
+    gen_event:call(Sink, ?MODULE, print_bad_state).
+
 
 has_line_numbers() ->
     %% are we R15 or greater
@@ -128,6 +151,11 @@ lager_test_() ->
                         ?assertEqual(0, count())
                 end
             },
+	    {"test sink not running",
+		fun() ->
+			?assertEqual({error, {sink_not_configured, test}}, lager:log(test, info, self(), "~p", "not running"))
+		end
+	    },
             {"logging works",
                 fun() ->
                         lager:warning("test message"),
@@ -557,6 +585,99 @@ lager_test_() ->
             }
         ]
     }.
+
+extra_sinks_test_() ->
+    {foreach,
+        fun setup_sink/0,
+        fun cleanup/1,
+        [
+            {"observe that there is nothing up my sleeve",
+                fun() ->
+                        ?assertEqual(undefined, pop(?TEST_SINK_H)),
+                        ?assertEqual(0, count(?TEST_SINK_H))
+                end
+            },
+            {"logging works",
+                fun() ->
+                        ?TEST_SINK:warning("test message"),
+                        ?assertEqual(1, count(?TEST_SINK_H)),
+                        {Level, _Time, Message, _Metadata}  = pop(?TEST_SINK_H),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual("test message", Message),
+                        ok
+                end
+            },
+            {"logging with arguments works",
+                fun() ->
+                        ?TEST_SINK:warning("test message ~p", [self()]),
+                        ?assertEqual(1, count(?TEST_SINK_H)),
+                        {Level, _Time, Message,_Metadata}  = pop(?TEST_SINK_H),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), lists:flatten(Message)),
+                        ok
+                end
+            },
+            {"variables inplace of literals in logging statements work",
+                fun() ->
+                        ?assertEqual(0, count(?TEST_SINK_H)),
+                        Attr = [{a, alpha}, {b, beta}],
+                        Fmt = "format ~p",
+                        Args = [world],
+                        ?TEST_SINK:info(Attr, "hello"),
+                        ?TEST_SINK:info(Attr, "hello ~p", [world]),
+                        ?TEST_SINK:info(Fmt, [world]),
+                        ?TEST_SINK:info("hello ~p", Args),
+                        ?TEST_SINK:info(Attr, "hello ~p", Args),
+                        ?TEST_SINK:info([{d, delta}, {g, gamma}], Fmt, Args),
+                        ?assertEqual(6, count(?TEST_SINK_H)),
+                        {_Level, _Time, Message, Metadata}  = pop(?TEST_SINK_H),
+                        ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
+                        ?assertEqual("hello", lists:flatten(Message)),
+                        {_Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_H),
+                        ?assertEqual("hello world", lists:flatten(Message2)),
+                        {_Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_H),
+                        ?assertEqual("format world", lists:flatten(Message3)),
+                        {_Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_H),
+                        ?assertEqual("hello world", lists:flatten(Message4)),
+                        {_Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_H),
+                        ?assertEqual("hello world", lists:flatten(Message5)),
+                        {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_H),
+                        ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
+                        ?assertEqual("format world", lists:flatten(Message6)),
+                        ok
+                end
+            },
+            {"log messages below the threshold are ignored",
+                fun() ->
+                        ?assertEqual(0, count(?TEST_SINK_H)),
+                        ?TEST_SINK:debug("this message will be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_H)),
+                        ?assertEqual(0, count_ignored(?TEST_SINK_H)),
+                        lager_config:set({?TEST_SINK, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}),
+                        ?TEST_SINK:debug("this message should be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_H)),
+                        %?assertEqual(1, count_ignored(?TEST_SINK_H)),
+                        lager:set_loglevel(?TEST_SINK_H, ?MODULE, undefined, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get({?TEST_SINK, loglevel})),
+                        ?TEST_SINK:debug("this message should be logged"),
+                        ?assertEqual(1, count(?TEST_SINK_H)),
+                        ?assertEqual(1, count_ignored(?TEST_SINK_H)),
+                        ?assertEqual(debug, lager:get_loglevel(?TEST_SINK, ?MODULE)),
+                        ok
+                end
+            }
+	]
+    }.
+
+setup_sink() ->
+    error_logger:tty(false),
+    application:load(lager),
+    application:set_env(lager, handlers, []),
+    application:set_env(lager, error_logger_redirect, false),
+    application:set_env(lager, extra_sinks, [{?TEST_SINK_H, [{handlers, [{?MODULE, info}]}]}]),
+    lager:start(),
+    gen_event:call(lager_event, ?MODULE, flush),
+    gen_event:call(?TEST_SINK_H, ?MODULE, flush).
 
 setup() ->
     error_logger:tty(false),
