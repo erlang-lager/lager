@@ -23,12 +23,11 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--define(TEST_SINK, '__lager_test_sink').
--define(TEST_SINK_H, '__lager_test_sink_event').
+-define(TEST_SINK_NAME, '__lager_test_sink').        %% <-- used by parse transform
+-define(TEST_SINK_EVENT, '__lager_test_sink_event'). %% <-- used by lager API calls and internals for gen_event
 
 -record(state, {level :: list(), buffer :: list(), ignored :: term()}).
 -compile({parse_transform, lager_transform}).
-%-compile([{parse_transform, lager_transform}]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -593,15 +592,15 @@ extra_sinks_test_() ->
         [
             {"observe that there is nothing up my sleeve",
                 fun() ->
-                        ?assertEqual(undefined, pop(?TEST_SINK_H)),
-                        ?assertEqual(0, count(?TEST_SINK_H))
+                        ?assertEqual(undefined, pop(?TEST_SINK_EVENT)),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT))
                 end
             },
             {"logging works",
                 fun() ->
-                        ?TEST_SINK:warning("test message"),
-                        ?assertEqual(1, count(?TEST_SINK_H)),
-                        {Level, _Time, Message, _Metadata}  = pop(?TEST_SINK_H),
+                        ?TEST_SINK_NAME:warning("test message"),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        {Level, _Time, Message, _Metadata}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
                         ?assertEqual("test message", Message),
                         ok
@@ -609,9 +608,9 @@ extra_sinks_test_() ->
             },
             {"logging with arguments works",
                 fun() ->
-                        ?TEST_SINK:warning("test message ~p", [self()]),
-                        ?assertEqual(1, count(?TEST_SINK_H)),
-                        {Level, _Time, Message,_Metadata}  = pop(?TEST_SINK_H),
+                        ?TEST_SINK_NAME:warning("test message ~p", [self()]),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        {Level, _Time, Message,_Metadata}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
                         ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), lists:flatten(Message)),
                         ok
@@ -619,29 +618,29 @@ extra_sinks_test_() ->
             },
             {"variables inplace of literals in logging statements work",
                 fun() ->
-                        ?assertEqual(0, count(?TEST_SINK_H)),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
                         Attr = [{a, alpha}, {b, beta}],
                         Fmt = "format ~p",
                         Args = [world],
-                        ?TEST_SINK:info(Attr, "hello"),
-                        ?TEST_SINK:info(Attr, "hello ~p", [world]),
-                        ?TEST_SINK:info(Fmt, [world]),
-                        ?TEST_SINK:info("hello ~p", Args),
-                        ?TEST_SINK:info(Attr, "hello ~p", Args),
-                        ?TEST_SINK:info([{d, delta}, {g, gamma}], Fmt, Args),
-                        ?assertEqual(6, count(?TEST_SINK_H)),
-                        {_Level, _Time, Message, Metadata}  = pop(?TEST_SINK_H),
+                        ?TEST_SINK_NAME:info(Attr, "hello"),
+                        ?TEST_SINK_NAME:info(Attr, "hello ~p", [world]),
+                        ?TEST_SINK_NAME:info(Fmt, [world]),
+                        ?TEST_SINK_NAME:info("hello ~p", Args),
+                        ?TEST_SINK_NAME:info(Attr, "hello ~p", Args),
+                        ?TEST_SINK_NAME:info([{d, delta}, {g, gamma}], Fmt, Args),
+                        ?assertEqual(6, count(?TEST_SINK_EVENT)),
+                        {_Level, _Time, Message, Metadata}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_H),
+                        {_Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_H),
+                        {_Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_H),
+                        {_Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_H),
+                        {_Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_H),
+                        {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
                         ok
@@ -649,20 +648,20 @@ extra_sinks_test_() ->
             },
             {"log messages below the threshold are ignored",
                 fun() ->
-                        ?assertEqual(0, count(?TEST_SINK_H)),
-                        ?TEST_SINK:debug("this message will be ignored"),
-                        ?assertEqual(0, count(?TEST_SINK_H)),
-                        ?assertEqual(0, count_ignored(?TEST_SINK_H)),
-                        lager_config:set({?TEST_SINK, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}),
-                        ?TEST_SINK:debug("this message should be ignored"),
-                        ?assertEqual(0, count(?TEST_SINK_H)),
-                        %?assertEqual(1, count_ignored(?TEST_SINK_H)),
-                        lager:set_loglevel(?TEST_SINK_H, ?MODULE, undefined, debug),
-                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get({?TEST_SINK, loglevel})),
-                        ?TEST_SINK:debug("this message should be logged"),
-                        ?assertEqual(1, count(?TEST_SINK_H)),
-                        ?assertEqual(1, count_ignored(?TEST_SINK_H)),
-                        ?assertEqual(debug, lager:get_loglevel(?TEST_SINK, ?MODULE)),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?TEST_SINK_NAME:debug("this message will be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(0, count_ignored(?TEST_SINK_EVENT)),
+                        lager_config:set({?TEST_SINK_EVENT, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}),
+                        ?TEST_SINK_NAME:debug("this message should be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(1, count_ignored(?TEST_SINK_EVENT)),
+                        lager:set_loglevel(?TEST_SINK_EVENT, ?MODULE, undefined, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get({?TEST_SINK_EVENT, loglevel})),
+                        ?TEST_SINK_NAME:debug("this message should be logged"),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(1, count_ignored(?TEST_SINK_EVENT)),
+                        ?assertEqual(debug, lager:get_loglevel(?TEST_SINK_EVENT, ?MODULE)),
                         ok
                 end
             }
@@ -674,10 +673,10 @@ setup_sink() ->
     application:load(lager),
     application:set_env(lager, handlers, []),
     application:set_env(lager, error_logger_redirect, false),
-    application:set_env(lager, extra_sinks, [{?TEST_SINK_H, [{handlers, [{?MODULE, info}]}]}]),
+    application:set_env(lager, extra_sinks, [{?TEST_SINK_EVENT, [{handlers, [{?MODULE, info}]}]}]),
     lager:start(),
     gen_event:call(lager_event, ?MODULE, flush),
-    gen_event:call(?TEST_SINK_H, ?MODULE, flush).
+    gen_event:call(?TEST_SINK_EVENT, ?MODULE, flush).
 
 setup() ->
     error_logger:tty(false),
