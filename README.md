@@ -171,9 +171,6 @@ will be applied on that sink.
 ].
 ```
 
-In your application you can then use `sink1:info(...)` as you normally would, but the message
-will be routed into the sink handler(s) instead of the default `lager_event` handler.
-
 Custom Formatting
 -----------------
 All loggers have a default formatting that can be overriden.  A formatter is any module that
