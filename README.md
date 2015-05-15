@@ -444,8 +444,8 @@ You can also specify multiple expressions in a filter, or use the `*` atom as
 a wildcard to match any message that has that attribute, regardless of its
 value.
 
-Tracing to an existing logfile is also supported, if you wanted to log
-warnings from a particular function in a particular module to the default `error.log`:
+Tracing to an existing logfile is also supported (but see **Multiple
+sink support** below):
 
 ```erlang
 lager:trace_file("log/error.log", [{module, mymodule}, {function, myfunction}], warning)
@@ -483,6 +483,30 @@ lager:trace_console([{request, '>', 117}, {request, '<', 120}])
 ```
 
 Using `=` is equivalent to the 2-tuple form.
+
+### Multiple sink support
+
+If using multiple sinks, there are limitations on tracing that you
+should be aware of.
+
+Traces are specific to a sink, which can be specified via trace
+filters:
+
+```erlang
+lager:trace_file("log/security.log", [{sink, audit}, {function, myfunction}], warning)
+```
+
+If no sink is thus specified, the default lager sink will be used.
+
+This has two ramifications:
+
+* Traces cannot intercept messages sent to a different sink.
+* Tracing to a file already opened via `lager:trace_file` will only be
+  successful if the same sink is specified.
+
+The former can be ameliorated by opening multiple traces; the latter
+can be fixed by rearchitecting lager's file backend, but this has not
+been tackled.
 
 Setting the truncation limit at compile-time
 --------------------------------------------
