@@ -74,7 +74,7 @@ set_high_water(N) ->
     gen_event:call(error_logger, ?MODULE, {set_high_water, N}, infinity).
 
 -spec init(any()) -> {ok, #state{}}.
-init([{sink, Sink}, HighWaterMark]) ->
+init([HighWaterMark]) ->
     {ok, #state{hwm=HighWaterMark}}.
 
 handle_call({set_high_water, N}, State) ->

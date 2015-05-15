@@ -47,11 +47,8 @@ start_link(Sink, Module, Config) ->
 start(Sink, Module, Config) ->
     gen_server:start(?MODULE, [Sink, Module, Config], []).
 
-init([Sink, Module, Config]) when is_list(Config) ->
-    install_handler(Sink, Module, Config),
-    {ok, #state{sink=Sink, module=Module, config=Config}};
 init([Sink, Module, Config]) ->
-    install_handler(Sink, Module, [Config]),
+    install_handler(Sink, Module, Config),
     {ok, #state{sink=Sink, module=Module, config=Config}}.
 
 handle_call(_Call, _From, State) ->
@@ -90,9 +87,19 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% internal
-
+install_handler(Sink, lager_backend_throttle, Config) ->
+    %% The lager_backend_throttle needs to know to which sink it is
+    %% attached, hence this admittedly ugly workaround. Handlers are
+    %% sensitive to the structure of the configuration sent to `init',
+    %% sadly, so it's not trivial to add a configuration item to be
+    %% ignored to backends without breaking 3rd party handlers.
+    install_handler2(Sink, lager_backend_throttle, [{sink, Sink}|Config]);
 install_handler(Sink, Module, Config) ->
-    case gen_event:add_sup_handler(Sink, Module, [{sink, Sink}|Config]) of
+    install_handler2(Sink, Module, Config).
+
+%% private
+install_handler2(Sink, Module, Config) ->
+    case gen_event:add_sup_handler(Sink, Module, Config) of
         ok ->
             ?INT_LOG(debug, "Lager installed handler ~p into ~p", [Module, Sink]),
             lager:update_loglevel_config(Sink),

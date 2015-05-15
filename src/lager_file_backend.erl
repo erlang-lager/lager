@@ -80,8 +80,6 @@
                   {formatter_config, term()}.
 
 -spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
-init([{sink, _Sink}|Options]) ->
-    init(Options);
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatability hack
     init([{file, FileName}, {level, LogLevel}]);
