@@ -32,7 +32,7 @@
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
-        do_log/10, pr/2]).
+        do_log/9, do_log/10, pr/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -82,9 +82,6 @@ md(NewMD) when is_list(NewMD) ->
 md(_) ->
     erlang:error(badarg).
 
-
-dispatch_log(Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
-    dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
 
 -spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, atom()}}.
 %% this is the same check that the parse transform bakes into the module at compile time
@@ -136,6 +133,15 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
 %% backwards compatible with beams compiled with lager 1.x
 dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, Size) ->
     dispatch_log(Severity, Metadata, Format, Args, Size).
+
+%% backwards compatible with beams compiled with lager 2.x
+dispatch_log(Severity, Metadata, Format, Args, Size) ->
+    dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
+
+%% backwards compatible with beams compiled with lager 2.x
+do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, SinkPid) ->
+    do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt,
+           LevelThreshold, TraceFilters, ?DEFAULT_SINK, SinkPid).
 
 
 %% TODO:
