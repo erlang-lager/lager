@@ -40,7 +40,7 @@
 %% or refer to other properties, if desired. You can also use a {atom, semi-iolist(), semi-iolist()} formatter, which
 %% acts like a ternary operator's true/false branches.
 %%
-%% The metadata properties date,time, message, and severity will always exist.  
+%% The metadata properties date,time, message, severity, and sev will always exist.  
 %% The properties pid, file, line, module, and function will always exist if the parser transform is used.
 %%
 %% Example:
@@ -86,6 +86,9 @@ output(time,Msg) ->
     T;
 output(severity,Msg) ->
     atom_to_list(lager_msg:severity(Msg));
+output(sev,Msg) ->
+    %% Write brief acronym for the severity level (e.g. debug -> $D)
+    [lager_util:level_to_chr(lager_msg:severity(Msg))];
 output(Prop,Msg) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
     make_printable(get_metadata(Prop,Metadata,<<"Undefined">>));

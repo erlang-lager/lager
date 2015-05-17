@@ -18,7 +18,8 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
+-export([levels/0, level_to_num/1, level_to_chr/1,
+        num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
@@ -33,25 +34,35 @@
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency, none].
 
-level_to_num(debug)     -> ?DEBUG;
-level_to_num(info)      -> ?INFO;
-level_to_num(notice)    -> ?NOTICE;
-level_to_num(warning)   -> ?WARNING;
-level_to_num(error)     -> ?ERROR;
-level_to_num(critical)  -> ?CRITICAL;
-level_to_num(alert)     -> ?ALERT;
-level_to_num(emergency) -> ?EMERGENCY;
-level_to_num(none)      -> ?LOG_NONE.
+level_to_num(debug)      -> ?DEBUG;
+level_to_num(info)       -> ?INFO;
+level_to_num(notice)     -> ?NOTICE;
+level_to_num(warning)    -> ?WARNING;
+level_to_num(error)      -> ?ERROR;
+level_to_num(critical)   -> ?CRITICAL;
+level_to_num(alert)      -> ?ALERT;
+level_to_num(emergency)  -> ?EMERGENCY;
+level_to_num(none)       -> ?LOG_NONE.
 
-num_to_level(?DEBUG) -> debug;
-num_to_level(?INFO) -> info;
-num_to_level(?NOTICE) -> notice;
-num_to_level(?WARNING) -> warning;
-num_to_level(?ERROR) -> error;
-num_to_level(?CRITICAL) -> critical;
-num_to_level(?ALERT) -> alert;
+level_to_chr(debug)      -> $D;
+level_to_chr(info)       -> $I;
+level_to_chr(notice)     -> $N;
+level_to_chr(warning)    -> $W;
+level_to_chr(error)      -> $E;
+level_to_chr(critical)   -> $C;
+level_to_chr(alert)      -> $A;
+level_to_chr(emergency)  -> $M;
+level_to_chr(none)       -> $ .
+
+num_to_level(?DEBUG)     -> debug;
+num_to_level(?INFO)      -> info;
+num_to_level(?NOTICE)    -> notice;
+num_to_level(?WARNING)   -> warning;
+num_to_level(?ERROR)     -> error;
+num_to_level(?CRITICAL)  -> critical;
+num_to_level(?ALERT)     -> alert;
 num_to_level(?EMERGENCY) -> emergency;
-num_to_level(?LOG_NONE) -> none.
+num_to_level(?LOG_NONE)  -> none.
 
 -spec config_to_mask(atom()|string()) -> {'mask', integer()}.
 config_to_mask(Conf) ->

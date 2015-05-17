@@ -108,7 +108,9 @@ for the backend:
 Included is lager_default_formatter.  This provides a generic, default formatting for log messages using a "semi-iolist"
 as configuration.  Any iolist allowed elements in the configuration are printed verbatim.  Atoms in the configuration
 are treated as metadata properties and extracted from the log message.
-The metadata properties date,time, message, and severity will always exist.
+The metadata properties date,time, message, severity, and sev will always exist. The sev
+property represents an "abbreviated" severity which `lager_default_formatter` interprets as a
+capitalized single letter encoding of the severity level (e.g. `'debug'` -> `$D`).
 The properties pid, file, line, module, function, and node will always exist if the parser transform is used.
 
 ```
