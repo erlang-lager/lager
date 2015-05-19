@@ -16,6 +16,7 @@ Features
 * When no handler is consuming a log level (eg. debug) no event is sent
   to the log handler
 * Supports multiple backends, including console and file.
+* Supports multiple sinks
 * Rewrites common OTP error messages into more readable messages
 * Support for pretty printing records encountered at compile time
 * Tolerant in the face of large or many log messages, won't out of memory the node
@@ -91,6 +92,84 @@ your app.config):
 
 The available configuration options for each backend are listed in their
 module's documentation.
+
+Sinks
+-----
+Lager has traditionally supported a single sink (implemented as a
+`gen_event` manager) named `lager_event` to which all backends were
+connected.
+
+Lager now supports extra sinks; each sink can have different
+sync/async message thresholds and different backends.
+
+### Sink configuration
+
+To use multiple sinks (beyond the built-in sink of lager and lager_event), you
+need to:
+
+1. Setup rebar.config
+2. Configure the backends in app.config
+
+#### Names
+
+Each sink has two names: one atom to be used like a module name for
+sending messages, and that atom with `_event` appended for backend
+configuration.
+
+This reflects the legacy behavior: `lager:info` (or `critical`, or
+`debug`, etc) is a way of sending a message to a sink named
+`lager_event`. Now developers can invoke `audit:info` or
+`myCompanyName:debug` so long as the corresponding `audit_event` or
+`myCompanyName_event` sinks are configured.
+
+#### rebar.config
+
+In `rebar.config` for the project that requires lager, include a list
+of sink names (without the `_event` suffix) in `erl_opts`:
+
+`{lager_extra_sinks, [audit]}`
+
+#### Runtime requirements
+
+To be useful, sinks must be configured at runtime with backends.
+
+In `app.config` for the project that requires lager, for example,
+extend the lager configuration to include an `extra_sinks` tuple with
+backends (aka "handlers") and optionally `async_threshold` and
+`async_threshold_window` values (see **Overload Protection**
+below). If async values are not configured, no overload protection
+will be applied on that sink.
+
+```erlang
+[{lager, [
+          {log_root, "/tmp"},
+
+          %% Default handlers for lager/lager_event
+          {handlers, [
+                      {lager_console_backend, info},
+                      {lager_file_backend, [{file, "error.log"}, {level, error}]},
+                      {lager_file_backend, [{file, "console.log"}, {level, info}]}
+                     ]},
+
+          %% Any other sinks
+          {extra_sinks,
+           [
+            {audit_event,
+             [{handlers,
+               [{lager_file_backend,
+                 [{file, "sink1.log"},
+                  {level, info}
+                 ]
+                }]
+              },
+              {async_threshold, 500},
+              {async_threshold_window, 50}]
+            }]
+          }
+         ]
+ }
+].
+```
 
 Custom Formatting
 -----------------
@@ -365,8 +444,8 @@ You can also specify multiple expressions in a filter, or use the `*` atom as
 a wildcard to match any message that has that attribute, regardless of its
 value.
 
-Tracing to an existing logfile is also supported, if you wanted to log
-warnings from a particular function in a particular module to the default `error.log`:
+Tracing to an existing logfile is also supported (but see **Multiple
+sink support** below):
 
 ```erlang
 lager:trace_file("log/error.log", [{module, mymodule}, {function, myfunction}], warning)
@@ -404,6 +483,30 @@ lager:trace_console([{request, '>', 117}, {request, '<', 120}])
 ```
 
 Using `=` is equivalent to the 2-tuple form.
+
+### Multiple sink support
+
+If using multiple sinks, there are limitations on tracing that you
+should be aware of.
+
+Traces are specific to a sink, which can be specified via trace
+filters:
+
+```erlang
+lager:trace_file("log/security.log", [{sink, audit}, {function, myfunction}], warning)
+```
+
+If no sink is thus specified, the default lager sink will be used.
+
+This has two ramifications:
+
+* Traces cannot intercept messages sent to a different sink.
+* Tracing to a file already opened via `lager:trace_file` will only be
+  successful if the same sink is specified.
+
+The former can be ameliorated by opening multiple traces; the latter
+can be fixed by rearchitecting lager's file backend, but this has not
+been tackled.
 
 Setting the truncation limit at compile-time
 --------------------------------------------

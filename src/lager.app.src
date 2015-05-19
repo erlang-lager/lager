@@ -13,9 +13,9 @@
   {registered, [lager_sup, lager_event, lager_crash_log, lager_handler_watcher_sup]},
   {mod, {lager_app, []}},
   {env, [
-            %% Note: application:start(lager) overwrites previously defined environment variables 
+            %% Note: application:start(lager) overwrites previously defined environment variables
             %%       thus declaration of default handlers is done at lager_app.erl
-  
+
             %% What colors to use with what log levels
             {colored, false},
             {colors, [
@@ -43,14 +43,18 @@
             %% Number of rotated crash logs to keep, 0 means keep only the
             %% current one - default is 0
             {crash_log_count, 5},
-            %% Whether to redirect error_logger messages into lager - defaults to true
+            %% Whether to redirect error_logger messages into the default lager_event sink - defaults to true
             {error_logger_redirect, true},
             %% How many messages per second to allow from error_logger before we start dropping them
             {error_logger_hwm, 50},
-            %% How big the gen_event mailbox can get before it is switched into sync mode
+            %% How big the gen_event mailbox can get before it is
+            %% switched into sync mode.  This value only applies to
+            %% the default sink; extra sinks can supply their own.
             {async_threshold, 20},
-            %% Switch back to async mode, when gen_event mailbox size decrease from `async_threshold'
-            %% to async_threshold - async_threshold_window
+            %% Switch back to async mode, when gen_event mailbox size
+            %% decrease from `async_threshold' to async_threshold -
+            %% async_threshold_window. This value only applies to the
+            %% default sink; extra sinks can supply their own.
             {async_threshold_window, 5}
         ]}
  ]}.

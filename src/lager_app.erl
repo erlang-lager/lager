@@ -27,93 +27,175 @@
 -endif.
 -export([start/0,
          start/2,
+         start_handler/3,
          stop/1]).
+
+-define(FILENAMES, '__lager_file_backend_filenames').
+-define(THROTTLE, lager_backend_throttle).
+-define(DEFAULT_HANDLER_CONF,
+        [{lager_console_backend, info},
+         {lager_file_backend,
+          [{file, "log/error.log"}, {level, error},
+           {size, 10485760}, {date, "$D0"}, {count, 5}]
+         },
+         {lager_file_backend,
+          [{file, "log/console.log"}, {level, info},
+           {size, 10485760}, {date, "$D0"}, {count, 5}]
+         }
+        ]).
 
 start() ->
     application:start(lager).
 
+start_throttle(Sink, Threshold, Window) ->
+    _ = supervisor:start_child(lager_handler_watcher_sup,
+                               [Sink, ?THROTTLE, [Threshold, Window]]),
+    ok.
+
+determine_async_behavior(_Sink, {ok, undefined}, _Window) ->
+    ok;
+determine_async_behavior(_Sink, undefined, _Window) ->
+    ok;
+determine_async_behavior(_Sink, {ok, Threshold}, _Window) when not is_integer(Threshold) orelse Threshold < 0 ->
+    error_logger:error_msg("Invalid value for 'async_threshold': ~p~n",
+                           [Threshold]),
+    throw({error, bad_config});
+determine_async_behavior(Sink, {ok, Threshold}, undefined) ->
+    start_throttle(Sink, Threshold, erlang:trunc(Threshold * 0.2));
+determine_async_behavior(_Sink, {ok, Threshold}, {ok, Window}) when not is_integer(Window) orelse Window > Threshold orelse Window < 0 ->
+    error_logger:error_msg(
+      "Invalid value for 'async_threshold_window': ~p~n", [Window]),
+    throw({error, bad_config});
+determine_async_behavior(Sink, {ok, Threshold}, {ok, Window}) ->
+    start_throttle(Sink, Threshold, Window).
+
+start_handlers(_Sink, undefined) ->
+    ok;
+start_handlers(_Sink, Handlers) when not is_list(Handlers) ->
+    error_logger:error_msg(
+      "Invalid value for 'handlers' (must be list): ~p~n", [Handlers]),
+    throw({error, bad_config});
+start_handlers(Sink, Handlers) ->
+    %% handlers failing to start are handled in the handler_watcher
+    lager_config:global_set(handlers,
+                            lager_config:global_get(handlers, []) ++
+                            lists:map(fun({Module, Config}) ->
+                                              check_handler_config(Module, Config),
+                                              start_handler(Sink, Module, Config)
+                                      end,
+                                      expand_handlers(Handlers))),
+    ok.
+
+start_handler(Sink, Module, Config) ->
+    {ok, Watcher} = supervisor:start_child(lager_handler_watcher_sup,
+                                           [Sink, Module, Config]),
+    {Module, Watcher, Sink}.
+
+check_handler_config({lager_file_backend, F}, _Config) ->
+    Fs = case get(?FILENAMES) of
+        undefined -> ordsets:new();
+        X -> X
+    end,
+    case ordsets:is_element(F, Fs) of
+        true ->
+            error_logger:error_msg(
+              "Cannot have same file (~p) in multiple file backends~n", [F]),
+            throw({error, bad_config});
+        false ->
+            put(?FILENAMES,
+                ordsets:add_element(F, Fs))
+    end,
+    ok;
+
+check_handler_config(_Other, _Config) ->
+    ok.
+
+clean_up_config_checks() ->
+    erase(?FILENAMES).
+
+interpret_hwm(undefined) ->
+    undefined;
+interpret_hwm({ok, undefined}) ->
+    undefined;
+interpret_hwm({ok, HWM}) when not is_integer(HWM) orelse HWM < 0 ->
+    _ = lager:log(warning, self(), "Invalid error_logger high water mark: ~p, disabling", [HWM]),
+    undefined;
+interpret_hwm({ok, HWM}) ->
+    HWM.
+
+start_error_logger_handler({ok, false}, _HWM, _Whitelist) ->
+    [];
+start_error_logger_handler(_, HWM, undefined) ->
+    start_error_logger_handler(ignore_me, HWM, {ok, []});
+start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
+    case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM]]) of
+        {ok, _} ->
+            [begin error_logger:delete_report_handler(X), X end ||
+                X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
+        {error, _} ->
+            []
+    end.
+
+%% `determine_async_behavior/3' is called with the results from either
+%% `application:get_env/2' and `proplists:get_value/2'. Since
+%% `application:get_env/2' wraps a successful retrieval in an `{ok,
+%% Value}' tuple, do the same for the result from
+%% `proplists:get_value/2'.
+wrap_proplist_value(undefined) ->
+    undefined;
+wrap_proplist_value(Value) ->
+    {ok, Value}.
+
+configure_sink(Sink, SinkDef) ->
+    lager_config:new_sink(Sink),
+    ChildId = list_to_atom(atom_to_list(Sink) ++ "_event"),
+    _ = supervisor:start_child(lager_sup,
+                               {ChildId,
+                                {gen_event, start_link,
+                                 [{local, Sink}]},
+                                permanent, 5000, worker, [dynamic]}),
+    determine_async_behavior(Sink,
+                             wrap_proplist_value(
+                               proplists:get_value(async_threshold, SinkDef)),
+                             wrap_proplist_value(
+                               proplists:get_value(async_threshold_window, SinkDef))
+                            ),
+    start_handlers(Sink,
+                   proplists:get_value(handlers, SinkDef, [])),
+
+    lager:update_loglevel_config(Sink).
+
+
+configure_extra_sinks(Sinks) ->
+    lists:foreach(fun({Sink, Proplist}) -> configure_sink(Sink, Proplist) end,
+                  Sinks).
+
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
 
-
-    case application:get_env(lager, async_threshold) of
-        undefined ->
-            ok;
-        {ok, undefined} ->
-            undefined;
-        {ok, Threshold} when is_integer(Threshold), Threshold >= 0 ->
-            DefWindow = erlang:trunc(Threshold * 0.2), % maybe 0?
-            ThresholdWindow =
-                case application:get_env(lager, async_threshold_window) of
-                    undefined ->
-                        DefWindow;
-                    {ok, Window} when is_integer(Window), Window < Threshold, Window >= 0 ->
-                        Window;
-                    {ok, BadWindow} ->
-                        error_logger:error_msg(
-                          "Invalid value for 'async_threshold_window': ~p~n", [BadWindow]),
-                        throw({error, bad_config})
-                end,
-            _ = supervisor:start_child(lager_handler_watcher_sup,
-                                       [lager_event, lager_backend_throttle, [Threshold, ThresholdWindow]]),
-            ok;
-        {ok, BadThreshold} ->
-            error_logger:error_msg("Invalid value for 'async_threshold': ~p~n", [BadThreshold]),
-            throw({error, bad_config})
-    end,
-
-    Handlers = case application:get_env(lager, handlers) of
-        undefined ->
-            [{lager_console_backend, info},
-             {lager_file_backend, [{file, "log/error.log"},   {level, error}, {size, 10485760}, {date, "$D0"}, {count, 5}]},
-             {lager_file_backend, [{file, "log/console.log"}, {level, info}, {size, 10485760}, {date, "$D0"}, {count, 5}]}];
-        {ok, Val} ->
-            Val
-    end,
-
-    %% handlers failing to start are handled in the handler_watcher
-    _ = [supervisor:start_child(lager_handler_watcher_sup, [lager_event, Module, Config]) ||
-        {Module, Config} <- expand_handlers(Handlers)],
+    %% Handle the default sink.
+    determine_async_behavior(?DEFAULT_SINK,
+                             application:get_env(lager, async_threshold),
+                             application:get_env(lager, async_threshold_window)),
+    start_handlers(?DEFAULT_SINK,
+                   application:get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
 
     ok = add_configured_traces(),
 
-    %% mask the messages we have no use for
-    lager:update_loglevel_config(),
+    lager:update_loglevel_config(?DEFAULT_SINK),
 
-    HighWaterMark = case application:get_env(lager, error_logger_hwm) of
-        {ok, undefined} ->
-            undefined;
-        {ok, HwmVal} when is_integer(HwmVal), HwmVal > 0 ->
-            HwmVal;
-        {ok, BadVal} ->
-            _ = lager:log(warning, self(), "Invalid error_logger high water mark: ~p, disabling", [BadVal]),
-            undefined;
-        undefined ->
-            undefined
-    end,
+    SavedHandlers = start_error_logger_handler(
+                      application:get_env(lager, error_logger_redirect),
+                      interpret_hwm(application:get_env(lager, error_logger_hwm)),
+                      application:get_env(lager, error_logger_whitelist)
+                     ),
 
-    SavedHandlers =
-        case application:get_env(lager, error_logger_redirect) of
-            {ok, false} ->
-                [];
-            _ ->
-                WhiteList = case application:get_env(lager, error_logger_whitelist) of
-                    undefined ->
-                        [];
-                    {ok, WhiteList0} ->
-                        WhiteList0
-                end,
+    _ = lager_util:trace_filter(none),
 
-                case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HighWaterMark]]) of
-                    {ok, _} ->
-                        [begin error_logger:delete_report_handler(X), X end ||
-                            X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
-                    {error, _} ->
-                        []
-                end
-        end,
+    %% Now handle extra sinks
+    configure_extra_sinks(application:get_env(lager, extra_sinks, [])),
 
-    _ = lager_util:trace_filter(none), 
+    clean_up_config_checks(),
 
     {ok, Pid, SavedHandlers}.
 
@@ -153,7 +235,7 @@ add_configured_traces() ->
 
 maybe_make_handler_id(Mod, Config) ->
     %% Allow the backend to generate a gen_event handler id, if it wants to.
-    %% We don't use erlang:function_exported here because that requires the module 
+    %% We don't use erlang:function_exported here because that requires the module
     %% already be loaded, which is unlikely at this phase of startup. Using code:load
     %% caused undesireable side-effects with generating code-coverage reports.
     try Mod:config_to_id(Config) of
@@ -227,6 +309,20 @@ application_config_mangling_test_() ->
                         {lager_file_backend, [{formatter, lager_default_formatter},{file, "test3.log"}]}
                     ])
             )
+        }
+    ].
+
+check_handler_config_test_() ->
+    Good = expand_handlers(?DEFAULT_HANDLER_CONF),
+    Bad  = expand_handlers([{lager_console_backend, info},
+            {lager_file_backend, [{file, "same_file.log"}]},
+            {lager_file_backend, [{file, "same_file.log"}, {level, info}]}]),
+    [
+        {"lager_file_backend_good",
+         ?_assertEqual([ok, ok, ok], [ check_handler_config(M,C) || {M,C} <- Good ])
+        },
+        {"lager_file_backend_bad",
+         ?_assertThrow({error, bad_config}, [ check_handler_config(M,C) || {M,C} <- Bad ])
         }
     ].
 -endif.

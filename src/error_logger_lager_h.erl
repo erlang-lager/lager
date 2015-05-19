@@ -318,7 +318,7 @@ format_reason({function_clause, [MFA|_]}) ->
 format_reason({if_clause, [MFA|_]}) ->
     ["no true branch found while evaluating if expression in ", format_mfa(MFA)];
 format_reason({{try_clause, Val}, [MFA|_]}) ->
-    ["no try clause matching ", print_val(Val), " in ", format_mfa(MFA)]; 
+    ["no try clause matching ", print_val(Val), " in ", format_mfa(MFA)];
 format_reason({badarith, [MFA|_]}) ->
     ["bad arithmetic expression in ", format_mfa(MFA)];
 format_reason({{badmatch, Val}, [MFA|_]}) ->

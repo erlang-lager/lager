@@ -38,18 +38,18 @@
 -record(state, {
         module :: atom(),
         config :: any(),
-        event :: pid() | atom()
+        sink :: pid() | atom()
     }).
 
-start_link(Event, Module, Config) ->
-    gen_server:start_link(?MODULE, [Event, Module, Config], []).
+start_link(Sink, Module, Config) ->
+    gen_server:start_link(?MODULE, [Sink, Module, Config], []).
 
-start(Event, Module, Config) ->
-    gen_server:start(?MODULE, [Event, Module, Config], []).
+start(Sink, Module, Config) ->
+    gen_server:start(?MODULE, [Sink, Module, Config], []).
 
-init([Event, Module, Config]) ->
-    install_handler(Event, Module, Config),
-    {ok, #state{event=Event, module=Module, config=Config}}.
+init([Sink, Module, Config]) ->
+    install_handler(Sink, Module, Config),
+    {ok, #state{sink=Sink, module=Module, config=Config}}.
 
 handle_call(_Call, _From, State) ->
     {reply, ok, State}.
@@ -62,18 +62,18 @@ handle_info({gen_event_EXIT, Module, normal}, #state{module=Module} = State) ->
 handle_info({gen_event_EXIT, Module, shutdown}, #state{module=Module} = State) ->
     {stop, normal, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
-        config=Config, event=Event} = State) ->
+        config=Config, sink=Sink} = State) ->
     case lager:log(error, self(), "Lager event handler ~p exited with reason ~s",
         [Module, error_logger_lager_h:format_reason(Reason)]) of
       ok ->
-        install_handler(Event, Module, Config);
+        install_handler(Sink, Module, Config);
       {error, _} ->
         %% lager is not working, so installing a handler won't work
         ok
     end,
     {noreply, State};
-handle_info(reinstall_handler, #state{module=Module, config=Config, event=Event} = State) ->
-    install_handler(Event, Module, Config),
+handle_info(reinstall_handler, #state{module=Module, config=Config, sink=Sink} = State) ->
+    install_handler(Sink, Module, Config),
     {noreply, State};
 handle_info(stop, State) ->
     {stop, normal, State};
@@ -87,23 +87,33 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% internal
+install_handler(Sink, lager_backend_throttle, Config) ->
+    %% The lager_backend_throttle needs to know to which sink it is
+    %% attached, hence this admittedly ugly workaround. Handlers are
+    %% sensitive to the structure of the configuration sent to `init',
+    %% sadly, so it's not trivial to add a configuration item to be
+    %% ignored to backends without breaking 3rd party handlers.
+    install_handler2(Sink, lager_backend_throttle, [{sink, Sink}|Config]);
+install_handler(Sink, Module, Config) ->
+    install_handler2(Sink, Module, Config).
 
-install_handler(Event, Module, Config) ->
-    case gen_event:add_sup_handler(Event, Module, Config) of
+%% private
+install_handler2(Sink, Module, Config) ->
+    case gen_event:add_sup_handler(Sink, Module, Config) of
         ok ->
-            ?INT_LOG(debug, "Lager installed handler ~p into ~p", [Module, Event]),
-            lager:update_loglevel_config(),
+            ?INT_LOG(debug, "Lager installed handler ~p into ~p", [Module, Sink]),
+            lager:update_loglevel_config(Sink),
             ok;
         {error, {fatal, Reason}} ->
             ?INT_LOG(error, "Lager fatally failed to install handler ~p into"
-                " ~p, NOT retrying: ~p", [Module, Event, Reason]),
+                " ~p, NOT retrying: ~p", [Module, Sink, Reason]),
             %% tell ourselves to stop
             self() ! stop,
             ok;
         Error ->
             %% try to reinstall it later
             ?INT_LOG(error, "Lager failed to install handler ~p into"
-               " ~p, retrying later : ~p", [Module, Event, Error]),
+               " ~p, retrying later : ~p", [Module, Sink, Error]),
             erlang:send_after(5000, self(), reinstall_handler),
             ok
     end.

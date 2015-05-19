@@ -23,12 +23,15 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, buffer, ignored}).
--record(test, {attrs, format, args}).
--compile([{parse_transform, lager_transform}]).
+-define(TEST_SINK_NAME, '__lager_test_sink').        %% <-- used by parse transform
+-define(TEST_SINK_EVENT, '__lager_test_sink_event'). %% <-- used by lager API calls and internals for gen_event
+
+-record(state, {level :: list(), buffer :: list(), ignored :: term()}).
+-compile({parse_transform, lager_transform}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-record(test, {attrs :: list(), format :: list(), args :: list()}).
 -export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
@@ -89,22 +92,41 @@ code_change(_OldVsn, State, _Extra) ->
 -ifdef(TEST).
 
 pop() ->
-    gen_event:call(lager_event, ?MODULE, pop).
+    pop(lager_event).
 
 count() ->
-    gen_event:call(lager_event, ?MODULE, count).
+    count(lager_event).
 
 count_ignored() ->
-    gen_event:call(lager_event, ?MODULE, count_ignored).
+    count_ignored(lager_event).
 
 flush() ->
-    gen_event:call(lager_event, ?MODULE, flush).
+    flush(lager_event).
 
 print_state() ->
-    gen_event:call(lager_event, ?MODULE, print_state).
+    print_state(lager_event).
 
 print_bad_state() ->
-    gen_event:call(lager_event, ?MODULE, print_bad_state).
+    print_bad_state(lager_event).
+
+pop(Sink) ->
+    gen_event:call(Sink, ?MODULE, pop).
+
+count(Sink) ->
+    gen_event:call(Sink, ?MODULE, count).
+
+count_ignored(Sink) ->
+    gen_event:call(Sink, ?MODULE, count_ignored).
+
+flush(Sink) ->
+    gen_event:call(Sink, ?MODULE, flush).
+
+print_state(Sink) ->
+    gen_event:call(Sink, ?MODULE, print_state).
+
+print_bad_state(Sink) ->
+    gen_event:call(Sink, ?MODULE, print_bad_state).
+
 
 has_line_numbers() ->
     %% are we R15 or greater
@@ -126,6 +148,11 @@ lager_test_() ->
                         ?assertEqual(0, count())
                 end
             },
+        {"test sink not running",
+        fun() ->
+            ?assertEqual({error, {sink_not_configured, test}}, lager:log(test, info, self(), "~p", "not running"))
+        end
+        },
             {"logging works",
                 fun() ->
                         lager:warning("test message"),
@@ -556,6 +583,99 @@ lager_test_() ->
         ]
     }.
 
+extra_sinks_test_() ->
+    {foreach,
+        fun setup_sink/0,
+        fun cleanup/1,
+        [
+            {"observe that there is nothing up my sleeve",
+                fun() ->
+                        ?assertEqual(undefined, pop(?TEST_SINK_EVENT)),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT))
+                end
+            },
+            {"logging works",
+                fun() ->
+                        ?TEST_SINK_NAME:warning("test message"),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        {Level, _Time, Message, _Metadata}  = pop(?TEST_SINK_EVENT),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual("test message", Message),
+                        ok
+                end
+            },
+            {"logging with arguments works",
+                fun() ->
+                        ?TEST_SINK_NAME:warning("test message ~p", [self()]),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        {Level, _Time, Message,_Metadata}  = pop(?TEST_SINK_EVENT),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), lists:flatten(Message)),
+                        ok
+                end
+            },
+            {"variables inplace of literals in logging statements work",
+                fun() ->
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        Attr = [{a, alpha}, {b, beta}],
+                        Fmt = "format ~p",
+                        Args = [world],
+                        ?TEST_SINK_NAME:info(Attr, "hello"),
+                        ?TEST_SINK_NAME:info(Attr, "hello ~p", [world]),
+                        ?TEST_SINK_NAME:info(Fmt, [world]),
+                        ?TEST_SINK_NAME:info("hello ~p", Args),
+                        ?TEST_SINK_NAME:info(Attr, "hello ~p", Args),
+                        ?TEST_SINK_NAME:info([{d, delta}, {g, gamma}], Fmt, Args),
+                        ?assertEqual(6, count(?TEST_SINK_EVENT)),
+                        {_Level, _Time, Message, Metadata}  = pop(?TEST_SINK_EVENT),
+                        ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
+                        ?assertEqual("hello", lists:flatten(Message)),
+                        {_Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_EVENT),
+                        ?assertEqual("hello world", lists:flatten(Message2)),
+                        {_Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_EVENT),
+                        ?assertEqual("format world", lists:flatten(Message3)),
+                        {_Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_EVENT),
+                        ?assertEqual("hello world", lists:flatten(Message4)),
+                        {_Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_EVENT),
+                        ?assertEqual("hello world", lists:flatten(Message5)),
+                        {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_EVENT),
+                        ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
+                        ?assertEqual("format world", lists:flatten(Message6)),
+                        ok
+                end
+            },
+            {"log messages below the threshold are ignored",
+                fun() ->
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?TEST_SINK_NAME:debug("this message will be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(0, count_ignored(?TEST_SINK_EVENT)),
+                        lager_config:set({?TEST_SINK_EVENT, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}),
+                        ?TEST_SINK_NAME:debug("this message should be ignored"),
+                        ?assertEqual(0, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(1, count_ignored(?TEST_SINK_EVENT)),
+                        lager:set_loglevel(?TEST_SINK_EVENT, ?MODULE, undefined, debug),
+                        ?assertEqual({?DEBUG bor ?INFO bor ?NOTICE bor ?WARNING bor ?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, []}, lager_config:get({?TEST_SINK_EVENT, loglevel})),
+                        ?TEST_SINK_NAME:debug("this message should be logged"),
+                        ?assertEqual(1, count(?TEST_SINK_EVENT)),
+                        ?assertEqual(1, count_ignored(?TEST_SINK_EVENT)),
+                        ?assertEqual(debug, lager:get_loglevel(?TEST_SINK_EVENT, ?MODULE)),
+                        ok
+                end
+            }
+    ]
+    }.
+
+setup_sink() ->
+    error_logger:tty(false),
+    application:load(lager),
+    application:set_env(lager, handlers, []),
+    application:set_env(lager, error_logger_redirect, false),
+    application:set_env(lager, extra_sinks, [{?TEST_SINK_EVENT, [{handlers, [{?MODULE, info}]}]}]),
+    lager:start(),
+    gen_event:call(lager_event, ?MODULE, flush),
+    gen_event:call(?TEST_SINK_EVENT, ?MODULE, flush).
+
 setup() ->
     error_logger:tty(false),
     application:load(lager),
@@ -607,7 +727,7 @@ error_logger_redirect_crash_test_() ->
                         ?assertEqual(Pid,proplists:get_value(pid,Metadata)),
                         ?assertEqual(lager_util:level_to_num(error),Level)
                 end
-            } 
+            }
     end,
     {foreach,
         fun() ->
@@ -1004,7 +1124,7 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 600)
                 end
             },
-            {"crash reports for 'special processes' should be handled right - function_clause", 
+            {"crash reports for 'special processes' should be handled right - function_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1017,7 +1137,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - case_clause", 
+            {"crash reports for 'special processes' should be handled right - case_clause",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1030,7 +1150,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - exit", 
+            {"crash reports for 'special processes' should be handled right - exit",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1043,7 +1163,7 @@ error_logger_redirect_test_() ->
                         test_body(Expected, lists:flatten(Msg))
                 end
             },
-            {"crash reports for 'special processes' should be handled right - error", 
+            {"crash reports for 'special processes' should be handled right - error",
                 fun() ->
                         {ok, Pid} = special_process:start(),
                         unlink(Pid),
@@ -1159,6 +1279,9 @@ async_threshold_test_() ->
     {foreach,
         fun() ->
                 error_logger:tty(false),
+                ets:new(async_threshold_test, [set, named_table, public]),
+                ets:insert_new(async_threshold_test, {sync_toggled, 0}),
+                ets:insert_new(async_threshold_test, {async_toggled, 0}),
                 application:load(lager),
                 application:set_env(lager, error_logger_redirect, false),
                 application:set_env(lager, async_threshold, 2),
@@ -1170,6 +1293,7 @@ async_threshold_test_() ->
                 application:unset_env(lager, async_threshold),
                 application:stop(lager),
                 application:stop(goldrush),
+                ets:delete(async_threshold_test),
                 error_logger:tty(true)
         end,
         [
@@ -1184,11 +1308,22 @@ async_threshold_test_() ->
                         %% serialize on mailbox
                         _ = gen_event:which_handlers(lager_event),
                         timer:sleep(500),
-                        %% there should be a ton of outstanding messages now, so async is false
-                        ?assertEqual(false, lager_config:get(async)),
-                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're in sync mode)
+
+                        %% By now the flood of messages will have
+                        %% forced the backend throttle to turn off
+                        %% async mode, but it's possible all
+                        %% outstanding requests have been processed,
+                        %% so checking the current status (sync or
+                        %% async) is an exercise in race control.
+
+                        %% Instead, we'll see whether the backend
+                        %% throttle has toggled into sync mode at any
+                        %% point in the past
+                        ?assertMatch([{sync_toggled, N}] when N > 0,
+                                                              ets:lookup(async_threshold_test, sync_toggled)),
+                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're definitely in sync mode at the end of the run)
                         collect_workers(Workers),
-                        %% serialize ont  the mailbox again
+                        %% serialize on the mailbox again
                         _ = gen_event:which_handlers(lager_event),
                         %% just in case...
                         timer:sleep(1000),
@@ -1268,5 +1403,3 @@ high_watermark_test_() ->
     }.
 
 -endif.
-
-
