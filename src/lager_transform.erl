@@ -174,7 +174,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
     {'case',Line,
          {tuple,Line,
                 [{call,Line,{atom,Line,whereis},[{atom,Line,SinkName}]},
-                 {call,Line,{atom,Line,whereis},[{atom,Line,lager_event}]}, %% <--lager_event is ?DEFAULT_SINK
+                 {call,Line,{atom,Line,whereis},[{atom,Line,?DEFAULT_SINK}]}, 
                  {call,Line,
                        {remote,Line,{atom,Line,lager_config},{atom,Line,get}},
                        [{tuple,Line,[{atom,Line,SinkName},{atom,Line,loglevel}]},
