@@ -130,7 +130,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
                                                                     {atom, Line, App}]},
                                          {nil, Line}}, DefaultAttrs0)
                    end,
-    {Traces, Message, Arguments} = case Arguments0 of
+    {Meta, Message, Arguments} = case Arguments0 of
                                        [Format] ->
                                            {DefaultAttrs, Format, {atom, Line, none}};
                                        [Arg1, Arg2] ->
@@ -207,7 +207,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
                     {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
                   [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, do_log}},
                          [{atom,Line,Severity},
-                          Traces,
+                          Meta,
                           Message,
                           Arguments,
                           {integer, Line, get(truncation_size)},
