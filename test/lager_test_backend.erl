@@ -27,8 +27,8 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--record(state, {level, buffer, ignored}).
--record(test, {attrs, format, args}).
+-record(state, {level :: list(), buffer :: list(), ignored :: list()}).
+-record(test, {attrs :: term(), format :: term() , args :: term()}).
 -compile([{parse_transform, lager_transform}]).
 
 -ifdef(TEST).
