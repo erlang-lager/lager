@@ -714,6 +714,11 @@ filesystem_test_() ->
                         {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
                         lager:error("Test message"),
                         ?assertNot(filelib:is_regular("foo.log.0")),
+                        %% rotation is sensitive to intervals between
+                        %% writes so we sleep to exceed the 1
+                        %% millisecond interval specified by
+                        %% check_interval above
+                        timer:sleep(2),
                         lager:error("Test message"),
                         timer:sleep(10),
                         ?assert(filelib:is_regular("foo.log.0"))
