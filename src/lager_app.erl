@@ -81,7 +81,9 @@ start_handlers(Sink, Handlers) ->
                             lager_config:global_get(handlers, []) ++
                             lists:map(fun({Module, Config}) ->
                                               check_handler_config(Module, Config),
-                                              start_handler(Sink, Module, Config)
+                                              start_handler(Sink, Module, Config);
+                                          (_) ->
+                                              throw({error, bad_config})
                                       end,
                                       expand_handlers(Handlers))),
     ok.
@@ -91,7 +93,7 @@ start_handler(Sink, Module, Config) ->
                                            [Sink, Module, Config]),
     {Module, Watcher, Sink}.
 
-check_handler_config({lager_file_backend, F}, _Config) ->
+check_handler_config({lager_file_backend, F}, Config) when is_list(Config) ->
     Fs = case get(?FILENAMES) of
         undefined -> ordsets:new();
         X -> X
@@ -106,9 +108,10 @@ check_handler_config({lager_file_backend, F}, _Config) ->
                 ordsets:add_element(F, Fs))
     end,
     ok;
-
-check_handler_config(_Other, _Config) ->
-    ok.
+check_handler_config(_Handler, Config) when is_list(Config) orelse is_atom(Config) ->
+    ok;
+check_handler_config(Handler, _BadConfig) ->
+    throw({error, {bad_config, Handler}}).
 
 clean_up_config_checks() ->
     erase(?FILENAMES).
@@ -332,12 +335,24 @@ check_handler_config_test_() ->
     Bad  = expand_handlers([{lager_console_backend, info},
             {lager_file_backend, [{file, "same_file.log"}]},
             {lager_file_backend, [{file, "same_file.log"}, {level, info}]}]),
+    AlsoBad = [{lager_logstash_backend,
+                                    {level, info},
+                                    {output, {udp, "localhost", 5000}},
+                                    {format, json},
+                                    {json_encoder, jiffy}}],
+    BadToo = [{fail, {fail}}],
     [
         {"lager_file_backend_good",
          ?_assertEqual([ok, ok, ok], [ check_handler_config(M,C) || {M,C} <- Good ])
         },
         {"lager_file_backend_bad",
          ?_assertThrow({error, bad_config}, [ check_handler_config(M,C) || {M,C} <- Bad ])
+        },
+        {"Invalid config dies",
+         ?_assertThrow({error, bad_config}, start_handlers(foo, AlsoBad))
+        },
+        {"Invalid config dies",
+         ?_assertThrow({error, {bad_config, _}}, start_handlers(foo, BadToo))
         }
     ].
 -endif.
