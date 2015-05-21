@@ -192,7 +192,9 @@ Included is `lager_default_formatter`.  This provides a generic, default formatt
 
 * Any traditional iolist elements in the configuration are printed verbatim.
 * Atoms in the configuration are treated as placeholders for lager metadata and extracted from the log message.
-    * The placeholders `date`, `time`, `message`, and `severity` will always exist.
+    * The placeholders `date`, `time`, `message`, `sev` and `severity` will always exist.
+    * `sev` is an abbreviated severity which is interpreted as a capitalized single letter encoding of the severity level
+      (e.g. `'debug'` -> `$D`)
     * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node` will always exist if the parse transform is used.
     * Applications can define their own metadata placeholder.
     * A tuple of `{atom(), semi-iolist()}` allows for a fallback for
