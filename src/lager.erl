@@ -189,21 +189,22 @@ trace_file(File, Filter, Options) when is_list(Options) ->
     trace_file(File, Filter, debug, Options).
 
 trace_file(File, Filter, Level, Options) ->
-    case validate_trace_filters(Filter, Level, {lager_file_backend, File}) of
+    FileName = lager_util:expand_path(File),
+    case validate_trace_filters(Filter, Level, {lager_file_backend, FileName}) of
         {Sink, {ok, Trace}} ->
             Handlers = lager_config:global_get(handlers, []),
             %% check if this file backend is already installed
-            Res = case lists:keyfind({lager_file_backend, File}, 1, Handlers) of
+            Res = case lists:keyfind({lager_file_backend, FileName}, 1, Handlers) of
                       false ->
                           %% install the handler
                           LogFileConfig =
                               lists:keystore(level, 1,
                                              lists:keystore(file, 1,
                                                             Options,
-                                                            {file, File}),
+                                                            {file, FileName}),
                                              {level, none}),
                           HandlerInfo =
-                              lager_app:start_handler(Sink, {lager_file_backend, File},
+                              lager_app:start_handler(Sink, {lager_file_backend, FileName},
                                                       LogFileConfig),
                           lager_config:global_set(handlers, [HandlerInfo|Handlers]),
                           {ok, installed};
@@ -216,7 +217,7 @@ trace_file(File, Filter, Level, Options) ->
               {ok, _} ->
                 %% XXX Double-check this logic for {ok, exists}
                 add_trace_to_loglevel_config(Trace, Sink),
-                {ok, {{lager_file_backend, File}, Filter, Level}};
+                {ok, {{lager_file_backend, FileName}, Filter, Level}};
               {error, _} = E ->
                 E
             end;
