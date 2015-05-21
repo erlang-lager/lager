@@ -32,7 +32,7 @@
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
-        do_log/9, do_log/10, pr/2]).
+        do_log/9, do_log/10, pr/2, pr/3]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -476,33 +476,42 @@ safe_format_chop(Fmt, Args, Limit) ->
 
 %% @doc Print a record lager found during parse transform
 pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
-    try
+    pr(Record, Module, []);
+pr(Record, _) ->
+    Record.
+
+%% @doc Print a record lager found during parse transform
+pr(Record, Module, Options) when is_tuple(Record), is_atom(element(1, Record)), is_list(Options) ->
+    try 
         case is_record_known(Record, Module) of
             false ->
                 Record;
             {RecordName, RecordFields} ->
-                {'$lager_record', RecordName,
-                    zip(RecordFields, tl(tuple_to_list(Record)), Module, [])}
+                {'$lager_record', RecordName, 
+                    zip(RecordFields, tl(tuple_to_list(Record)), Module, Options, [])}
         end
     catch
         error:undef ->
             Record
     end;
-pr(Record, _) ->
+pr(Record, _, _) ->
     Record.
 
-zip([FieldName|RecordFields], [FieldValue|Record], Module, ToReturn) ->
+zip([FieldName|RecordFields], [FieldValue|Record], Module, Options, ToReturn) ->
+    Compress = lists:member(compress, Options),
     case   is_tuple(FieldValue) andalso
            tuple_size(FieldValue) > 0 andalso
            is_atom(element(1, FieldValue)) andalso
            is_record_known(FieldValue, Module) of
+        false when Compress andalso FieldValue =:= undefined ->
+            zip(RecordFields, Record, Module, Options, ToReturn);
         false ->
-            zip(RecordFields, Record, Module, [{FieldName, FieldValue}|ToReturn]);
+            zip(RecordFields, Record, Module, Options, [{FieldName, FieldValue}|ToReturn]);
         _Else ->
-            F = {FieldName, pr(FieldValue, Module)},
-            zip(RecordFields, Record, Module, [F|ToReturn])
+            F = {FieldName, pr(FieldValue, Module, Options)},
+            zip(RecordFields, Record, Module, Options, [F|ToReturn])
     end;
-zip([], [], _Module, ToReturn) ->
+zip([], [], _Module, _Compress, ToReturn) ->
     lists:reverse(ToReturn).
 
 is_record_known(Record, Module) ->
