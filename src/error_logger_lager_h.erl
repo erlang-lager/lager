@@ -1,4 +1,4 @@
-%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% Copyright (c) 2011-2015 Basho Technologies, Inc.  All Rights Reserved.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -197,7 +197,7 @@ log_event(Event, State) ->
                     ?LOGFMT(error, Pid, "Webmachine error at path ~p : ~s", [Path, format_reason(StackTrace)]);
                 _ ->
                     ?CRASH_LOG(Event),
-                    ?LOGMSG(error, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION))
+                    ?LOGFMT(error, Pid, Fmt, Args)
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
             ?CRASH_LOG(Event),
@@ -217,11 +217,11 @@ log_event(Event, State) ->
             ?CRASH_LOG(Event),
             ?LOGMSG(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOGMSG(warning, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
+            ?LOGFMT(warning, Pid, Fmt, Args);
         {warning_report, _GL, {Pid, std_warning, Report}} ->
             ?LOGMSG(warning, Pid, print_silly_list(Report));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOGMSG(info, Pid, lager:safe_format(Fmt, Args, ?DEFAULT_TRUNCATION));
+            ?LOGFMT(info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
