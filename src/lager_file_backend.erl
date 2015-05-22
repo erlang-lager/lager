@@ -63,7 +63,7 @@
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
-		shaper :: lager_shaper(),
+        shaper :: lager_shaper(),
         formatter :: atom(),
         formatter_config :: any(),
         sync_on :: {'mask', integer()},
@@ -76,7 +76,7 @@
 -type option() :: {file, string()} | {level, lager:log_level()} |
                   {size, non_neg_integer()} | {date, string()} |
                   {count, non_neg_integer()} | {high_water_mark, non_neg_integer()} |
-				  {sync_interval, non_neg_integer()} |
+                  {sync_interval, non_neg_integer()} |
                   {sync_size, non_neg_integer()} | {sync_on, lager:log_level()} |
                   {check_interval, non_neg_integer()} | {formatter, atom()} |
                   {formatter_config, term()}.
@@ -134,43 +134,41 @@ handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
-	case validate_logfile_proplist([{file, Name}, {high_water_mark, Hwm}]) of
+    case validate_logfile_proplist([{file, Name}, {high_water_mark, Hwm}]) of
         false ->
             {ok, {error, bad_log_hwm}, State};
         _ ->
-			NewShaper = Shaper#lager_shaper{hwm=Hwm},
-			?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
-			{ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
-	end;
+            NewShaper = Shaper#lager_shaper{hwm=Hwm},
+            ?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
+            {ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
+    end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
 handle_event({log, Message},
-    #state{name=Name, level=L, shaper=Shaper, 
-		   formatter=Formatter,formatter_config=FormatConfig} = State) ->
+    #state{name=Name, level=L, shaper=Shaper, formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-			case lager_util:check_hwm(Shaper) of
-				{true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} ->
-					NewState = case Drop > 0 of
-								   true ->
-									   Report = io_lib:format("lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", [Drop, Hwm]),
-									   ReportMsg = lager_msg:new(Report, warning, [], []),
-									   write(State, 
-											 lager_msg:timestamp(ReportMsg), 
-											 lager_msg:severity_as_int(ReportMsg), 
-											 Formatter:format(ReportMsg, FormatConfig));
-								   false ->
-									   State
-							   end,
-					{ok,write(NewState#state{shaper=NewShaper}, 
-							  lager_msg:timestamp(Message), 
-							  lager_msg:severity_as_int(Message), 
-							  Formatter:format(Message,FormatConfig)) };
-				{false, _, NewShaper} ->
-					{ok, State#state{shaper=NewShaper}}
-			end;
+            case lager_util:check_hwm(Shaper) of
+                {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} ->
+                    NewState = case Drop > 0 of
+                        true ->
+                            Report = io_lib:format(
+                                "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
+                                [Drop, Hwm]),
+                            ReportMsg = lager_msg:new(Report, warning, [], []),
+                            write(State, lager_msg:timestamp(ReportMsg),
+                                lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig));
+                        false ->
+                            State
+                    end,
+                    {ok,write(NewState#state{shaper=NewShaper},
+                        lager_msg:timestamp(Message), lager_msg:severity_as_int(Message),
+                        Formatter:format(Message,FormatConfig))};
+                {false, _, NewShaper} ->
+                    {ok, State#state{shaper=NewShaper}}
+            end;
         false ->
             {ok, State}
     end;

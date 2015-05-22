@@ -74,7 +74,7 @@ init([HighWaterMark, GlStrategy]) ->
     {ok, #state{shaper=Shaper, groupleader_strategy=GlStrategy}}.
 
 handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
-	NewShaper = Shaper#lager_shaper{hwm=N},
+    NewShaper = Shaper#lager_shaper{hwm=N},
     {ok, ok, State#state{shaper = NewShaper}};
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
@@ -84,7 +84,7 @@ handle_event(Event, #state{shaper=Shaper} = State) ->
         {true, 0, NewShaper} ->
             eval_gl(Event, State#state{shaper=NewShaper});
         {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} when Drop > 0 ->
-	    ?LOGFMT(warning, self(), 
+            ?LOGFMT(warning, self(), 
                 "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
                 [Drop, Hwm]),
             eval_gl(Event, State#state{shaper=NewShaper});
