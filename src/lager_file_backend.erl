@@ -63,6 +63,7 @@
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
+		shaper :: lager_shaper(),
         formatter :: atom(),
         formatter_config :: any(),
         sync_on :: {'mask', integer()},
@@ -74,7 +75,8 @@
 
 -type option() :: {file, string()} | {level, lager:log_level()} |
                   {size, non_neg_integer()} | {date, string()} |
-                  {count, non_neg_integer()} | {sync_interval, non_neg_integer()} |
+                  {count, non_neg_integer()} | {high_water_mark, non_neg_integer()} |
+				  {sync_interval, non_neg_integer()} |
                   {sync_size, non_neg_integer()} | {sync_on, lager:log_level()} |
                   {check_interval, non_neg_integer()} | {formatter, atom()} |
                   {formatter_config, term()}.
@@ -102,11 +104,12 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
             {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever
-            [RelName, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
-              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
+            [RelName, Level, Date, Size, Count, HighWaterMark, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
+              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, high_water_mark, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
             Name = lager_util:expand_path(RelName),
             schedule_rotation(Name, Date),
-            State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, formatter=Formatter,
+            Shaper = #lager_shaper{hwm=HighWaterMark},
+            State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, shaper=Shaper, formatter=Formatter,
                 formatter_config=FormatterConfig, sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize,
                 check_interval=CheckInterval},
             State = case lager_util:open_logfile(Name, {SyncSize, SyncInterval}) of
@@ -130,15 +133,44 @@ handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
     end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
+handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
+	case validate_logfile_proplist([{file, Name}, {high_water_mark, Hwm}]) of
+        false ->
+            {ok, {error, bad_log_hwm}, State};
+        _ ->
+			NewShaper = Shaper#lager_shaper{hwm=Hwm},
+			?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
+			{ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
+	end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
 handle_event({log, Message},
-    #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
+    #state{name=Name, level=L, shaper=Shaper, 
+		   formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-            {ok,write(State, lager_msg:timestamp(Message), lager_msg:severity_as_int(Message), Formatter:format(Message,FormatConfig)) };
+			case lager_util:check_hwm(Shaper) of
+				{true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} ->
+					NewState = case Drop > 0 of
+								   true ->
+									   Report = io_lib:format("lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", [Drop, Hwm]),
+									   ReportMsg = lager_msg:new(Report, warning, [], []),
+									   write(State, 
+											 lager_msg:timestamp(ReportMsg), 
+											 lager_msg:severity_as_int(ReportMsg), 
+											 Formatter:format(ReportMsg, FormatConfig));
+								   false ->
+									   State
+							   end,
+					{ok,write(NewState#state{shaper=NewShaper}, 
+							  lager_msg:timestamp(Message), 
+							  lager_msg:severity_as_int(Message), 
+							  Formatter:format(Message,FormatConfig)) };
+				{false, _, NewShaper} ->
+					{ok, State#state{shaper=NewShaper}}
+			end;
         false ->
             {ok, State}
     end;
@@ -300,6 +332,13 @@ validate_logfile_proplist([{count, Count}|Tail], Acc) ->
             validate_logfile_proplist(Tail, [{count, Count}|Acc]);
         _ ->
             throw({bad_config, "Invalid rotation count", Count})
+    end;
+validate_logfile_proplist([{high_water_mark, HighWaterMark}|Tail], Acc) ->
+    case HighWaterMark of
+        Hwm when is_integer(Hwm), Hwm >= 0 ->
+            validate_logfile_proplist(Tail, [{high_water_mark, Hwm}|Acc]);
+        _ ->
+            throw({bad_config, "Invalid high water mark", HighWaterMark})
     end;
 validate_logfile_proplist([{date, Date}|Tail], Acc) ->
     case lager_util:parse_rotation_date_spec(Date) of
@@ -787,6 +826,10 @@ config_validation_test_() ->
         {"bad count",
             ?_assertEqual(false,
                 validate_logfile_proplist([{file, "test.log"}, {count, infinity}]))
+        },
+        {"bad high water mark",
+            ?_assertEqual(false,
+                validate_logfile_proplist([{file, "test.log"}, {high_water_mark, infinity}]))
         },
         {"bad date",
             ?_assertEqual(false,

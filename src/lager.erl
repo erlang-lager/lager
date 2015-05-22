@@ -30,7 +30,7 @@
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         name_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
-        update_loglevel_config/1, posix_error/1,
+        update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
         safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
         do_log/9, do_log/10, pr/2, pr/3]).
 
@@ -427,6 +427,18 @@ get_loglevels(Sink) ->
     [gen_event:call(Sink, Handler, get_loglevel, infinity) ||
         Handler <- gen_event:which_handlers(Sink)].
 
+%% @doc Set the loghwm for the default sink.
+set_loghwm(Handler, Hwm) when is_integer(Hwm) ->
+    set_loghwm(?DEFAULT_SINK, Handler, Hwm).
+
+%% @doc Set the loghwm for a particular backend.
+set_loghwm(Sink, Handler, Hwm) when is_integer(Hwm) ->
+    gen_event:call(Sink, Handler, {set_loghwm, Hwm}, infinity).
+
+%% @doc Set the loghwm (log high water mark) for file backends with multiple identifiers
+set_loghwm(Sink, Handler, Ident, Hwm) when is_integer(Hwm) ->
+    gen_event:call(Sink, {Handler, Ident}, {set_loghwm, Hwm}, infinity).
+
 %% @private
 add_trace_to_loglevel_config(Trace, Sink) ->
     {MinLevel, Traces} = lager_config:get({Sink, loglevel}),
@@ -529,3 +541,4 @@ is_record_known(Record, Module) ->
                     end
             end
     end.
+

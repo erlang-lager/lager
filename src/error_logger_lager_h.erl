@@ -33,15 +33,8 @@
 
 -export([format_reason/1]).
 
--record(state, {
-        %% how many messages per second we try to deliver
-        hwm = undefined :: 'undefined' | pos_integer(),
-        %% how many messages we've received this second
-        mps = 0 :: non_neg_integer(),
-        %% the current second
-        lasttime = os:timestamp() :: erlang:timestamp(),
-        %% count of dropped messages this second
-        dropped = 0 :: non_neg_integer(),
+-record(state, { 
+        shaper :: lager_shaper(),
         %% group leader strategy
         groupleader_strategy :: handle | ignore | mirror
     }).
@@ -77,30 +70,26 @@ set_high_water(N) ->
 
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
-    {ok, #state{hwm=HighWaterMark, groupleader_strategy=GlStrategy}}.
+    Shaper = #lager_shaper{hwm=HighWaterMark},
+    {ok, #state{shaper=Shaper, groupleader_strategy=GlStrategy}}.
 
-handle_call({set_high_water, N}, State) ->
-    {ok, ok, State#state{hwm = N}};
+handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
+	NewShaper = Shaper#lager_shaper{hwm=N},
+    {ok, ok, State#state{shaper = NewShaper}};
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
-handle_event(Event, #state{groupleader_strategy=GlStrategy0}=State) ->
-    case check_hwm(State) of
-        {true, NewState} when is_pid(element(2, Event)) ->
-            case element(2, Event) of
-                GL when node(GL) =/= node(), GlStrategy0 =:= ignore ->
-                    gen_event:notify({error_logger, node(GL)}, Event),
-                    {ok, State};
-                GL when node(GL) =/= node(), GlStrategy0 =:= mirror ->
-                    gen_event:notify({error_logger, node(GL)}, Event),
-                    log_event(Event, NewState);
-                _ ->
-                    log_event(Event, NewState)
-            end;
-        {true, NewState} ->
-            log_event(Event, NewState);
-        {false, NewState} ->
-            {ok, NewState}
+handle_event(Event, #state{shaper=Shaper} = State) ->
+    case lager_util:check_hwm(Shaper) of
+        {true, 0, NewShaper} ->
+            eval_gl(Event, State#state{shaper=NewShaper});
+        {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} when Drop > 0 ->
+	    ?LOGFMT(warning, self(), 
+                "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
+                [Drop, Hwm]),
+            eval_gl(Event, State#state{shaper=NewShaper});
+        {false, _, NewShaper} ->
+            {ok, State#state{shaper=NewShaper}}
     end.
 
 handle_info(_Info, State) ->
@@ -114,49 +103,19 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% internal functions
 
-check_hwm(State = #state{hwm = undefined}) ->
-    {true, State};
-check_hwm(State = #state{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
-    %% haven't hit high water mark yet, just log it
-    {true, State#state{mps=Mps+1}};
-check_hwm(State = #state{hwm = Hwm, lasttime = Last, dropped = Drop}) ->
-    %% are we still in the same second?
-    {M, S, _} = Now = os:timestamp(),
-    case Last of
-        {M, S, _} ->
-            %% still in same second, but have exceeded the high water mark
-            NewDrops = discard_messages(Now, 0),
-            {false, State#state{dropped=Drop+NewDrops}};
-        _ ->
-            %% different second, reset all counters and allow it
-            case Drop > 0 of
-                true ->
-                    ?LOGFMT(warning, self(), "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
-                        [Drop, Hwm]);
-                false ->
-                    ok
-            end,
-            {true, State#state{dropped = 0, mps=1, lasttime = Now}}
-    end.
-
-discard_messages(Second, Count) ->
-    {M, S, _} = os:timestamp(),
-    case Second of
-        {M, S, _} ->
-            receive
-                %% we only discard gen_event notifications, because
-                %% otherwise we might discard gen_event internal
-                %% messages, such as trapped EXITs
-                {notify, _Event} ->
-                    discard_messages(Second, Count+1);
-                {_From, _Tag, {sync_notify, _Event}} ->
-                    discard_messages(Second, Count+1)
-            after 0 ->
-                    Count
-            end;
-        _ ->
-            Count
-    end.
+eval_gl(Event, #state{groupleader_strategy=GlStrategy0}=State) when is_pid(element(2, Event)) ->
+    case element(2, Event) of
+         GL when node(GL) =/= node(), GlStrategy0 =:= ignore ->
+            gen_event:notify({error_logger, node(GL)}, Event),
+            {ok, State};
+         GL when node(GL) =/= node(), GlStrategy0 =:= mirror ->
+            gen_event:notify({error_logger, node(GL)}, Event),
+            log_event(Event, State);
+         _ ->
+            log_event(Event, State)
+    end;
+eval_gl(Event, State) ->
+    log_event(Event, State).
 
 log_event(Event, State) ->
     case Event of
