@@ -209,7 +209,7 @@ stop_trace(Backend, Filter, Level) ->
 stop_trace({Backend, Filter, Level}) ->
     stop_trace(Backend, Filter, Level).
 
-stop_trace_int({Backend, _Filter, _Level} = Trace) ->
+stop_trace_int({_Filter, _Level, Backend} = Trace) ->
     {Level, Traces} = lager_config:get(loglevel),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
