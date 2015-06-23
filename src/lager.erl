@@ -31,8 +31,8 @@
         name_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
-        safe_format/3, safe_format_chop/3, dispatch_log/5, dispatch_log/6, dispatch_log/9,
-        do_log/9, do_log/10, pr/2, pr/3]).
+        safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/6, dispatch_log/9,
+        do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -98,6 +98,13 @@ dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity
 
 %% @private Should only be called externally from code generated from the parse transform
 do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid) when is_atom(Severity) ->
+    %% XXX FIXME : DO NOT RELEASE
+    %% If you use the unsafe fun, make sure to underscore the _Size variable in the function head.
+    %FormatFun = fun() -> unsafe_format(Format, Args) end,
+    FormatFun = fun() -> safe_format_chop(Format, Args, Size) end,
+    do_log_impl(Severity, Metadata, Format, Args, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid, FormatFun).
+
+do_log_impl(Severity, Metadata, Format, Args, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid, FormatFun) ->
     {Destinations, TraceSinkPid} = case TraceFilters of
         [] ->
             {[], undefined};
@@ -108,7 +115,7 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
         true ->
             Msg = case Args of
                 A when is_list(A) ->
-                    safe_format_chop(Format,Args,Size);
+                    FormatFun();
                 _ ->
                     Format
             end,
@@ -129,6 +136,13 @@ do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, Tr
         false ->
             ok
     end.
+
+%% @private Should only be called externally from code generated from the parse transform
+%% Specifically, it would be level ++ `_unsafe' as in `info_unsafe'.
+do_log_unsafe(Severity, Metadata, Format, Args, _Size, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid) when is_atom(Severity) ->
+    FormatFun = fun() -> unsafe_format(Format, Args) end,
+    do_log_impl(Severity, Metadata, Format, Args, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid, FormatFun).
+
 
 %% backwards compatible with beams compiled with lager 1.x
 dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, Size) ->
@@ -485,6 +499,23 @@ safe_format(Fmt, Args, Limit, Options) ->
 %% @private
 safe_format_chop(Fmt, Args, Limit) ->
     safe_format(Fmt, Args, Limit, [{chomp, true}]).
+
+%% @private Print the format string `Fmt' with `Args' without a size limit.
+%% This is unsafe because the output of this function is unbounded.
+%%
+%% Log messages with unbounded size will kill your application dead as
+%% OTP mechanisms stuggle to cope with them.  So this function is
+%% intended <b>only</b> for messages which have a reasonable bounded
+%% size before they're formatted.
+%%
+%% If the format string is invalid or not enough arguments are
+%% supplied a 'FORMAT ERROR' message is printed instead with the
+%% offending arguments. The caller is NOT crashed.
+unsafe_format(Fmt, Args) ->
+    try io_lib:format(Fmt, Args)
+    catch
+        _:_ -> io_lib:format("FORMAT ERROR: ~p ~p", [Fmt, Args])
+    end.
 
 %% @doc Print a record lager found during parse transform
 pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
