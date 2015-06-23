@@ -89,7 +89,13 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, Module},
                     SinkName = list_to_atom(atom_to_list(Module) ++ "_event"),
                     do_transform(Line, SinkName, Function, Arguments0);
                 false ->
-                    Stmt
+                    case lists:member(Function, ?LEVELS_UNSAFE) of
+                        true ->
+                            SinkName = list_to_atom(atom_to_list(Module) ++ "_event"),
+                            do_transform(Line, SinkName, Function, Arguments0, unsafe);
+                        false ->
+                            Stmt
+                    end
             end;
         false ->
             list_to_tuple(transform_statement(tuple_to_list(Stmt), Sinks))
@@ -102,6 +108,9 @@ transform_statement(Stmt, _Sinks) ->
     Stmt.
 
 do_transform(Line, SinkName, Severity, Arguments0) ->
+    do_transform(Line, SinkName, Severity, Arguments0, safe).
+
+do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
     SeverityAsInt=lager_util:level_to_num(Severity),
     DefaultAttrs0 = {cons, Line, {tuple, Line, [
                                                 {atom, Line, module}, {atom, Line, get(module)}]},
@@ -168,6 +177,12 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
     LevelVar = make_varname("__Level", Line),
     TracesVar = make_varname("__Traces", Line),
     PidVar = make_varname("__Pid", Line),
+    LogFun = case Safety of
+                 safe ->
+                     do_log;
+                 unsafe ->
+                     do_log_unsafe
+             end,
     %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not elegible for logging
     %% See lager.erl (lines 89-100) for lager:dispatch_log/6
     %% case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
@@ -205,7 +220,7 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
                   [[{op, Line, 'orelse',
                     {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
                     {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
-                  [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, do_log}},
+                  [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, LogFun}},
                          [{atom,Line,Severity},
                           Meta,
                           Message,
