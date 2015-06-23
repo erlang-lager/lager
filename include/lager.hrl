@@ -25,7 +25,7 @@
 %% Use of these "functions" means that the argument list will not be
 %% truncated for safety
 -define(LEVELS_UNSAFE,
-    [debug_unsafe, info_unsafe, notice_unsafe, warning_unsafe, error_unsafe, critical_unsafe, alert_unsafe, emergency_unsafe]).
+    [{debug_unsafe, debug}, {info_unsafe, info}, {notice_unsafe, notice}, {warning_unsafe, warning}, {error_unsafe, error}, {critical_unsafe, critical}, {alert_unsafe, alert}, {emergency_unsafe, emergency}]).
 
 -define(DEBUG, 128).
 -define(INFO, 64).

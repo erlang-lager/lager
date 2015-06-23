@@ -89,10 +89,10 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, Module},
                     SinkName = list_to_atom(atom_to_list(Module) ++ "_event"),
                     do_transform(Line, SinkName, Function, Arguments0);
                 false ->
-                    case lists:member(Function, ?LEVELS_UNSAFE) of
-                        true ->
+                    case lists:keyfind(Function, 1, ?LEVELS_UNSAFE) of
+                        {Function, Severity} ->
                             SinkName = list_to_atom(atom_to_list(Module) ++ "_event"),
-                            do_transform(Line, SinkName, Function, Arguments0, unsafe);
+                            do_transform(Line, SinkName, Severity, Arguments0, unsafe);
                         false ->
                             Stmt
                     end
