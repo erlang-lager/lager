@@ -41,7 +41,7 @@ init([]) ->
     %% Maybe a new API to handle the sink and its policy?
     Children = [
         {lager, {gen_event, start_link, [{local, lager_event}]},
-            permanent, 5000, worker, [dynamic]},
+            permanent, 5000, worker, dynamic},
         {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
             permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
 
