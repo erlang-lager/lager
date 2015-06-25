@@ -98,9 +98,6 @@ dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity
 
 %% @private Should only be called externally from code generated from the parse transform
 do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid) when is_atom(Severity) ->
-    %% XXX FIXME : DO NOT RELEASE
-    %% If you use the unsafe fun, make sure to underscore the _Size variable in the function head.
-    %FormatFun = fun() -> unsafe_format(Format, Args) end,
     FormatFun = fun() -> safe_format_chop(Format, Args, Size) end,
     do_log_impl(Severity, Metadata, Format, Args, SeverityAsInt, LevelThreshold, TraceFilters, Sink, SinkPid, FormatFun).
 
