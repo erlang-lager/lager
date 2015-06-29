@@ -26,12 +26,13 @@
 %% API
 -export([start/0,
         log/3, log/4, log/5,
+        log_unsafe/4,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         name_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
-        safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/6, dispatch_log/9,
+        safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
         do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
@@ -83,16 +84,18 @@ md(_) ->
     erlang:error(badarg).
 
 
--spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer()) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, atom()}}.
+-spec dispatch_log(atom(), log_level(), list(), string(), list() | none, pos_integer(), safe | unsafe) ->  ok | {error, lager_not_running} | {error, {sink_not_configured, atom()}}.
 %% this is the same check that the parse transform bakes into the module at compile time
 %% see lager_transform (lines 173-216)
-dispatch_log(Sink, Severity, Metadata, Format, Args, Size) when is_atom(Severity)->
+dispatch_log(Sink, Severity, Metadata, Format, Args, Size, Safety) when is_atom(Severity)->
     SeverityAsInt=lager_util:level_to_num(Severity),
     case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
          {undefined, undefined, _} -> {error, lager_not_running};
          {undefined, _LagerEventPid0, _} -> {error, {sink_not_configured, Sink}};
-         {SinkPid, _LagerEventPid1, {Level, Traces}} when (Level band SeverityAsInt) /= 0 orelse Traces /= [] ->
+         {SinkPid, _LagerEventPid1, {Level, Traces}} when Safety =:= safe andalso ( (Level band SeverityAsInt) /= 0 orelse Traces /= [] ) ->
             do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Sink, SinkPid);
+         {SinkPid, _LagerEventPid1, {Level, Traces}} when Safety =:= unsafe andalso ( (Level band SeverityAsInt) /= 0 orelse Traces /= [] ) ->
+            do_log_unsafe(Severity, Metadata, Format, Args, Size, SeverityAsInt, Level, Traces, Sink, SinkPid);
          _ -> ok
     end.
 
@@ -147,7 +150,7 @@ dispatch_log(Severity, _Module, _Function, _Line, _Pid, Metadata, Format, Args, 
 
 %% backwards compatible with beams compiled with lager 2.x
 dispatch_log(Severity, Metadata, Format, Args, Size) ->
-    dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size).
+    dispatch_log(?DEFAULT_SINK, Severity, Metadata, Format, Args, Size, safe).
 
 %% backwards compatible with beams compiled with lager 2.x
 do_log(Severity, Metadata, Format, Args, Size, SeverityAsInt, LevelThreshold, TraceFilters, SinkPid) ->
@@ -173,12 +176,16 @@ log(Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
 log(Level, Metadata, Format, Args) when is_list(Metadata) ->
     dispatch_log(Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
 
+log_unsafe(Level, Metadata, Format, Args) when is_list(Metadata) ->
+    dispatch_log(?DEFAULT_SINK, Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION, unsafe).
+
+
 %% @doc Manually log a message into lager without using the parse transform.
 -spec log(atom(), log_level(), pid() | atom() | [tuple(),...], string(), list()) -> ok | {error, lager_not_running}.
 log(Sink, Level, Pid, Format, Args) when is_pid(Pid); is_atom(Pid) ->
-    dispatch_log(Sink, Level, [{pid,Pid}], Format, Args, ?DEFAULT_TRUNCATION);
+    dispatch_log(Sink, Level, [{pid,Pid}], Format, Args, ?DEFAULT_TRUNCATION, safe);
 log(Sink, Level, Metadata, Format, Args) when is_list(Metadata) ->
-    dispatch_log(Sink, Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION).
+    dispatch_log(Sink, Level, Metadata, Format, Args, ?DEFAULT_TRUNCATION, safe).
 
 validate_trace_filters(Filters, Level, Backend) ->
     Sink = proplists:get_value(sink, Filters, ?DEFAULT_SINK),
