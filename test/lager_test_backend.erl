@@ -168,11 +168,11 @@ lager_test_() ->
                         ?assertEqual(0, count())
                 end
             },
-        {"test sink not running",
-        fun() ->
-            ?assertEqual({error, {sink_not_configured, test}}, lager:log(test, info, self(), "~p", "not running"))
-        end
-        },
+            {"test sink not running",
+                fun() ->
+                         ?assertEqual({error, {sink_not_configured, test}}, lager:log(test, info, self(), "~p", "not running"))
+                end
+            },
             {"logging works",
                 fun() ->
                         lager:warning("test message"),
@@ -183,7 +183,27 @@ lager_test_() ->
                         ok
                 end
             },
+            {"unsafe logging works",
+                fun() ->
+                        lager:warning_unsafe("test message"),
+                        ?assertEqual(1, count()),
+                        {Level, _Time, Message, _Metadata}  = pop(),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual("test message", Message),
+                        ok
+                end
+            },
             {"logging with arguments works",
+                fun() ->
+                        lager:warning("test message ~p", [self()]),
+                        ?assertEqual(1, count()),
+                        {Level, _Time, Message,_Metadata}  = pop(),
+                        ?assertMatch(Level, lager_util:level_to_num(warning)),
+                        ?assertEqual(lists:flatten(io_lib:format("test message ~p", [self()])), lists:flatten(Message)),
+                        ok
+                end
+            },
+            {"unsafe logging with args works",
                 fun() ->
                         lager:warning("test message ~p", [self()]),
                         ?assertEqual(1, count()),
@@ -592,6 +612,13 @@ lager_test_() ->
                         ok
                 end
             },
+            {"unsafe messages really are not truncated",
+                fun() ->
+                        lager:info_unsafe("doom, doom has come upon you all ~p", [string:copies("doom", 1500)]),
+                        {_, _, Msg,_Metadata} = pop(),
+                        ?assert(length(lists:flatten(Msg)) == 6035)
+                end
+            },
             {"can't store invalid metadata",
                 fun() ->
                         ?assertEqual(ok, lager:md([{platypus, gravid}, {sloth, hirsute}, {duck, erroneous}])),
@@ -881,7 +908,6 @@ error_logger_redirect_test_() ->
                         ?assertEqual("Привет!", lists:flatten(Msg))
                 end
             },
-
             {"error messages are truncated at 4096 characters",
                 fun() ->
                         sync_error_logger:error_msg("doom, doom has come upon you all ~p", [string:copies("doom", 10000)]),
@@ -890,6 +916,7 @@ error_logger_redirect_test_() ->
                         ?assert(length(lists:flatten(Msg)) < 5100)
                 end
             },
+
             {"info reports are printed",
                 fun() ->
                         sync_error_logger:info_report([{this, is}, a, {silly, format}]),
@@ -1347,6 +1374,11 @@ error_logger_redirect_test_() ->
 safe_format_test() ->
     ?assertEqual("foo bar", lists:flatten(lager:safe_format("~p ~p", [foo, bar], 1024))),
     ?assertEqual("FORMAT ERROR: \"~p ~p ~p\" [foo,bar]", lists:flatten(lager:safe_format("~p ~p ~p", [foo, bar], 1024))),
+    ok.
+
+unsafe_format_test() ->
+    ?assertEqual("foo bar", lists:flatten(lager:unsafe_format("~p ~p", [foo, bar]))),
+    ?assertEqual("FORMAT ERROR: \"~p ~p ~p\" [foo,bar]", lists:flatten(lager:unsafe_format("~p ~p ~p", [foo, bar]))),
     ok.
 
 async_threshold_test_() ->

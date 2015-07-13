@@ -20,6 +20,7 @@ Features
 * Rewrites common OTP error messages into more readable messages
 * Support for pretty printing records encountered at compile time
 * Tolerant in the face of large or many log messages, won't out of memory the node
+* Optional feature to bypass log size truncation ("unsafe")
 * Supports internal time and date based rotation, as well as external rotation tools
 * Syslog style log level comparison flags
 * Colored terminal output (requires R16+)
@@ -262,6 +263,30 @@ related processes crash, you can set a limit:
 ```
 
 It is probably best to keep this number small.
+
+"Unsafe"
+--------
+The unsafe code pathway bypasses the normal lager formatting code and uses the
+same code as error_logger in OTP. This provides a marginal speedup to your logging
+code (we measured between 0.5-1.3% improvement during our benchmarking; others have
+reported better improvements.)
+
+This is a **dangerous** feature. It *will not* protect you against
+large log messages - large messages can kill your application and even your
+Erlang VM dead due to memory exhaustion as large terms are copied over and
+over in a failure cascade.  We strongly recommend that this code pathway
+only be used by log messages with a well bounded upper size of around 500 bytes.
+
+If there's any possibility the log messages could exceed that limit, you should
+use the normal lager message formatting code which will provide the appropriate
+size limitations and protection against memory exhaustion.
+
+If you want to format an unsafe log message, you may use the severity level (as
+usual) followed by `_unsafe`. Here's an example:
+
+```erlang
+lager:info_unsafe("The quick brown ~s jumped over the lazy ~s", ["fox", "dog"]).
+```
 
 Runtime loglevel changes
 ------------------------
