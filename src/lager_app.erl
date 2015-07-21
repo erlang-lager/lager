@@ -164,14 +164,21 @@ wrap_proplist_value(undefined) ->
 wrap_proplist_value(Value) ->
     {ok, Value}.
 
+%% The default sink has always been lager_event. Using 'lager_lager_event' is likely to break
+%% historical code and lots of tests.
+make_internal_sink_name(lager) -> ?DEFAULT_SINK;
+
+make_internal_sink_name(Sink) ->
+    list_to_atom(atom_to_list(Sink) ++ "_lager_event").
+
 configure_sink(Sink, SinkDef) ->
     lager_config:new_sink(Sink),
-    ChildId = list_to_atom(atom_to_list(Sink) ++ "_event"),
+    ChildId = make_internal_sink_name(Sink),
     _ = supervisor:start_child(lager_sup,
                                {ChildId,
                                 {gen_event, start_link,
                                  [{local, Sink}]},
-                                permanent, 5000, worker, [dynamic]}),
+                                permanent, 5000, worker, dynamic}),
     determine_async_behavior(Sink,
                              wrap_proplist_value(
                                proplists:get_value(async_threshold, SinkDef)),

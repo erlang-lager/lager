@@ -114,19 +114,19 @@ need to:
 #### Names
 
 Each sink has two names: one atom to be used like a module name for
-sending messages, and that atom with `_event` appended for backend
+sending messages, and that atom with `_lager_event` appended for backend
 configuration.
 
 This reflects the legacy behavior: `lager:info` (or `critical`, or
 `debug`, etc) is a way of sending a message to a sink named
 `lager_event`. Now developers can invoke `audit:info` or
-`myCompanyName:debug` so long as the corresponding `audit_event` or
-`myCompanyName_event` sinks are configured.
+`myCompanyName:debug` so long as the corresponding `audit_lager_event` or
+`myCompanyName_lager_event` sinks are configured.
 
 #### rebar.config
 
 In `rebar.config` for the project that requires lager, include a list
-of sink names (without the `_event` suffix) in `erl_opts`:
+of sink names (without the `_lager_event` suffix) in `erl_opts`:
 
 `{lager_extra_sinks, [audit]}`
 
@@ -155,7 +155,7 @@ will be applied on that sink.
           %% Any other sinks
           {extra_sinks,
            [
-            {audit_event,
+            {audit_lager_event,
              [{handlers,
                [{lager_file_backend,
                  [{file, "sink1.log"},

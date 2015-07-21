@@ -27,8 +27,8 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--define(TEST_SINK_NAME, '__lager_test_sink').        %% <-- used by parse transform
--define(TEST_SINK_EVENT, '__lager_test_sink_event'). %% <-- used by lager API calls and internals for gen_event
+-define(TEST_SINK_NAME, '__lager_test_sink').              %% <-- used by parse transform
+-define(TEST_SINK_EVENT, '__lager_test_sink_lager_event'). %% <-- used by lager API calls and internals for gen_event
 
 -record(state, {level :: list(), buffer :: list(), ignored :: term()}).
 -compile({parse_transform, lager_transform}).
