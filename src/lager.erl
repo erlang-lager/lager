@@ -29,7 +29,7 @@
         log_unsafe/4,
         md/0, md/1,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
-        name_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
+        list_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
         safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
@@ -295,7 +295,7 @@ stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
     end,
     ok.
 
-name_all_sinks() ->
+list_all_sinks() ->
     sets:to_list(
       lists:foldl(fun({_Watcher, _Handler, Sink}, Set) ->
                           sets:add_element(Sink, Set)
@@ -314,7 +314,7 @@ clear_traces_by_sink(Sinks) ->
 
 clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),
-    clear_traces_by_sink(name_all_sinks()),
+    clear_traces_by_sink(list_all_sinks()),
     _ = lager_util:trace_filter(none),
     lager_config:global_set(handlers,
                             lists:filter(
@@ -338,7 +338,7 @@ find_traces(Sinks) ->
 
 status() ->
     Handlers = lager_config:global_get(handlers, []),
-    Sinks = lists:sort(name_all_sinks()),
+    Sinks = lists:sort(list_all_sinks()),
     Traces = find_traces(Sinks),
     TraceCount = case length(Traces) of
         0 -> 1;
