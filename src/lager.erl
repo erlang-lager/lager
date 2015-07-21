@@ -233,7 +233,6 @@ trace_file(File, Filter, Level, Options) ->
             end,
             case Res of
               {ok, _} ->
-                %% XXX Double-check this logic for {ok, exists}
                 add_trace_to_loglevel_config(Trace, Sink),
                 {ok, {{lager_file_backend, FileName}, Filter, Level}};
               {error, _} = E ->
