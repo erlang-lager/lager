@@ -79,13 +79,6 @@ walk_body(Acc, []) ->
 walk_body(Acc, [H|T]) ->
     walk_body([transform_statement(H, get(sinks))|Acc], T).
 
-%% 'lager' is special cased because its sink has *always* been named 'lager_event'
-make_internal_sink_name(lager) -> ?DEFAULT_SINK;
-
-%% Everything else should be Sink++_lager_event
-make_internal_sink_name(Sink) ->
-    list_to_atom(atom_to_list(Sink) ++ "_lager_event").
-
 transform_statement({call, Line, {remote, _Line1, {atom, _Line2, Module},
                                   {atom, _Line3, Function}}, Arguments0} = Stmt,
                     Sinks) ->
@@ -93,12 +86,12 @@ transform_statement({call, Line, {remote, _Line1, {atom, _Line2, Module},
         true ->
             case lists:member(Function, ?LEVELS) of
                 true ->
-                    SinkName = make_internal_sink_name(Module),
+                    SinkName = lager_util:make_internal_sink_name(Module),
                     do_transform(Line, SinkName, Function, Arguments0);
                 false ->
                     case lists:keyfind(Function, 1, ?LEVELS_UNSAFE) of
                         {Function, Severity} ->
-                            SinkName = make_internal_sink_name(Module),
+                            SinkName = lager_util:make_internal_sink_name(Module),
                             do_transform(Line, SinkName, Severity, Arguments0, unsafe);
                         false ->
                             Stmt

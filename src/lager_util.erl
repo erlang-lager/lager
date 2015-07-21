@@ -23,7 +23,7 @@
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-        trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1]).
+        trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1, make_internal_sink_name/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -524,6 +524,14 @@ discard_messages(Second, Count) ->
             Count
     end.
 
+%% @private Build an atom for the gen_event process based on a sink name.
+%% For historical reasons, the default gen_event process for lager itself is named
+%% `lager_event'. For all other sinks, it is SinkName++`_lager_event'
+make_internal_sink_name(lager) ->
+    ?DEFAULT_SINK;
+make_internal_sink_name(Sink) ->
+    list_to_atom(atom_to_list(Sink) ++ "_lager_event").
+
 -ifdef(TEST).
 
 parse_test() ->
@@ -780,5 +788,11 @@ expand_path_test() ->
         {ok, Root} -> application:set_env(lager, log_root, Root)
     end,
     ok.
+
+sink_name_test_() ->
+    [
+        ?_assertEqual(lager_event, make_internal_sink_name(lager)),
+        ?_assertEqual(audit_lager_event, make_internal_sink_name(audit))
+    ].
 
 -endif.
