@@ -17,9 +17,15 @@
 
 -define(DEFAULT_TRUNCATION, 4096).
 -define(DEFAULT_TRACER, lager_default_tracer).
+-define(DEFAULT_SINK, lager_event).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
+
+%% Use of these "functions" means that the argument list will not be
+%% truncated for safety
+-define(LEVELS_UNSAFE,
+    [{debug_unsafe, debug}, {info_unsafe, info}, {notice_unsafe, notice}, {warning_unsafe, warning}, {error_unsafe, error}, {critical_unsafe, critical}, {alert_unsafe, alert}, {emergency_unsafe, emergency}]).
 
 -define(DEBUG, 128).
 -define(INFO, 64).
@@ -63,7 +69,7 @@
             Level,
             [{pid,Pid},{line,?LINE},{file,?FILE},{module,?MODULE}],
             [])}
-        )). 
+        )).
 
 %% FOR INTERNAL USE ONLY
 %% internal non-blocking logging call
@@ -100,3 +106,15 @@
     end)).
 -endif.
 
+-record(lager_shaper, {
+                  %% how many messages per second we try to deliver
+                  hwm = undefined :: 'undefined' | pos_integer(),
+                  %% how many messages we've received this second
+                  mps = 0 :: non_neg_integer(),
+                  %% the current second
+                  lasttime = os:timestamp() :: erlang:timestamp(),
+                  %% count of dropped messages this second
+                  dropped = 0 :: non_neg_integer()
+                 }).
+
+-type lager_shaper() :: #lager_shaper{}.

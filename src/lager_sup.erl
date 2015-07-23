@@ -34,9 +34,14 @@ start_link() ->
 init([]) ->
     %% set up the config, is safe even during relups
     lager_config:new(),
+    %% TODO:
+    %% Always start lager_event as the default and make sure that 
+    %% other gen_event stuff can start up as needed 
+    %%
+    %% Maybe a new API to handle the sink and its policy?
     Children = [
         {lager, {gen_event, start_link, [{local, lager_event}]},
-            permanent, 5000, worker, [dynamic]},
+            permanent, 5000, worker, dynamic},
         {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
             permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
 

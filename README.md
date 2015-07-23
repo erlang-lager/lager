@@ -16,9 +16,11 @@ Features
 * When no handler is consuming a log level (eg. debug) no event is sent
   to the log handler
 * Supports multiple backends, including console and file.
+* Supports multiple sinks
 * Rewrites common OTP error messages into more readable messages
 * Support for pretty printing records encountered at compile time
 * Tolerant in the face of large or many log messages, won't out of memory the node
+* Optional feature to bypass log size truncation ("unsafe")
 * Supports internal time and date based rotation, as well as external rotation tools
 * Syslog style log level comparison flags
 * Colored terminal output (requires R16+)
@@ -92,6 +94,84 @@ your app.config):
 The available configuration options for each backend are listed in their
 module's documentation.
 
+Sinks
+-----
+Lager has traditionally supported a single sink (implemented as a
+`gen_event` manager) named `lager_event` to which all backends were
+connected.
+
+Lager now supports extra sinks; each sink can have different
+sync/async message thresholds and different backends.
+
+### Sink configuration
+
+To use multiple sinks (beyond the built-in sink of lager and lager_event), you
+need to:
+
+1. Setup rebar.config
+2. Configure the backends in app.config
+
+#### Names
+
+Each sink has two names: one atom to be used like a module name for
+sending messages, and that atom with `_lager_event` appended for backend
+configuration.
+
+This reflects the legacy behavior: `lager:info` (or `critical`, or
+`debug`, etc) is a way of sending a message to a sink named
+`lager_event`. Now developers can invoke `audit:info` or
+`myCompanyName:debug` so long as the corresponding `audit_lager_event` or
+`myCompanyName_lager_event` sinks are configured.
+
+#### rebar.config
+
+In `rebar.config` for the project that requires lager, include a list
+of sink names (without the `_lager_event` suffix) in `erl_opts`:
+
+`{lager_extra_sinks, [audit]}`
+
+#### Runtime requirements
+
+To be useful, sinks must be configured at runtime with backends.
+
+In `app.config` for the project that requires lager, for example,
+extend the lager configuration to include an `extra_sinks` tuple with
+backends (aka "handlers") and optionally `async_threshold` and
+`async_threshold_window` values (see **Overload Protection**
+below). If async values are not configured, no overload protection
+will be applied on that sink.
+
+```erlang
+[{lager, [
+          {log_root, "/tmp"},
+
+          %% Default handlers for lager/lager_event
+          {handlers, [
+                      {lager_console_backend, info},
+                      {lager_file_backend, [{file, "error.log"}, {level, error}]},
+                      {lager_file_backend, [{file, "console.log"}, {level, info}]}
+                     ]},
+
+          %% Any other sinks
+          {extra_sinks,
+           [
+            {audit_lager_event,
+             [{handlers,
+               [{lager_file_backend,
+                 [{file, "sink1.log"},
+                  {level, info}
+                 ]
+                }]
+              },
+              {async_threshold, 500},
+              {async_threshold_window, 50}]
+            }]
+          }
+         ]
+ }
+].
+```
+
 Custom Formatting
 -----------------
 All loggers have a default formatting that can be overriden.  A formatter is any module that
@@ -113,7 +193,9 @@ Included is `lager_default_formatter`.  This provides a generic, default formatt
 
 * Any traditional iolist elements in the configuration are printed verbatim.
 * Atoms in the configuration are treated as placeholders for lager metadata and extracted from the log message.
-    * The placeholders `date`, `time`, `message`, and `severity` will always exist.
+    * The placeholders `date`, `time`, `message`, `sev` and `severity` will always exist.
+    * `sev` is an abbreviated severity which is interpreted as a capitalized single letter encoding of the severity level
+      (e.g. `'debug'` -> `$D`)
     * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node` will always exist if the parse transform is used.
     * Applications can define their own metadata placeholder.
     * A tuple of `{atom(), semi-iolist()}` allows for a fallback for
@@ -181,6 +263,30 @@ related processes crash, you can set a limit:
 ```
 
 It is probably best to keep this number small.
+
+"Unsafe"
+--------
+The unsafe code pathway bypasses the normal lager formatting code and uses the
+same code as error_logger in OTP. This provides a marginal speedup to your logging
+code (we measured between 0.5-1.3% improvement during our benchmarking; others have
+reported better improvements.)
+
+This is a **dangerous** feature. It *will not* protect you against
+large log messages - large messages can kill your application and even your
+Erlang VM dead due to memory exhaustion as large terms are copied over and
+over in a failure cascade.  We strongly recommend that this code pathway
+only be used by log messages with a well bounded upper size of around 500 bytes.
+
+If there's any possibility the log messages could exceed that limit, you should
+use the normal lager message formatting code which will provide the appropriate
+size limitations and protection against memory exhaustion.
+
+If you want to format an unsafe log message, you may use the severity level (as
+usual) followed by `_unsafe`. Here's an example:
+
+```erlang
+lager:info_unsafe("The quick brown ~s jumped over the lazy ~s", ["fox", "dog"]).
+```
 
 Runtime loglevel changes
 ------------------------
@@ -365,8 +471,8 @@ You can also specify multiple expressions in a filter, or use the `*` atom as
 a wildcard to match any message that has that attribute, regardless of its
 value.
 
-Tracing to an existing logfile is also supported, if you wanted to log
-warnings from a particular function in a particular module to the default `error.log`:
+Tracing to an existing logfile is also supported (but see **Multiple
+sink support** below):
 
 ```erlang
 lager:trace_file("log/error.log", [{module, mymodule}, {function, myfunction}], warning)
@@ -404,6 +510,30 @@ lager:trace_console([{request, '>', 117}, {request, '<', 120}])
 ```
 
 Using `=` is equivalent to the 2-tuple form.
+
+### Multiple sink support
+
+If using multiple sinks, there are limitations on tracing that you
+should be aware of.
+
+Traces are specific to a sink, which can be specified via trace
+filters:
+
+```erlang
+lager:trace_file("log/security.log", [{sink, audit}, {function, myfunction}], warning)
+```
+
+If no sink is thus specified, the default lager sink will be used.
+
+This has two ramifications:
+
+* Traces cannot intercept messages sent to a different sink.
+* Tracing to a file already opened via `lager:trace_file` will only be
+  successful if the same sink is specified.
+
+The former can be ameliorated by opening multiple traces; the latter
+can be fixed by rearchitecting lager's file backend, but this has not
+been tackled.
 
 Setting the truncation limit at compile-time
 --------------------------------------------

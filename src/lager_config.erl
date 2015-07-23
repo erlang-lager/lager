@@ -20,9 +20,16 @@
 
 -include("lager.hrl").
 
--export([new/0, get/1, get/2, set/2]).
+-export([new/0, new_sink/1, get/1, get/2, set/2,
+         global_get/1, global_get/2, global_set/2]).
 
 -define(TBL, lager_config).
+-define(GLOBAL, '_global').
+
+%% For multiple sinks, the key is now the registered event name and the old key
+%% as a tuple.
+%%
+%% {{lager_event, loglevel}, Value} instead of {loglevel, Value}
 
 new() ->
     %% set up the ETS configuration table
@@ -33,32 +40,48 @@ new() ->
         error:badarg ->
             ?INT_LOG(warning, "Table ~p already exists", [?TBL])
     end,
+    new_sink(?DEFAULT_SINK),
+    %% Need to be able to find the `lager_handler_watcher' for all handlers
+    ets:insert_new(?TBL, {{?GLOBAL, handlers}, []}),
+    ok.
+
+new_sink(Sink) ->
     %% use insert_new here so that if we're in an appup we don't mess anything up
     %%
     %% until lager is completely started, allow all messages to go through
-    ets:insert_new(?TBL, {loglevel, {element(2, lager_util:config_to_mask(debug)), []}}),
-    ok.
+    ets:insert_new(?TBL, {{Sink, loglevel}, {element(2, lager_util:config_to_mask(debug)), []}}).
+
+global_get(Key) ->
+    global_get(Key, undefined).
+
+global_get(Key, Default) ->
+    get({?GLOBAL, Key}, Default).
+
+global_set(Key, Value) ->
+    set({?GLOBAL, Key}, Value).
 
 
+get({_Sink, _Key}=FullKey) ->
+    get(FullKey, undefined);
 get(Key) ->
-    case ets:lookup(?TBL, Key) of
-        [] ->
-            undefined;
-        [{Key, Res}] ->
-            Res
-    end.
+    get({?DEFAULT_SINK, Key}, undefined).
 
-get(Key, Default) ->
-    try ?MODULE:get(Key) of
-        undefined ->
+get({Sink, Key}, Default) ->
+    try
+    case ets:lookup(?TBL, {Sink, Key}) of
+        [] ->
             Default;
-        Res ->
+        [{{Sink, Key}, Res}] ->
             Res
+    end
     catch
         _:_ ->
             Default
-    end.
+    end;
+get(Key, Default) ->
+    get({?DEFAULT_SINK, Key}, Default).
 
+set({Sink, Key}, Value) ->
+    ets:insert(?TBL, {{Sink, Key}, Value});
 set(Key, Value) ->
-    ets:insert(?TBL, {Key, Value}).
-
+    set({?DEFAULT_SINK, Key}, Value).

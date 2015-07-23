@@ -18,11 +18,12 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
+-export([levels/0, level_to_num/1, level_to_chr/1,
+        num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
         open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
         localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
         calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-        trace_filter/1, trace_filter/2, expand_path/1]).
+        trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1, make_internal_sink_name/1]).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -33,25 +34,35 @@
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency, none].
 
-level_to_num(debug)     -> ?DEBUG;
-level_to_num(info)      -> ?INFO;
-level_to_num(notice)    -> ?NOTICE;
-level_to_num(warning)   -> ?WARNING;
-level_to_num(error)     -> ?ERROR;
-level_to_num(critical)  -> ?CRITICAL;
-level_to_num(alert)     -> ?ALERT;
-level_to_num(emergency) -> ?EMERGENCY;
-level_to_num(none)      -> ?LOG_NONE.
+level_to_num(debug)      -> ?DEBUG;
+level_to_num(info)       -> ?INFO;
+level_to_num(notice)     -> ?NOTICE;
+level_to_num(warning)    -> ?WARNING;
+level_to_num(error)      -> ?ERROR;
+level_to_num(critical)   -> ?CRITICAL;
+level_to_num(alert)      -> ?ALERT;
+level_to_num(emergency)  -> ?EMERGENCY;
+level_to_num(none)       -> ?LOG_NONE.
 
-num_to_level(?DEBUG) -> debug;
-num_to_level(?INFO) -> info;
-num_to_level(?NOTICE) -> notice;
-num_to_level(?WARNING) -> warning;
-num_to_level(?ERROR) -> error;
-num_to_level(?CRITICAL) -> critical;
-num_to_level(?ALERT) -> alert;
+level_to_chr(debug)      -> $D;
+level_to_chr(info)       -> $I;
+level_to_chr(notice)     -> $N;
+level_to_chr(warning)    -> $W;
+level_to_chr(error)      -> $E;
+level_to_chr(critical)   -> $C;
+level_to_chr(alert)      -> $A;
+level_to_chr(emergency)  -> $M;
+level_to_chr(none)       -> $ .
+
+num_to_level(?DEBUG)     -> debug;
+num_to_level(?INFO)      -> info;
+num_to_level(?NOTICE)    -> notice;
+num_to_level(?WARNING)   -> warning;
+num_to_level(?ERROR)     -> error;
+num_to_level(?CRITICAL)  -> critical;
+num_to_level(?ALERT)     -> alert;
 num_to_level(?EMERGENCY) -> emergency;
-num_to_level(?LOG_NONE) -> none.
+num_to_level(?LOG_NONE)  -> none.
 
 -spec config_to_mask(atom()|string()) -> {'mask', integer()}.
 config_to_mask(Conf) ->
@@ -476,6 +487,51 @@ expand_path(RelPath) ->
             RelPath
     end.
 
+%% Log rate limit, i.e. high water mark for incoming messages
+
+check_hwm(Shaper = #lager_shaper{hwm = undefined}) ->
+    {true, 0, Shaper};
+check_hwm(Shaper = #lager_shaper{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
+    %% haven't hit high water mark yet, just log it
+    {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
+    %% are we still in the same second?
+    {M, S, _} = Now = os:timestamp(),
+    case Last of
+        {M, S, _} ->
+            %% still in same second, but have exceeded the high water mark
+            NewDrops = discard_messages(Now, 0),
+            {false, 0, Shaper#lager_shaper{dropped=Drop+NewDrops}};
+        _ ->
+            %% different second, reset all counters and allow it
+            {true, Drop, Shaper#lager_shaper{dropped = 0, mps=1, lasttime = Now}}
+    end.
+
+discard_messages(Second, Count) ->
+    {M, S, _} = os:timestamp(),
+    case Second of
+        {M, S, _} ->
+            receive
+                %% we only discard gen_event notifications, because
+                %% otherwise we might discard gen_event internal
+                %% messages, such as trapped EXITs
+                {notify, _Event} ->
+                    discard_messages(Second, Count+1)
+            after 0 ->
+                    Count
+            end;
+        _ ->
+            Count
+    end.
+
+%% @private Build an atom for the gen_event process based on a sink name.
+%% For historical reasons, the default gen_event process for lager itself is named
+%% `lager_event'. For all other sinks, it is SinkName++`_lager_event'
+make_internal_sink_name(lager) ->
+    ?DEFAULT_SINK;
+make_internal_sink_name(Sink) ->
+    list_to_atom(atom_to_list(Sink) ++ "_lager_event").
+
 -ifdef(TEST).
 
 parse_test() ->
@@ -732,5 +788,11 @@ expand_path_test() ->
         {ok, Root} -> application:set_env(lager, log_root, Root)
     end,
     ok.
+
+sink_name_test_() ->
+    [
+        ?_assertEqual(lager_event, make_internal_sink_name(lager)),
+        ?_assertEqual(audit_lager_event, make_internal_sink_name(audit))
+    ].
 
 -endif.

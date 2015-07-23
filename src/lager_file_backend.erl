@@ -63,6 +63,7 @@
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
+        shaper :: lager_shaper(),
         formatter :: atom(),
         formatter_config :: any(),
         sync_on :: {'mask', integer()},
@@ -74,7 +75,8 @@
 
 -type option() :: {file, string()} | {level, lager:log_level()} |
                   {size, non_neg_integer()} | {date, string()} |
-                  {count, non_neg_integer()} | {sync_interval, non_neg_integer()} |
+                  {count, non_neg_integer()} | {high_water_mark, non_neg_integer()} |
+                  {sync_interval, non_neg_integer()} |
                   {sync_size, non_neg_integer()} | {sync_on, lager:log_level()} |
                   {check_interval, non_neg_integer()} | {formatter, atom()} |
                   {formatter_config, term()}.
@@ -102,11 +104,12 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
             {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever
-            [RelName, Level, Date, Size, Count, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
-              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
+            [RelName, Level, Date, Size, Count, HighWaterMark, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
+              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, high_water_mark, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
             Name = lager_util:expand_path(RelName),
             schedule_rotation(Name, Date),
-            State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, formatter=Formatter,
+            Shaper = #lager_shaper{hwm=HighWaterMark},
+            State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, shaper=Shaper, formatter=Formatter,
                 formatter_config=FormatterConfig, sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize,
                 check_interval=CheckInterval},
             State = case lager_util:open_logfile(Name, {SyncSize, SyncInterval}) of
@@ -130,15 +133,42 @@ handle_call({set_loglevel, Level}, #state{name=Ident} = State) ->
     end;
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
+handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
+    case validate_logfile_proplist([{file, Name}, {high_water_mark, Hwm}]) of
+        false ->
+            {ok, {error, bad_log_hwm}, State};
+        _ ->
+            NewShaper = Shaper#lager_shaper{hwm=Hwm},
+            ?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
+            {ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
+    end;
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
 %% @private
 handle_event({log, Message},
-    #state{name=Name, level=L,formatter=Formatter,formatter_config=FormatConfig} = State) ->
+    #state{name=Name, level=L, shaper=Shaper, formatter=Formatter,formatter_config=FormatConfig} = State) ->
     case lager_util:is_loggable(Message,L,{lager_file_backend, Name}) of
         true ->
-            {ok,write(State, lager_msg:timestamp(Message), lager_msg:severity_as_int(Message), Formatter:format(Message,FormatConfig)) };
+            case lager_util:check_hwm(Shaper) of
+                {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} ->
+                    NewState = case Drop > 0 of
+                        true ->
+                            Report = io_lib:format(
+                                "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
+                                [Drop, Hwm]),
+                            ReportMsg = lager_msg:new(Report, warning, [], []),
+                            write(State, lager_msg:timestamp(ReportMsg),
+                                lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig));
+                        false ->
+                            State
+                    end,
+                    {ok,write(NewState#state{shaper=NewShaper},
+                        lager_msg:timestamp(Message), lager_msg:severity_as_int(Message),
+                        Formatter:format(Message,FormatConfig))};
+                {false, _, NewShaper} ->
+                    {ok, State#state{shaper=NewShaper}}
+            end;
         false ->
             {ok, State}
     end;
@@ -164,7 +194,7 @@ terminate(_Reason, #state{fd=FD}) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% @private convert the config into a gen_event handler ID
+%% Convert the config into a gen_event handler ID
 config_to_id({Name,_Severity}) when is_list(Name) ->
     {?MODULE, Name};
 config_to_id({Name,_Severity,_Size,_Rotation,_Count}) ->
@@ -237,7 +267,7 @@ do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
                     Flap
             end,
             State#state{flap=Flap2};
-        _ -> 
+        _ ->
             State
     end.
 
@@ -300,6 +330,13 @@ validate_logfile_proplist([{count, Count}|Tail], Acc) ->
             validate_logfile_proplist(Tail, [{count, Count}|Acc]);
         _ ->
             throw({bad_config, "Invalid rotation count", Count})
+    end;
+validate_logfile_proplist([{high_water_mark, HighWaterMark}|Tail], Acc) ->
+    case HighWaterMark of
+        Hwm when is_integer(Hwm), Hwm >= 0 ->
+            validate_logfile_proplist(Tail, [{high_water_mark, Hwm}|Acc]);
+        _ ->
+            throw({bad_config, "Invalid high water mark", HighWaterMark})
     end;
 validate_logfile_proplist([{date, Date}|Tail], Acc) ->
     case lager_util:parse_rotation_date_spec(Date) of
@@ -666,8 +703,8 @@ filesystem_test_() ->
                             {"test.log", critical}),
                         lager:error("Test message"),
                         ?assertEqual({ok, <<>>}, file:read_file("test.log")),
-                        {Level, _} = lager_config:get(loglevel),
-                        lager_config:set(loglevel, {Level, [{[{module,
+                        {Level, _} = lager_config:get({lager_event, loglevel}),
+                        lager_config:set({lager_event, loglevel}, {Level, [{[{module,
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:error("Test message"),
@@ -684,8 +721,8 @@ filesystem_test_() ->
                         {ok, Bin1} = file:read_file("test.log"),
                         ?assertMatch([_, _, "[critical]", _, "Test message\n"], re:split(Bin1, " ", [{return, list}, {parts, 5}])),
                         ok = file:delete("test.log"),
-                        {Level, _} = lager_config:get(loglevel),
-                        lager_config:set(loglevel, {Level, [{[{module,
+                        {Level, _} = lager_config:get({lager_event, loglevel}),
+                        lager_config:set({lager_event, loglevel}, {Level, [{[{module,
                                                 ?MODULE}], ?DEBUG,
                                         {lager_file_backend, "test.log"}}]}),
                         lager:critical("Test message"),
@@ -708,12 +745,31 @@ filesystem_test_() ->
                         ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
                 end
             },
+            {"tracing to a dedicated file should work even if root_log is set",
+                fun() ->
+                        {ok, P} = file:get_cwd(),
+                        file:delete(P ++ "/test_root_log/foo.log"),
+                        application:set_env(lager, log_root, P++"/test_root_log"),
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}]),
+                        lager:error("Test message"),
+                        %% not elegible for trace
+                        lager:log(error, self(), "Test message"),
+                        {ok, Bin3} = file:read_file(P++"/test_root_log/foo.log"),
+                        application:unset_env(lager, log_root),
+                        ?assertMatch([_, _, "[error]", _, "Test message\n"], re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+                end
+            },
             {"tracing with options should work",
                 fun() ->
                         file:delete("foo.log"),
-                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]), 
+                        {ok, _} = lager:trace_file("foo.log", [{module, ?MODULE}], [{size, 20}, {check_interval, 1}]),
                         lager:error("Test message"),
                         ?assertNot(filelib:is_regular("foo.log.0")),
+                        %% rotation is sensitive to intervals between
+                        %% writes so we sleep to exceed the 1
+                        %% millisecond interval specified by
+                        %% check_interval above
+                        timer:sleep(2),
                         lager:error("Test message"),
                         timer:sleep(10),
                         ?assert(filelib:is_regular("foo.log.0"))
@@ -769,6 +825,10 @@ config_validation_test_() ->
             ?_assertEqual(false,
                 validate_logfile_proplist([{file, "test.log"}, {count, infinity}]))
         },
+        {"bad high water mark",
+            ?_assertEqual(false,
+                validate_logfile_proplist([{file, "test.log"}, {high_water_mark, infinity}]))
+        },
         {"bad date",
             ?_assertEqual(false,
                 validate_logfile_proplist([{file, "test.log"}, {date, "midnight"}]))
@@ -809,4 +869,3 @@ config_validation_test_() ->
 
 
 -endif.
-

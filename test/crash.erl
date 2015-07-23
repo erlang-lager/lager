@@ -10,8 +10,8 @@
 -export([start/0]).
 
 -record(state, {
-        host,
-        port
+        host :: term(),
+        port :: term()
     }).
 
 start() ->
