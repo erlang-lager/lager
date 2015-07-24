@@ -1,6 +1,6 @@
 -module(lager_msg).
 
--export([new/4, new/5]).
+-export([new/4, new/5, new/6]).
 -export([message/1]).
 -export([timestamp/1]).
 -export([datetime/1]).
@@ -8,6 +8,7 @@
 -export([severity_as_int/1]).
 -export([metadata/1]).
 -export([destinations/1]).
+-export([format_and_args/1]).
 
 -record(lager_msg,{
         destinations :: list(),
@@ -15,7 +16,9 @@
         severity :: lager:log_level(),
         datetime :: {string(), string()},
         timestamp :: erlang:timestamp(),
-        message :: list()
+        message :: list(),
+        msg_format :: list(),
+        msg_args :: list()
     }).
 
 -opaque lager_msg() :: #lager_msg{}.
@@ -32,6 +35,13 @@ new(Msg, Timestamp, Severity, Metadata, Destinations) ->
 new(Msg, Severity, Metadata, Destinations) ->
     Now = os:timestamp(),
     new(Msg, Now, Severity, Metadata, Destinations).
+
+-spec new(list(), lager:log_level(), [tuple()], list(), list(), list()) -> lager_msg().
+new(Msg, Severity, Metadata, Destinations, Format, Args) ->
+  Timestamp = os:timestamp(),
+  {Date, Time} = lager_util:format_time(lager_util:maybe_utc(lager_util:localtime_ms(Timestamp))),
+  #lager_msg{message=Msg, datetime={Date, Time}, timestamp=Timestamp, severity=Severity,
+  metadata=Metadata, destinations=Destinations, msg_format = Format, msg_args = Args}.
 
 -spec message(lager_msg()) -> list().
 message(Msg) ->
@@ -61,4 +71,7 @@ metadata(Msg) ->
 destinations(Msg) ->
     Msg#lager_msg.destinations.
 
+-spec format_and_args(lager_msg()) -> {list(), list()}.
+format_and_args(Msg) ->
+  {Msg#lager_msg.msg_format, Msg#lager_msg.msg_args}.
 
