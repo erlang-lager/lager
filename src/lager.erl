@@ -469,6 +469,10 @@ add_trace_to_loglevel_config(Trace, Sink) ->
     end.
 
 %% @doc recalculate min log level
+update_loglevel_config(error_logger) ->
+    %% Not a sink under our control, part of the Erlang logging
+    %% utility that error_logger_lager_h attaches to
+    true;
 update_loglevel_config(Sink) ->
     {_, Traces} = lager_config:get({Sink, loglevel}, {ignore_me, []}),
     MinLog = minimum_loglevel(get_loglevels(Sink)),
