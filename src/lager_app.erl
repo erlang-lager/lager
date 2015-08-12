@@ -195,7 +195,7 @@ get_env(Application, Key, Default) ->
 
 get_env_default(undefined, Default) ->
     Default;
-get_env_default(Value, _Default) ->
+get_env_default({ok, Value}, _Default) ->
     Value.
 
 start(_StartType, _StartArgs) ->
