@@ -188,6 +188,16 @@ configure_extra_sinks(Sinks) ->
     lists:foreach(fun({Sink, Proplist}) -> configure_sink(Sink, Proplist) end,
                   Sinks).
 
+%% R15 doesn't know about application:get_env/3
+get_env(Application, Key, Default) ->
+    get_env_default(application:get_env(Application, Key),
+                    Default).
+
+get_env_default(undefined, Default) ->
+    Default;
+get_env_default(Value, _Default) ->
+    Value.
+
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
 
@@ -196,7 +206,7 @@ start(_StartType, _StartArgs) ->
                              application:get_env(lager, async_threshold),
                              application:get_env(lager, async_threshold_window)),
     start_handlers(?DEFAULT_SINK,
-                   application:get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
+                   get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
 
     ok = add_configured_traces(),
 
@@ -211,7 +221,7 @@ start(_StartType, _StartArgs) ->
     _ = lager_util:trace_filter(none),
 
     %% Now handle extra sinks
-    configure_extra_sinks(application:get_env(lager, extra_sinks, [])),
+    configure_extra_sinks(get_env(lager, extra_sinks, [])),
 
     clean_up_config_checks(),
 
