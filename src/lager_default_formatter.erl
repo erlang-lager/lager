@@ -89,6 +89,11 @@ output(severity,Msg) ->
 output(sev,Msg) ->
     %% Write brief acronym for the severity level (e.g. debug -> $D)
     [lager_util:level_to_chr(lager_msg:severity(Msg))];
+output(metadata, Msg) ->
+    output({metadata, "=", " "}, Msg);
+output({metadata, IntSep, FieldSep}, Msg) ->
+    MD = lists:keysort(1, lager_msg:metadata(Msg)),
+    string:join([io_lib:format("~s~s~p", [K, IntSep, V]) || {K, V} <- MD], FieldSep);
 output(Prop,Msg) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
     make_printable(get_metadata(Prop,Metadata,<<"Undefined">>));
@@ -235,6 +240,26 @@ basic_test_() ->
                             [],
                             []),
                         [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}]
+                    )))
+        },
+        {"Metadata can be printed in its enterity",
+            ?_assertEqual(iolist_to_binary(["bar=2 baz=3 foo=1"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{foo, 1}, {bar, 2}, {baz, 3}],
+                            []),
+                        [metadata]
+                    )))
+        },
+        {"Metadata can be printed in its enterity with custom seperators",
+            ?_assertEqual(iolist_to_binary(["bar->2, baz->3, foo->1"]),
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{foo, 1}, {bar, 2}, {baz, 3}],
+                            []),
+                        [{metadata, "->", ", "}]
                     )))
         }
     ].
