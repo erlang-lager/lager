@@ -172,7 +172,7 @@ basic_test_() ->
                         [date, " ", time," [",severity,"] ",pid, " ", message, "\n"]
                     )))
         },
-        {"Non existant metadata can default to string",
+        {"Non existent metadata can default to string",
             ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                             Now,
@@ -182,7 +182,7 @@ basic_test_() ->
                         [date, " ", time," [",severity,"] ",{does_not_exist,"Fallback"}, " ", message, "\n"]
                     )))
         },
-        {"Non existant metadata can default to other metadata",
+        {"Non existent metadata can default to other metadata",
             ?_assertEqual(iolist_to_binary([Date, " ", Time, " [error] Fallback Message\n"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                             Now,
@@ -192,7 +192,7 @@ basic_test_() ->
                         [date, " ", time," [",severity,"] ",{does_not_exist,pid}, " ", message, "\n"]
                     )))
         },
-        {"Non existant metadata can default to a string2",
+        {"Non existent metadata can default to a string2",
             ?_assertEqual(iolist_to_binary(["Unknown Pid"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                             Now,
