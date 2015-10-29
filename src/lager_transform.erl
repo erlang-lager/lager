@@ -172,7 +172,7 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                                        [Attrs, Format, Args] ->
                                            {concat_lists(Attrs, DefaultAttrs), Format, Args}
                                    end,
-    %% Generate some unique variable names so we don't accidentaly export from case clauses.
+    %% Generate some unique variable names so we don't accidentally export from case clauses.
     %% Note that these are not actual atoms, but the AST treats variable names as atoms.
     LevelVar = make_varname("__Level", Line),
     TracesVar = make_varname("__Traces", Line),

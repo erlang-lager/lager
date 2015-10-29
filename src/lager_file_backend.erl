@@ -83,19 +83,19 @@
 
 -spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
-    %% backwards compatability hack
+    %% backwards compatibility hack
     init([{file, FileName}, {level, LogLevel}]);
 init({FileName, LogLevel, Size, Date, Count}) when is_list(FileName), is_atom(LogLevel) ->
-    %% backwards compatability hack
+    %% backwards compatibility hack
     init([{file, FileName}, {level, LogLevel}, {size, Size}, {date, Date}, {count, Count}]);
 init([{FileName, LogLevel, Size, Date, Count}, {Formatter,FormatterConfig}]) when is_list(FileName), is_atom(LogLevel), is_atom(Formatter) ->
-    %% backwards compatability hack
+    %% backwards compatibility hack
     init([{file, FileName}, {level, LogLevel}, {size, Size}, {date, Date}, {count, Count}, {formatter, Formatter}, {formatter_config, FormatterConfig}]);
 init([LogFile,{Formatter}]) ->
-    %% backwards compatability hack
+    %% backwards compatibility hack
     init([LogFile,{Formatter,[]}]);
 init([{FileName, LogLevel}, {Formatter,FormatterConfig}]) when is_list(FileName), is_atom(LogLevel), is_atom(Formatter) ->
-    %% backwards compatability hack
+    %% backwards compatibility hack
     init([{file, FileName}, {level, LogLevel}, {formatter, Formatter}, {formatter_config, FormatterConfig}]);
 init(LogFileConfig) when is_list(LogFileConfig) ->
     case validate_logfile_proplist(LogFileConfig) of
