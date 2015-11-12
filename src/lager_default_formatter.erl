@@ -320,7 +320,7 @@ basic_test_() ->
                         [{metadata, "->", ", "}]
                     )))
         },
-        {"Metadata can have extra formatting with weidth1",
+        {"Metadata can have extra formatting with width 1",
             ?_assertEqual(iolist_to_binary(["(hello     )"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
@@ -330,7 +330,7 @@ basic_test_() ->
                     ["(",{pid, [pid], "", 10},")"]
                 )))
         },
-        {"Metadata can have extra formatting with weidth2",
+        {"Metadata can have extra formatting with width 2",
             ?_assertEqual(iolist_to_binary(["(hello     )"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
@@ -340,7 +340,7 @@ basic_test_() ->
                     ["(",{pid, [pid], "", {left,10}},")"]
                 )))
         },
-        {"Metadata can have extra formatting with weidth3",
+        {"Metadata can have extra formatting with width 3",
             ?_assertEqual(iolist_to_binary(["(     hello)"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
@@ -350,7 +350,7 @@ basic_test_() ->
                     ["(",{pid, [pid], "", {right,10}},")"]
                 )))
         },
-        {"Metadata can have extra formatting with weidth4",
+        {"Metadata can have extra formatting with width 4",
             ?_assertEqual(iolist_to_binary(["(  hello   )"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
@@ -360,7 +360,7 @@ basic_test_() ->
                     ["(",{pid, [pid], "", {centre,10}},")"]
                 )))
         },
-        {"Metadata can have extra formatting with weidth5",
+        {"Metadata can have extra formatting with width 5",
             ?_assertEqual(iolist_to_binary(["error     |hello     ! (  hello   )"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
@@ -370,7 +370,7 @@ basic_test_() ->
                     [{x,"",[severity,{blank,"|"},pid], 10},"!",blank,"(",{pid, [pid], "", {centre,10}},")"]
                 )))
         },
-        {"Metadata can have extra formatting with weidth6",
+        {"Metadata can have extra formatting with width 6",
             ?_assertEqual(iolist_to_binary([Time,Date," bar=2 baz=3 foo=1 pid=hello EMessage"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
