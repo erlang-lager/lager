@@ -181,7 +181,7 @@ make_printable(A,{Align,W}) when is_integer(W) ->
             string:left(make_printable(A),W)
     end;
 
-make_printable(A,_W) -> string:right(make_printable(A)).
+make_printable(A,_W) -> make_printable(A).
 
 get_metadata(Key, Metadata) ->
     get_metadata(Key, Metadata, undefined).
@@ -321,13 +321,17 @@ basic_test_() ->
                     )))
         },
         {"Metadata can have extra formatting with width 1",
-            ?_assertEqual(iolist_to_binary(["(hello     )"]),
+            ?_assertEqual(iolist_to_binary(["(hello     )(hello     )(hello)(hello)(hello)"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                     Now,
                     error,
                     [{pid, hello}],
                     []),
-                    ["(",{pid, [pid], "", 10},")"]
+                    ["(",{pid, [pid], "", 10},")",
+                        "(",{pid, [pid], "", {bad_align,10}},")",
+                        "(",{pid, [pid], "", bad10},")",
+                        "(",{pid, [pid], "", {right,bad20}},")",
+                        "(",{pid, [pid], "", {bad_align,bad20}},")"]
                 )))
         },
         {"Metadata can have extra formatting with width 2",
