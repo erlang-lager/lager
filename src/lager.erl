@@ -580,6 +580,15 @@ is_record_known(Record, Module) ->
             end
     end.
 
+integer_to_binary(Integer) ->
+    case
+        erlang:is_builtin(erlang, integer_to_binary, 1)
+    of
+        true -> apply(erlang, integer_to_binary, 1);
+        % backward compatibility for old OTP versions
+        false -> list_to_binary(integer_to_list(Integer))
+    end.
+
 %% @doc Print stacktrace in human readable form
 pr_stacktrace([]) ->
     <<"">>;
