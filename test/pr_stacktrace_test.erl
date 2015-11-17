@@ -4,23 +4,52 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-foo() ->
-    throw(test).
+make_throw() ->
+    throw({test, exception}).
 
-pr_stacktrace_test() ->
+bad_arity() ->
+    lists:concat([], []).
+
+bad_arg() ->
+    integer_to_list(1.0).
+
+pr_stacktrace_throw_test() ->
     Result = try
-        foo()
+        make_throw()
     catch
-        _Class:_Error ->
-            Stacktrace = lists:reverse(erlang:get_stacktrace()),
-            lager:pr_stacktrace(Stacktrace)
+        Class:Reason ->
+            lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})
     end,
-ExpectedPart = <<"
-    fun pr_stacktrace_test:pr_stacktrace_test/0
-        file \"test/pr_stacktrace_test.erl\"
-        line 12
-    fun pr_stacktrace_test:foo/0
-        file \"test/pr_stacktrace_test.erl\"
-        line 8">>,
+ExpectedPart = "
+    pr_stacktrace_test:pr_stacktrace_throw_test/0 line 18
+    pr_stacktrace_test:make_throw/0 line 8
+throw:{test,exception}",
+    ?assertNotEqual(0, string:str(Result, ExpectedPart)).
 
-    ?assertNotEqual(nomatch, binary:match(Result, ExpectedPart, [])).
+
+pr_stacktrace_bad_arg_test() ->
+    Result = try
+        bad_arg()
+    catch
+        Class:Reason ->
+            lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})
+    end,
+ExpectedPart = "
+    pr_stacktrace_test:pr_stacktrace_bad_arg_test/0 line 32
+    pr_stacktrace_test:bad_arg/0 line 14
+error:badarg",
+    ?assertNotEqual(0, string:str(Result, ExpectedPart)).
+
+
+pr_stacktrace_bad_arity_test() ->
+    Result = try
+        bad_arity()
+    catch
+        Class:Reason ->
+            lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})
+    end,
+ExpectedPart = "
+    pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 46
+    lists:concat([], [])
+error:undef",
+    ?assertNotEqual(0, string:str(Result, ExpectedPart)).

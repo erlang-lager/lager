@@ -33,7 +33,7 @@
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
         safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
-        do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3, pr_stacktrace/1]).
+        do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3, pr_stacktrace/1, pr_stacktrace/2]).
 
 -type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -580,55 +580,17 @@ is_record_known(Record, Module) ->
             end
     end.
 
-integer_to_binary(Integer) ->
-    case
-        erlang:is_builtin(erlang, integer_to_binary, 1)
-    of
-        true -> apply(erlang, integer_to_binary, 1);
-        % backward compatibility for old OTP versions
-        false -> list_to_binary(integer_to_list(Integer))
-    end.
 
 %% @doc Print stacktrace in human readable form
-pr_stacktrace([]) ->
-    <<"">>;
-pr_stacktrace([Entry|Stacktrace]) ->
-    Indent = <<"    ">>,
-    {Mod, Func, ArityOrArgs, Location} = Entry,
+pr_stacktrace(Stacktrace) ->
+    Indent = "\n    ",
+    lists:foldl(
+        fun(Entry, Acc) ->
+            Acc ++ Indent ++ error_logger_lager_h:format_mfa(Entry)
+        end,
+        [],
+        lists:reverse(Stacktrace)).
 
-    BinMod = atom_to_binary(Mod, utf8),
-    BinFunc = atom_to_binary(Func, utf8),
-
-    {Arity, Args} = case ArityOrArgs of
-        A when is_integer(A) -> {A, []};
-        _ ->
-            {length(ArityOrArgs), ArityOrArgs}
-    end,
-    BinArity = integer_to_binary(Arity),
-    FunSpec = <<"fun ", BinMod/binary, ":", BinFunc/binary, "/", BinArity/binary>>,
-
-    BinArgs = case Args of
-        [] -> <<"">>;
-        _ ->
-            BArgs = binary:replace(
-                list_to_binary(io_lib:format("~p", [Args])),
-                <<"\n">>, <<"">>, [global]),
-            <<"\n", Indent/binary, Indent/binary, "args ", BArgs/binary>>
-    end,
-
-    BinLocation = case Location of
-        [{file, File}, {line, Line}] ->
-            BLine = integer_to_binary(Line),
-            BFile = list_to_binary(File),
-            <<
-                "\n", Indent/binary, Indent/binary, "file \"", BFile/binary, "\"",
-                "\n", Indent/binary, Indent/binary, "line ", BLine/binary>>;
-        [] -> <<"">>
-    end,
-
-    Output = <<
-        "\n", Indent/binary, FunSpec/binary,
-            BinArgs/binary,
-            BinLocation/binary>>,
-    Rest = pr_stacktrace(Stacktrace),
-    <<Output/binary, Rest/binary>>.
+pr_stacktrace(Stacktrace, {Class, Reason}) ->
+    lists:flatten(
+        pr_stacktrace(Stacktrace) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason])).

@@ -31,7 +31,7 @@
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([format_reason/1]).
+-export([format_reason/1, format_mfa/1, format_args/3]).
 
 -record(state, { 
         shaper :: lager_shaper(),

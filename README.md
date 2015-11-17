@@ -399,9 +399,10 @@ Exception Pretty Printing
 try
     foo()
 catch
-    Class:Error ->
-        Stacktrace = lists:reverse(erlang:get_stacktrace()),
-        lager:error("~nStacktrace:~s~n~s:~p", [lager:pr_stacktrace(Stacktrace), Class, Error])
+    Class:Reason ->
+        lager:error(
+            "~nStacktrace:~s",
+            [lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})])
 end.
 ```
 
