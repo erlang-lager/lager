@@ -392,6 +392,20 @@ Lager 2.0 changed the backend API, there are various 3rd party backends for
 lager available, but they may not have been updated to the new API. As they
 are updated, links to them can be re-added here.
 
+Exception Pretty Printing
+----------------------
+
+```erlang
+try
+    foo()
+catch
+    Class:Reason ->
+        lager:error(
+            "~nStacktrace:~s",
+            [lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})])
+end.
+```
+
 Record Pretty Printing
 ----------------------
 Lager's parse transform will keep track of any record definitions it encounters
