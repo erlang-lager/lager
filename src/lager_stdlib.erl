@@ -39,7 +39,7 @@ string_p([]) ->
 string_p(Term) ->
     string_p1(Term).
 
-string_p1([H|T]) when is_integer(H), H >= $\s, H < 255 ->
+string_p1([H|T]) when is_integer(H), H >= $\s, H < 256 ->
     string_p1(T);
 string_p1([$\n|T]) -> string_p1(T);
 string_p1([$\r|T]) -> string_p1(T);
