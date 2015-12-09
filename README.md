@@ -231,6 +231,23 @@ application variable. If set to `undefined` it is not written at all.
 Messages in the crash log are subject to a maximum message size which can be
 specified via the `crash_log_msg_size` application variable.
 
+Messages from `error_logger` will be redirected to `error_logger_lager_event` sink
+if it is defined so it can be redirected to another log file.
+For example:
+
+```
+[{lager, [
+         {extra_sinks,
+          [
+           {error_logger_lager_event, 
+            [{handlers, [
+              {lager_file_backend, [{file, "error_logger.log"}, {level, info}]}]
+              }]
+           }]
+           }]
+}].
+```
+Will send all `error_logger` messages to `error_logger.log` file.
 Overload Protection
 -------------------
 
