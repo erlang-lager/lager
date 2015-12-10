@@ -41,7 +41,7 @@
     }).
 
 -define(LOGMSG(Sink, Level, Pid, Msg),
-    case ?SHOULD_LOG(Level) of
+    case ?SHOULD_LOG(Sink, Level) of
         true ->
             _ =lager:log(Sink, Level, Pid, Msg, []),
             ok;
@@ -49,7 +49,7 @@
     end).
 
 -define(LOGFMT(Sink, Level, Pid, Fmt, Args),
-    case ?SHOULD_LOG(Level) of
+    case ?SHOULD_LOG(Sink, Level) of
         true ->
             _ = lager:log(Sink, Level, Pid, Fmt, Args),
             ok;

@@ -63,6 +63,9 @@
         ?EMERGENCY -> emergency
     end).
 
+-define(SHOULD_LOG(Sink, Level),
+    (lager_util:level_to_num(Level) band element(1, lager_config:get({Sink, loglevel}, {?LOG_NONE, []}))) /= 0).
+
 -define(SHOULD_LOG(Level),
     (lager_util:level_to_num(Level) band element(1, lager_config:get(loglevel, {?LOG_NONE, []}))) /= 0).
 
