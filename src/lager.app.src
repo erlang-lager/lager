@@ -47,6 +47,8 @@
             {error_logger_redirect, true},
             %% How many messages per second to allow from error_logger before we start dropping them
             {error_logger_hwm, 50},
+            %% Whether to reformat OTP and Cowboy messages, or use format from event
+            {error_logger_format_raw, false},
             %% How big the gen_event mailbox can get before it is
             %% switched into sync mode.  This value only applies to
             %% the default sink; extra sinks can supply their own.

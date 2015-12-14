@@ -130,26 +130,27 @@ eval_gl(Event, State) ->
 log_event(Event, #state{sink=Sink} = State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
+            FormatRaw = application:get_env(lager, error_logger_format_raw, false),
             case Fmt of
-                "** Generic server "++_ ->
+                {false, "** Generic server "++_} ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
-                "** State machine "++_ ->
+                {false, "** State machine "++_} ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
-                "** gen_event handler"++_ ->
+                {false, "** gen_event handler"++_} ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
-                "** Cowboy handler"++_ ->
+                {false, "** Cowboy handler"++_} ->
                     %% Cowboy HTTP server error
                     ?CRASH_LOG(Event),
                     case Args of
@@ -165,7 +166,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                 "Cowboy handler ~p terminated in ~p:~p/~p with reason: ~s",
                                 [Module, Module, Function, Arity, format_reason({Reason, StackTrace})])
                     end;
-                "Ranch listener "++_ ->
+                {false, "Ranch listener "++_} ->
                     %% Ranch errors
                     ?CRASH_LOG(Event),
                     case Args of
@@ -178,7 +179,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                 "Ranch listener ~p terminated with reason: ~s",
                                 [Ref, format_reason(Reason)])
                     end;
-                "webmachine error"++_ ->
+                {false, "webmachine error"++_} ->
                     %% Webmachine HTTP server error
                     ?CRASH_LOG(Event),
                     [Path, Error] = Args,
