@@ -131,7 +131,7 @@ log_event(Event, #state{sink=Sink} = State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
             FormatRaw = application:get_env(lager, error_logger_format_raw, false),
-            case Fmt of
+            case {FormatRaw, Fmt} of
                 {false, "** Generic server "++_} ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
