@@ -34,23 +34,24 @@
 -export([format_reason/1, format_mfa/1, format_args/3]).
 
 -record(state, { 
+        sink :: atom(),
         shaper :: lager_shaper(),
         %% group leader strategy
         groupleader_strategy :: handle | ignore | mirror
     }).
 
--define(LOGMSG(Level, Pid, Msg),
-    case ?SHOULD_LOG(Level) of
+-define(LOGMSG(Sink, Level, Pid, Msg),
+    case ?SHOULD_LOG(Sink, Level) of
         true ->
-            _ =lager:log(Level, Pid, Msg),
+            _ =lager:log(Sink, Level, Pid, Msg, []),
             ok;
         _ -> ok
     end).
 
--define(LOGFMT(Level, Pid, Fmt, Args),
-    case ?SHOULD_LOG(Level) of
+-define(LOGFMT(Sink, Level, Pid, Fmt, Args),
+    case ?SHOULD_LOG(Sink, Level) of
         true ->
-            _ = lager:log(Level, Pid, Fmt, Args),
+            _ = lager:log(Sink, Level, Pid, Fmt, Args),
             ok;
         _ -> ok
     end).
@@ -71,7 +72,8 @@ set_high_water(N) ->
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
     Shaper = #lager_shaper{hwm=HighWaterMark},
-    {ok, #state{shaper=Shaper, groupleader_strategy=GlStrategy}}.
+    Sink = configured_sink(),
+    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy}}.
 
 handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
     NewShaper = Shaper#lager_shaper{hwm=N},
@@ -79,12 +81,12 @@ handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
-handle_event(Event, #state{shaper=Shaper} = State) ->
+handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
     case lager_util:check_hwm(Shaper) of
         {true, 0, NewShaper} ->
             eval_gl(Event, State#state{shaper=NewShaper});
         {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} when Drop > 0 ->
-            ?LOGFMT(warning, self(), 
+            ?LOGFMT(Sink, warning, self(), 
                 "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
                 [Drop, Hwm]),
             eval_gl(Event, State#state{shaper=NewShaper});
@@ -98,10 +100,18 @@ handle_info(_Info, State) ->
 terminate(_Reason, _State) ->
     ok.
 
+code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
+    {ok, #state{sink=configured_sink(), shaper=Shaper, groupleader_strategy=GLStrategy}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %% internal functions
+
+configured_sink() ->
+    case proplists:get_value(?ERROR_LOGGER_SINK, application:get_env(lager, extra_sinks, [])) of
+        undefined -> ?DEFAULT_SINK;
+        _ -> ?ERROR_LOGGER_SINK
+    end.
 
 eval_gl(Event, #state{groupleader_strategy=GlStrategy0}=State) when is_pid(element(2, Event)) ->
     case element(2, Event) of
@@ -117,7 +127,7 @@ eval_gl(Event, #state{groupleader_strategy=GlStrategy0}=State) when is_pid(eleme
 eval_gl(Event, State) ->
     log_event(Event, State).
 
-log_event(Event, State) ->
+log_event(Event, #state{sink=Sink} = State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
             case Fmt of
@@ -125,19 +135,19 @@ log_event(Event, State) ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOGFMT(error, Pid, "gen_server ~w terminated with reason: ~s",
+                    ?LOGFMT(Sink, error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
                 "** State machine "++_ ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOGFMT(error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
+                    ?LOGFMT(Sink, error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
                 "** gen_event handler"++_ ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
-                    ?LOGFMT(error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
+                    ?LOGFMT(Sink, error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
                 "** Cowboy handler"++_ ->
                     %% Cowboy HTTP server error
@@ -145,13 +155,13 @@ log_event(Event, State) ->
                     case Args of
                         [Module, Function, Arity, _Request, _State] ->
                             %% we only get the 5-element list when its a non-exported function
-                            ?LOGFMT(error, Pid,
+                            ?LOGFMT(Sink, error, Pid,
                                 "Cowboy handler ~p terminated with reason: call to undefined function ~p:~p/~p",
                                 [Module, Module, Function, Arity]);
                         [Module, Function, Arity, _Class, Reason | Tail] ->
                             %% any other cowboy error_format list *always* ends with the stacktrace
                             StackTrace = lists:last(Tail),
-                            ?LOGFMT(error, Pid,
+                            ?LOGFMT(Sink, error, Pid,
                                 "Cowboy handler ~p terminated in ~p:~p/~p with reason: ~s",
                                 [Module, Module, Function, Arity, format_reason({Reason, StackTrace})])
                     end;
@@ -160,11 +170,11 @@ log_event(Event, State) ->
                     ?CRASH_LOG(Event),
                     case Args of
                         [Ref, _Protocol, Worker, {[{reason, Reason}, {mfa, {Module, Function, Arity}}, {stacktrace, StackTrace} | _], _}] ->
-                            ?LOGFMT(error, Worker,
+                            ?LOGFMT(Sink, error, Worker,
                                 "Ranch listener ~p terminated in ~p:~p/~p with reason: ~s",
                                 [Ref, Module, Function, Arity, format_reason({Reason, StackTrace})]);
                         [Ref, _Protocol, Worker, Reason] ->
-                            ?LOGFMT(error, Worker,
+                            ?LOGFMT(Sink, error, Worker,
                                 "Ranch listener ~p terminated with reason: ~s",
                                 [Ref, format_reason(Reason)])
                     end;
@@ -179,34 +189,34 @@ log_event(Event, State) ->
                         _ ->
                             Error
                     end,
-                    ?LOGFMT(error, Pid, "Webmachine error at path ~p : ~s", [Path, format_reason(StackTrace)]);
+                    ?LOGFMT(Sink, error, Pid, "Webmachine error at path ~p : ~s", [Path, format_reason(StackTrace)]);
                 _ ->
                     ?CRASH_LOG(Event),
-                    ?LOGFMT(error, Pid, Fmt, Args)
+                    ?LOGFMT(Sink, error, Pid, Fmt, Args)
             end;
         {error_report, _GL, {Pid, std_error, D}} ->
             ?CRASH_LOG(Event),
-            ?LOGMSG(error, Pid, print_silly_list(D));
+            ?LOGMSG(Sink, error, Pid, print_silly_list(D));
         {error_report, _GL, {Pid, supervisor_report, D}} ->
             ?CRASH_LOG(Event),
             case lists:sort(D) of
                 [{errorContext, Ctx}, {offender, Off}, {reason, Reason}, {supervisor, Name}] ->
                     Offender = format_offender(Off),
-                    ?LOGFMT(error, Pid,
+                    ?LOGFMT(Sink, error, Pid,
                         "Supervisor ~w had child ~s exit with reason ~s in context ~w",
                         [supervisor_name(Name), Offender, format_reason(Reason), Ctx]);
                 _ ->
-                    ?LOGMSG(error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
+                    ?LOGMSG(Sink, error, Pid, "SUPERVISOR REPORT " ++ print_silly_list(D))
             end;
         {error_report, _GL, {Pid, crash_report, [Self, Neighbours]}} ->
             ?CRASH_LOG(Event),
-            ?LOGMSG(error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
+            ?LOGMSG(Sink, error, Pid, "CRASH REPORT " ++ format_crash_report(Self, Neighbours));
         {warning_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOGFMT(warning, Pid, Fmt, Args);
+            ?LOGFMT(Sink, warning, Pid, Fmt, Args);
         {warning_report, _GL, {Pid, std_warning, Report}} ->
-            ?LOGMSG(warning, Pid, print_silly_list(Report));
+            ?LOGMSG(Sink, warning, Pid, print_silly_list(Report));
         {info_msg, _GL, {Pid, Fmt, Args}} ->
-            ?LOGFMT(info, Pid, Fmt, Args);
+            ?LOGFMT(Sink, info, Pid, Fmt, Args);
         {info_report, _GL, {Pid, std_info, D}} when is_list(D) ->
             Details = lists:sort(D),
             case Details of
@@ -215,14 +225,14 @@ log_event(Event, State) ->
                         {ok, true} when Reason == stopped ->
                             ok;
                         _ ->
-                            ?LOGFMT(info, Pid, "Application ~w exited with reason: ~s",
+                            ?LOGFMT(Sink, info, Pid, "Application ~w exited with reason: ~s",
                                     [App, format_reason(Reason)])
                     end;
                 _ ->
-                    ?LOGMSG(info, Pid, print_silly_list(D))
+                    ?LOGMSG(Sink, info, Pid, print_silly_list(D))
             end;
         {info_report, _GL, {Pid, std_info, D}} ->
-            ?LOGFMT(info, Pid, "~w", [D]);
+            ?LOGFMT(Sink, info, Pid, "~w", [D]);
         {info_report, _GL, {P, progress, D}} ->
             Details = lists:sort(D),
             case Details of
@@ -231,19 +241,19 @@ log_event(Event, State) ->
                         {ok, true} ->
                             ok;
                         _ ->
-                            ?LOGFMT(info, P, "Application ~w started on node ~w",
+                            ?LOGFMT(Sink, info, P, "Application ~w started on node ~w",
                                     [App, Node])
                     end;
                 [{started, Started}, {supervisor, Name}] ->
                     MFA = format_mfa(get_value(mfargs, Started)),
                     Pid = get_value(pid, Started),
-                    ?LOGFMT(debug, P, "Supervisor ~w started ~s at pid ~w",
+                    ?LOGFMT(Sink, debug, P, "Supervisor ~w started ~s at pid ~w",
                         [supervisor_name(Name), MFA, Pid]);
                 _ ->
-                    ?LOGMSG(info, P, "PROGRESS REPORT " ++ print_silly_list(D))
+                    ?LOGMSG(Sink, info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;
         _ ->
-            ?LOGFMT(warning, self(), "Unexpected error_logger event ~w", [Event])
+            ?LOGFMT(Sink, warning, self(), "Unexpected error_logger event ~w", [Event])
     end,
     {ok, State}.
 

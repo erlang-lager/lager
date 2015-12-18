@@ -18,6 +18,8 @@
 -define(DEFAULT_TRUNCATION, 4096).
 -define(DEFAULT_TRACER, lager_default_tracer).
 -define(DEFAULT_SINK, lager_event).
+-define(ERROR_LOGGER_SINK, error_logger_lager_event).
+
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
@@ -60,6 +62,9 @@
         ?ALERT -> alert;
         ?EMERGENCY -> emergency
     end).
+
+-define(SHOULD_LOG(Sink, Level),
+    (lager_util:level_to_num(Level) band element(1, lager_config:get({Sink, loglevel}, {?LOG_NONE, []}))) /= 0).
 
 -define(SHOULD_LOG(Level),
     (lager_util:level_to_num(Level) band element(1, lager_config:get(loglevel, {?LOG_NONE, []}))) /= 0).
