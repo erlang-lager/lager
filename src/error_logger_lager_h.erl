@@ -37,7 +37,8 @@
         sink :: atom(),
         shaper :: lager_shaper(),
         %% group leader strategy
-        groupleader_strategy :: handle | ignore | mirror
+        groupleader_strategy :: handle | ignore | mirror,
+        raw :: boolean()
     }).
 
 -define(LOGMSG(Sink, Level, Pid, Msg),
@@ -72,8 +73,9 @@ set_high_water(N) ->
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
     Shaper = #lager_shaper{hwm=HighWaterMark},
+    Raw = application:get_env(lager, error_logger_format_raw, false),
     Sink = configured_sink(),
-    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy}}.
+    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.
 
 handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
     NewShaper = Shaper#lager_shaper{hwm=N},
@@ -100,8 +102,18 @@ handle_info(_Info, State) ->
 terminate(_Reason, _State) ->
     ok.
 
+
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
-    {ok, #state{sink=configured_sink(), shaper=Shaper, groupleader_strategy=GLStrategy}};
+    Raw = application:get_env(lager, error_logger_format_raw, false),
+    {ok, #state{
+        sink=configured_sink(), 
+        shaper=Shaper, 
+        groupleader_strategy=GLStrategy, 
+        raw=Raw
+        }};
+code_change(_OldVsn, {state, Sink, Shaper, GLS}, _Extra) ->
+    Raw = application:get_env(lager, error_logger_format_raw, false),
+    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GLS, raw=Raw}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -130,7 +142,7 @@ eval_gl(Event, State) ->
 log_event(Event, #state{sink=Sink} = State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
-            FormatRaw = application:get_env(lager, error_logger_format_raw, false),
+            FormatRaw = State#state.raw,
             case {FormatRaw, Fmt} of
                 {false, "** Generic server "++_} ->
                     %% gen_server terminate
