@@ -42,6 +42,7 @@
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
+-export([rotate_handlers/1, rotate_handler/1]).
 
 -export([config_to_id/1]).
 
@@ -400,6 +401,13 @@ schedule_rotation(_, undefined) ->
 schedule_rotation(Name, Date) ->
     erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}),
     ok.
+
+rotate_handlers(Handlers) ->
+    [ rotate_handler(Handler) || Handler <- Handlers ].
+
+rotate_handler({{lager_file_backend, FileName}, Handler, _Sink}) ->
+    Handler ! {rotate, lager_util:expand_path(FileName)};
+rotate_handler(_) -> ok.
 
 -ifdef(TEST).
 

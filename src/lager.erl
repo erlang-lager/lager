@@ -28,6 +28,7 @@
         log/3, log/4, log/5,
         log_unsafe/4,
         md/0, md/1,
+        rotate_file/1, rotate_sink/1, rotate_all/0,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         list_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
@@ -594,3 +595,26 @@ pr_stacktrace(Stacktrace) ->
 pr_stacktrace(Stacktrace, {Class, Reason}) ->
     lists:flatten(
         pr_stacktrace(Stacktrace) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason])).
+
+rotate_file(FileName) ->
+    Handlers = lager_config:global_get(handlers),
+    RotateHandlers = lists:filter(
+        fun ({{lager_file_backend, FN}, _, _}) ->
+                FN == FileName orelse 
+                lager_util:expand_path(FN) == lager_util:expand_path(FileName);
+            (_) -> false
+        end,
+        Handlers),
+    lager_file_backend:rotate_handlers(RotateHandlers).
+
+rotate_sink(Sink) ->
+    Handlers = lager_config:global_get(handlers),
+    RotateHandlers = lists:filter(
+        fun({_,_,S}) -> S == Sink; 
+           (_) -> false 
+        end, 
+        Handlers),
+    lager_file_backend:rotate_handlers(RotateHandlers).
+
+rotate_all() -> 
+    lager_file_backend:rotate_handlers(lager_config:global_get(handlers)).
