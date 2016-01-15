@@ -42,7 +42,6 @@
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
--export([rotate_handlers/1, rotate_handler/1]).
 
 -export([config_to_id/1]).
 
@@ -143,6 +142,9 @@ handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
             ?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
             {ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
     end;
+handle_call(rotate, State = #state{name=File}) ->
+    {ok, NewState} = handle_info({rotate, File}, State),
+    {ok, ok, NewState};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
@@ -402,13 +404,6 @@ schedule_rotation(Name, Date) ->
     erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}),
     ok.
 
-rotate_handlers(Handlers) ->
-    [ rotate_handler(Handler) || Handler <- Handlers ].
-
-rotate_handler({{lager_file_backend, FileName}, Handler, _Sink}) ->
-    Handler ! {rotate, lager_util:expand_path(FileName)};
-rotate_handler(_) -> ok.
-
 -ifdef(TEST).
 
 get_loglevel_test() ->
@@ -635,6 +630,16 @@ filesystem_test_() ->
                         whereis(lager_event) ! {rotate, "test.log"},
                         lager:log(error, self(), "Test message1"),
                         ?assert(filelib:is_regular("test.log.0"))
+                end
+            },
+            {"rotation call should work",
+                fun() ->
+                        gen_event:add_handler(lager_event, {lager_file_backend, "test.log"}, [{file, "test.log"}, {level, info}, {check_interval, 1000}]),
+                        lager:log(error, self(), "Test message1"),
+                        lager:log(error, self(), "Test message1"),
+                        gen_event:call(lager_event, {lager_file_backend, "test.log"}, rotate, infinity),
+                        lager:log(error, self(), "Test message1"),
+                        ?assert(filelib:is_regular("test.log.0")) 
                 end
             },
             {"sync_on option should work",

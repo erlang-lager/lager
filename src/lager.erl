@@ -605,7 +605,7 @@ rotate_file(FileName) ->
             (_) -> false
         end,
         Handlers),
-    lager_file_backend:rotate_handlers(RotateHandlers).
+    rotate_handlers(RotateHandlers).
 
 rotate_sink(Sink) ->
     Handlers = lager_config:global_get(handlers),
@@ -614,7 +614,15 @@ rotate_sink(Sink) ->
            (_) -> false 
         end, 
         Handlers),
-    lager_file_backend:rotate_handlers(RotateHandlers).
+    rotate_handlers(RotateHandlers).
 
 rotate_all() -> 
-    lager_file_backend:rotate_handlers(lager_config:global_get(handlers)).
+    rotate_handlers(lager_config:global_get(handlers)).
+
+
+rotate_handlers(Handlers) ->
+    [ rotate_handler(Handler) || Handler <- Handlers ].
+
+rotate_handler({Backend, Handler, Sink}) ->
+    gen_event:call(Sink, Backend, rotate, infinity).
+
