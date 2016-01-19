@@ -208,7 +208,6 @@ start(_StartType, _StartArgs) ->
     start_handlers(?DEFAULT_SINK,
                    get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
 
-    ok = add_configured_traces(),
 
     lager:update_loglevel_config(?DEFAULT_SINK),
 
@@ -222,6 +221,8 @@ start(_StartType, _StartArgs) ->
 
     %% Now handle extra sinks
     configure_extra_sinks(get_env(lager, extra_sinks, [])),
+
+    ok = add_configured_traces(),
 
     clean_up_config_checks(),
 
