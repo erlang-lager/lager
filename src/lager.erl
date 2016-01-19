@@ -274,7 +274,16 @@ stop_trace(Backend, Filter, Level) ->
 stop_trace({Backend, Filter, Level}) ->
     stop_trace(Backend, Filter, Level).
 
-stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
+%% Important: validate_trace_filters orders the arguments of
+%% trace tuples differently than the way outside callers have
+%% the trace tuple.
+%%
+%% That is to say, outside they are represented as 
+%% `{Backend, Filter, Level}'
+%%
+%% and when they come back from validation, they're
+%% `{Filter, Level, Backend}'
+stop_trace_int({_Filter, _Level, Backend} = Trace, Sink) ->
     {Level, Traces} = lager_config:get({Sink, loglevel}),
     NewTraces =  lists:delete(Trace, Traces),
     _ = lager_util:trace_filter([ element(1, T) || T <- NewTraces ]),
@@ -285,7 +294,10 @@ stop_trace_int({Backend, _Filter, _Level} = Trace, Sink) ->
             %% check no other traces point here
             case lists:keyfind(Backend, 3, NewTraces) of
                 false ->
-                    gen_event:delete_handler(Sink, Backend, []);
+                    gen_event:delete_handler(Sink, Backend, []),
+                    lager_config:global_set(handlers,
+                                            lists:keydelete(Backend, 1,
+                                                            lager_config:global_get(handlers)));
                 _ ->
                     ok
             end;

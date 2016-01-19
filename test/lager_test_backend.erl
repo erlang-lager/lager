@@ -536,6 +536,39 @@ lager_test_() ->
                         ok
                 end
             },
+            {"stopped trace stops and removes its event handler - default sink (gh#267)",
+                fun() ->
+                        Sink = ?DEFAULT_SINK,
+                        StartHandlers = gen_event:which_handlers(Sink),
+                        {_, T0} = lager_config:get({Sink, loglevel}),
+                        StartGlobal = lager_config:global_get(handlers),
+                        ?assertEqual([], T0),
+                        {ok, TestTrace1} = lager:trace_file("/tmp/test", [{a,b}]),
+                        MidHandlers = gen_event:which_handlers(Sink),
+                        {ok, TestTrace2} = lager:trace_file("/tmp/test", [{c,d}]),
+                        MidHandlers = gen_event:which_handlers(Sink),
+                        ?assertEqual(length(StartHandlers)+1, length(MidHandlers)),
+                        MidGlobal = lager_config:global_get(handlers),
+                        ?assertEqual(length(StartGlobal)+1, length(MidGlobal)),
+                        {_, T1} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual(2, length(T1)),
+                        ok = lager:stop_trace(TestTrace1),
+                        {_, T2} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual(1, length(T2)),
+                        ?assertEqual(length(StartHandlers)+1, length(
+                                                                gen_event:which_handlers(Sink))),
+
+                        ?assertEqual(length(StartGlobal)+1, length(lager_config:global_get(handlers))),
+                        ok = lager:stop_trace(TestTrace2),
+                        EndHandlers = gen_event:which_handlers(?DEFAULT_SINK),
+                        EndGlobal = lager_config:global_get(handlers),
+                        {_, T3} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual([], T3),
+                        ?assertEqual(StartHandlers, EndHandlers),
+                        ?assertEqual(StartGlobal, EndGlobal),
+                        ok
+                end
+            },
             {"record printing works",
                 fun() ->
                         print_state(),
@@ -688,6 +721,39 @@ extra_sinks_test_() ->
                         {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
+                        ok
+                end
+            },
+            {"stopped trace stops and removes its event handler - test sink (gh#267)",
+                fun() ->
+                        Sink = ?TEST_SINK_EVENT,
+                        StartHandlers = gen_event:which_handlers(Sink),
+                        {_, T0} = lager_config:get({Sink, loglevel}),
+                        StartGlobal = lager_config:global_get(handlers),
+                        ?assertEqual([], T0),
+                        {ok, TestTrace1} = lager:trace_file("/tmp/test", [{sink, Sink}, {a,b}]),
+                        MidHandlers = gen_event:which_handlers(Sink),
+                        {ok, TestTrace2} = lager:trace_file("/tmp/test", [{sink, Sink}, {c,d}]),
+                        MidHandlers = gen_event:which_handlers(Sink),
+                        ?assertEqual(length(StartHandlers)+1, length(MidHandlers)),
+                        MidGlobal = lager_config:global_get(handlers),
+                        ?assertEqual(length(StartGlobal)+1, length(MidGlobal)),
+                        {_, T1} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual(2, length(T1)),
+                        ok = lager:stop_trace(TestTrace1),
+                        {_, T2} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual(1, length(T2)),
+                        ?assertEqual(length(StartHandlers)+1, length(
+                                                                gen_event:which_handlers(Sink))),
+
+                        ?assertEqual(length(StartGlobal)+1, length(lager_config:global_get(handlers))),
+                        ok = lager:stop_trace(TestTrace2),
+                        EndHandlers = gen_event:which_handlers(Sink),
+                        EndGlobal = lager_config:global_get(handlers),
+                        {_, T3} = lager_config:get({Sink, loglevel}),
+                        ?assertEqual([], T3),
+                        ?assertEqual(StartHandlers, EndHandlers),
+                        ?assertEqual(StartGlobal, EndGlobal),
                         ok
                 end
             },
