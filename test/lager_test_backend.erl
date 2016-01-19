@@ -489,6 +489,24 @@ lager_test_() ->
                         ok
                 end
             },
+            {"stopped trace stops and removes its event handler (gh#267)",
+                fun() ->
+                        StartHandlers = gen_event:which_handlers(lager_event),
+                        {_, T0} = lager_config:get(loglevel),
+                        ?assertEqual([], T0),
+                        {ok, Test} = lager:trace_file("/tmp/test", [{vhost, test}]),
+                        MidHandlers = gen_event:which_handlers(lager_event),
+                        ?assertEqual(length(StartHandlers)+1, length(MidHandlers)),
+                        {_, T1} = lager_config:get(loglevel),
+                        ?assertEqual(1, length(T1)),
+                        ok = lager:stop_trace(Test),
+                        {_, T2} = lager_config:get(loglevel),
+                        ?assertEqual([], T2),
+                        EndHandlers = gen_event:which_handlers(lager_event),
+                        ?assertEqual(StartHandlers, EndHandlers),
+                        ok
+                end
+            },
             {"record printing works",
                 fun() ->
                         print_state(),
