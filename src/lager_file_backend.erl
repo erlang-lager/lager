@@ -186,7 +186,8 @@ handle_info(_Info, State) ->
 
 %% @private
 terminate(_Reason, State) ->
-    close_file(State),
+    %% leaving this function call unmatched makes dialyzer cranky
+    _ = close_file(State),
     ok.
 
 %% @private
