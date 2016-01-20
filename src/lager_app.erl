@@ -223,6 +223,7 @@ start(_StartType, _StartArgs) ->
     configure_extra_sinks(get_env(lager, extra_sinks, [])),
 
     ok = add_configured_traces(),
+    ok = add_configured_trace_files(),
 
     clean_up_config_checks(),
 
@@ -258,6 +259,26 @@ add_configured_traces() ->
 
     lists:foreach(fun({Handler, Filter, Level}) ->
                 {ok, _} = lager:trace(Handler, Filter, Level)
+        end,
+        Traces),
+    ok.
+
+add_configured_trace_files() ->
+    Traces = case application:get_env(lager, trace_files) of
+        undefined ->
+            [];
+        {ok, TraceVal} ->
+            TraceVal
+    end,
+
+    lists:foreach(fun({File, Filter}) ->
+                          lager:trace_file(File, Filter, debug, []);
+                     ({File, Filter, Level}) when is_atom(Level) ->
+                          lager:trace_file(File, Filter, Level, []);
+                     ({File, Filter, Options}) when is_list(Options) ->
+                          lager:trace_file(File, Filter, debug, Options);
+                     ({File, Filter, Level, Options}) ->
+                          {ok, _} = lager:trace_file(File, Filter, Level, Options)
         end,
         Traces),
     ok.
