@@ -178,16 +178,16 @@ handle_event(_Event, State) ->
 %% @private
 handle_info({rotate, File}, #state{name=File,count=Count,date=Date} = State) ->
     _ = lager_util:rotate_logfile(File, Count),
+    State1 = close_file(State),
     schedule_rotation(File, Date),
-    {ok, State};
+    {ok, State1};
 handle_info(_Info, State) ->
     {ok, State}.
 
 %% @private
-terminate(_Reason, #state{fd=FD}) ->
-    %% flush and close any file handles
-    _ = file:datasync(FD),
-    _ = file:close(FD),
+terminate(_Reason, State) ->
+    %% leaving this function call unmatched makes dialyzer cranky
+    _ = close_file(State),
     ok.
 
 %% @private
@@ -400,6 +400,14 @@ schedule_rotation(_, undefined) ->
 schedule_rotation(Name, Date) ->
     erlang:send_after(lager_util:calculate_next_rotation(Date) * 1000, self(), {rotate, Name}),
     ok.
+
+close_file(#state{fd=undefined} = State) ->
+    State;
+close_file(#state{fd=FD} = State) ->
+    %% Flush and close any file handles.
+    _ = file:datasync(FD),
+    _ = file:close(FD),
+    State#state{fd=undefined}.
 
 -ifdef(TEST).
 
