@@ -45,7 +45,7 @@ rotate_test_() ->
             fun() ->
                 lager:log(error, self(), "Test message 1"),
                 lager:log(sink_event, error, self(), "Sink test message 1", []),
-                lager:rotate_file("test1.log"),
+                lager:rotate_handler({lager_file_backend, "test1.log"}),
                 timer:sleep(1000),
                 true = filelib:is_regular("test1.log.0"),
                 lager:log(error, self(), "Test message 2"),
@@ -118,6 +118,9 @@ rotate_test_() ->
 
                 have_no_log(SinkFile, <<"Sink test message 1">>),
                 have_log(SinkFile, <<"Sink test message 2">>),
+
+                have_log(SinkFileOld, <<"Sink test message 1">>),
+                have_no_log(SinkFileOld, <<"Sink test message 2">>),
 
                 have_log(File1Old, <<"Test message 1">>),
                 have_no_log(File1Old, <<"Test message 2">>),
