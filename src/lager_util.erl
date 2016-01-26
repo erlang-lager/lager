@@ -482,7 +482,14 @@ i3l(I)              -> integer_to_list(I).
 expand_path(RelPath) ->
     case application:get_env(lager, log_root) of
         {ok, LogRoot} when is_list(LogRoot) -> % Join relative path
-            filename:join(LogRoot, RelPath);
+            %% check if the given RelPath contains LogRoot, if so, do not add
+            %% it again; see gh #304
+            case string:str(filename:dirname(RelPath), LogRoot) of
+                X when X > 0 ->
+                    RelPath;
+                _Zero ->
+                    filename:join(LogRoot, RelPath)
+            end;
         undefined -> % No log_root given, keep relative path
             RelPath
     end.
@@ -782,6 +789,7 @@ expand_path_test() ->
     ok = application:set_env(lager, log_root, "log/dir"),
     ?assertEqual("/foo/bar", expand_path("/foo/bar")), % Absolute path should not be changed
     ?assertEqual("log/dir/foo/bar", expand_path("foo/bar")),
+    ?assertEqual("log/dir/foo/bar", expand_path("log/dir/foo/bar")), %% gh #304
 
     case OldRootVal of
         undefined -> application:unset_env(lager, log_root);
