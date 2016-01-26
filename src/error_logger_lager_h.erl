@@ -37,7 +37,8 @@
         sink :: atom(),
         shaper :: lager_shaper(),
         %% group leader strategy
-        groupleader_strategy :: handle | ignore | mirror
+        groupleader_strategy :: handle | ignore | mirror,
+        raw :: boolean()
     }).
 
 -define(LOGMSG(Sink, Level, Pid, Msg),
@@ -72,8 +73,9 @@ set_high_water(N) ->
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
     Shaper = #lager_shaper{hwm=HighWaterMark},
+    Raw = application:get_env(lager, error_logger_format_raw, false),
     Sink = configured_sink(),
-    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy}}.
+    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.
 
 handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
     NewShaper = Shaper#lager_shaper{hwm=N},
@@ -100,8 +102,18 @@ handle_info(_Info, State) ->
 terminate(_Reason, _State) ->
     ok.
 
+
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
-    {ok, #state{sink=configured_sink(), shaper=Shaper, groupleader_strategy=GLStrategy}};
+    Raw = application:get_env(lager, error_logger_format_raw, false),
+    {ok, #state{
+        sink=configured_sink(), 
+        shaper=Shaper, 
+        groupleader_strategy=GLStrategy, 
+        raw=Raw
+        }};
+code_change(_OldVsn, {state, Sink, Shaper, GLS}, _Extra) ->
+    Raw = application:get_env(lager, error_logger_format_raw, false),
+    {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GLS, raw=Raw}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -130,26 +142,27 @@ eval_gl(Event, State) ->
 log_event(Event, #state{sink=Sink} = State) ->
     case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
-            case Fmt of
-                "** Generic server "++_ ->
+            FormatRaw = State#state.raw,
+            case {FormatRaw, Fmt} of
+                {false, "** Generic server "++_} ->
                     %% gen_server terminate
                     [Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
-                "** State machine "++_ ->
+                {false, "** State machine "++_} ->
                     %% gen_fsm terminate
                     [Name, _Msg, StateName, _StateData, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
                         [Name, StateName, format_reason(Reason)]);
-                "** gen_event handler"++_ ->
+                {false, "** gen_event handler"++_} ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
                     ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, Pid, "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, format_reason(Reason)]);
-                "** Cowboy handler"++_ ->
+                {false, "** Cowboy handler"++_} ->
                     %% Cowboy HTTP server error
                     ?CRASH_LOG(Event),
                     case Args of
@@ -165,7 +178,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                 "Cowboy handler ~p terminated in ~p:~p/~p with reason: ~s",
                                 [Module, Module, Function, Arity, format_reason({Reason, StackTrace})])
                     end;
-                "Ranch listener "++_ ->
+                {false, "Ranch listener "++_} ->
                     %% Ranch errors
                     ?CRASH_LOG(Event),
                     case Args of
@@ -178,7 +191,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                 "Ranch listener ~p terminated with reason: ~s",
                                 [Ref, format_reason(Reason)])
                     end;
-                "webmachine error"++_ ->
+                {false, "webmachine error"++_} ->
                     %% Webmachine HTTP server error
                     ?CRASH_LOG(Event),
                     [Path, Error] = Args,

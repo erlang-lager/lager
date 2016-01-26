@@ -222,6 +222,8 @@ Lager is also supplied with a `error_logger` handler module that translates
 traditional erlang error messages into a friendlier format and sends them into
 lager itself to be treated like a regular lager log call. To disable this, set
 the lager application variable `error_logger_redirect` to `false`.
+You can also disable reformatting for OTP and Cowboy messages by setting variable
+`error_logger_format_raw` to `true`.
 
 The `error_logger` handler will also log more complete error messages (protected
 with use of `trunc_io`) to a "crash log" which can be referred to for further
