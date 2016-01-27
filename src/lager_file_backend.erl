@@ -142,6 +142,9 @@ handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
             ?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
             {ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
     end;
+handle_call(rotate, State = #state{name=File}) ->
+    {ok, NewState} = handle_info({rotate, File}, State),
+    {ok, ok, NewState};
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
@@ -635,6 +638,16 @@ filesystem_test_() ->
                         whereis(lager_event) ! {rotate, "test.log"},
                         lager:log(error, self(), "Test message1"),
                         ?assert(filelib:is_regular("test.log.0"))
+                end
+            },
+            {"rotation call should work",
+                fun() ->
+                        gen_event:add_handler(lager_event, {lager_file_backend, "test.log"}, [{file, "test.log"}, {level, info}, {check_interval, 1000}]),
+                        lager:log(error, self(), "Test message1"),
+                        lager:log(error, self(), "Test message1"),
+                        gen_event:call(lager_event, {lager_file_backend, "test.log"}, rotate, infinity),
+                        lager:log(error, self(), "Test message1"),
+                        ?assert(filelib:is_regular("test.log.0")) 
                 end
             },
             {"sync_on option should work",

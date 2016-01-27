@@ -22,12 +22,14 @@
 
 -define(LAGER_MD_KEY, '__lager_metadata').
 -define(TRACE_SINK, '__trace_sink').
+-define(ROTATE_TIMEOUT, 100000).
 
 %% API
 -export([start/0,
         log/3, log/4, log/5,
         log_unsafe/4,
         md/0, md/1,
+        rotate_handler/1, rotate_handler/2, rotate_sink/1, rotate_all/0,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         list_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
@@ -606,3 +608,31 @@ pr_stacktrace(Stacktrace) ->
 pr_stacktrace(Stacktrace, {Class, Reason}) ->
     lists:flatten(
         pr_stacktrace(Stacktrace) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason])).
+    
+rotate_sink(Sink) ->
+    Handlers = lager_config:global_get(handlers),
+    RotateHandlers = lists:filtermap(
+        fun({Handler,_,S}) when S == Sink -> {true, {Handler, Sink}};
+           (_)                            -> false 
+        end, 
+        Handlers),
+    rotate_handlers(RotateHandlers).
+
+rotate_all() -> 
+    rotate_handlers(lists:map(fun({H,_,S}) -> {H, S} end,
+                              lager_config:global_get(handlers))).
+
+
+rotate_handlers(Handlers) ->
+    [ rotate_handler(Handler, Sink) || {Handler, Sink} <- Handlers ].
+
+
+rotate_handler(Handler) ->
+    Handlers = lager_config:global_get(handlers),
+    case lists:keyfind(Handler, 1, Handlers) of
+        {Handler, _, Sink} -> rotate_handler(Handler, Sink);
+        false              -> ok
+    end.
+
+rotate_handler(Handler, Sink) ->
+    gen_event:call(Sink, Handler, rotate, ?ROTATE_TIMEOUT).
