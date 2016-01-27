@@ -583,3 +583,16 @@ You can also pass it to `erlc`, if you prefer:
 ```
 erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
 ```
+
+3.x Changelog
+-------------
+3.0.3 - 27 January 2016
+    * Feature: Pretty printer for human readable stack traces (#298)
+    * Feature: Make error reformatting optional (#305)
+    * Feature: Optional and explicit sink for error_logger messages (#303)
+    * Bugfix: Always explicitly close a file after its been rotated (#316)
+    * Bugfix: If a relative path already contains the log root, do not add it again (#317)
+    * Bugfix: Configure and start extra sinks before traces are evaluated (#307)
+    * Bugfix: Stop and remove traces correctly (#306)
+    * Bugfix: A byte value of 255 is valid for Unicode (#300)
+    * Dependency: Bump to goldrush 0.1.8 (#313)
