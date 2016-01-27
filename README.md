@@ -586,7 +586,14 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 3.x Changelog
 -------------
+3.1.0 - 27 January 2016
+
+    * Feature: API calls to a rotate handler, sink or all.  This change
+      introduces a new `rotate` message for 3rd party lager backends; that's
+      why this is released as a new minor version number. (#311)
+
 3.0.3 - 27 January 2016
+
     * Feature: Pretty printer for human readable stack traces (#298)
     * Feature: Make error reformatting optional (#305)
     * Feature: Optional and explicit sink for error_logger messages (#303)
