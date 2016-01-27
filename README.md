@@ -420,3 +420,10 @@ You can also pass it to `erlc`, if you prefer:
 ```
 erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
 ```
+
+Changelog 2.x
+-------------
+2.2.1 - 27 January 2016
+    * Dependency: Bump goldrush to 0.1.8
+    * Bugfix: Properly remove backends from traces when stopped. (#308)
+    * Bugfix: Handle byte value 255 (0xFF) properly (#292)
