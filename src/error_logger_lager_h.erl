@@ -107,7 +107,7 @@ terminate(_Reason, _State) ->
 
 
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
-    Raw = case application:get_env(lager, error_logger_format_raw, false) of
+    Raw = case application:get_env(lager, error_logger_format_raw) of
         {ok, Value} -> Value;
         undefined -> false
     end,
