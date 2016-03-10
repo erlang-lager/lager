@@ -134,7 +134,7 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
     GlStrategy = case application:get_env(lager, error_logger_groupleader_strategy) of
                     undefined ->
                         handle;
-                    {ok, GlStrategy0} when 
+                    {ok, GlStrategy0} when
                             GlStrategy0 =:= handle;
                             GlStrategy0 =:= ignore;
                             GlStrategy0 =:= mirror ->
@@ -146,6 +146,25 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
                         throw({error, bad_config})
                 end,
 
+    KillerHWM = case application:get_env(lager, killer_hwm) of
+                    undefined -> -1;
+                    {ok, undefined} -> -1;
+                    {ok, KHWM} when is_integer(KHWM), KHWM >= 0 -> KHWM
+                end,
+    KillerReinstallAfter = case application:get_env(lager, killer_reinstall_after) of
+                               undefined -> 5000;
+                               {ok, undefined} -> 5000;
+                               {ok, V} when is_integer(V), V >= 0 -> V;
+                               {ok, BadKillerReinstallAfter} ->
+                                   error_logger:error_msg("Invalid value for 'cooldown': ~p~n",
+                                                          [BadKillerReinstallAfter]),
+                                   throw({error, bad_config})
+                           end,
+
+    _ = supervisor:start_child(lager_handler_watcher_sup,
+                               [?DEFAULT_SINK, lager_manager_killer,
+                                [KillerHWM, KillerReinstallAfter]]),
+
     case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM, GlStrategy]]) of
         {ok, _} ->
             [begin error_logger:delete_report_handler(X), X end ||
@@ -153,6 +172,7 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
         {error, _} ->
             []
     end.
+
 
 %% `determine_async_behavior/3' is called with the results from either
 %% `application:get_env/2' and `proplists:get_value/2'. Since
