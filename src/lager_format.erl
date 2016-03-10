@@ -245,18 +245,34 @@ control2($P, [A,Depth], _F, _Adj, _P, _Pad, _Enc, L) when is_integer(Depth) ->
     Term = lager_trunc_io:fprint(A, L, [{depth, Depth}, {lists_as_strings, true}]),
     {Term, lists:flatlength(Term)};
 control2($s, [L0], F, Adj, P, Pad, latin1, L) ->
-    List = lager_trunc_io:fprint(maybe_flatten(L0), L, [{force_strings, true}]),
+    List = lager_trunc_io:fprint(iolist_to_chars(L0), L, [{force_strings, true}]),
     Res = string(List, F, Adj, P, Pad),
     {Res, lists:flatlength(Res)};
 control2($s, [L0], F, Adj, P, Pad, unicode, L) ->
-    List = lager_trunc_io:fprint(unicode:characters_to_list(L0), L, [{force_strings, true}]),
+    List = lager_trunc_io:fprint(cdata_to_chars(L0), L, [{force_strings, true}]),
     Res = uniconv(string(List, F, Adj, P, Pad)),
     {Res, lists:flatlength(Res)}.
 
-maybe_flatten(X) when is_list(X) ->
-    lists:flatten(X);
-maybe_flatten(X) ->
-    X.
+iolist_to_chars([C|Cs]) when is_integer(C), C >= $\000, C =< $\377 ->
+    [C | iolist_to_chars(Cs)];
+iolist_to_chars([I|Cs]) ->
+    [iolist_to_chars(I) | iolist_to_chars(Cs)];
+iolist_to_chars([]) ->
+    [];
+iolist_to_chars(B) when is_binary(B) ->
+    binary_to_list(B).
+
+cdata_to_chars([C|Cs]) when is_integer(C), C >= $\000 ->
+    [C | cdata_to_chars(Cs)];
+cdata_to_chars([I|Cs]) ->
+    [cdata_to_chars(I) | cdata_to_chars(Cs)];
+cdata_to_chars([]) ->
+    [];
+cdata_to_chars(B) when is_binary(B) ->
+    case catch unicode:characters_to_list(B) of
+        L when is_list(L) -> L;
+        _ -> binary_to_list(B)
+    end.
 
 make_options([], Options) ->
     Options;

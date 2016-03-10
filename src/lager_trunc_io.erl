@@ -882,4 +882,10 @@ print_terms_without_format_string_test() ->
     ?assertError(badarg, format(65535, [], 50)),
     ok.
 
+improper_io_list_test() ->
+    ?assertEqual(">hello", lists:flatten(format('~s', [[$>|<<"hello">>]], 50))),
+    ?assertEqual(">hello", lists:flatten(format('~ts', [[$>|<<"hello">>]], 50))),
+    ?assertEqual("helloworld", lists:flatten(format('~ts', [[<<"hello">>|<<"world">>]], 50))),
+    ok.
+
 -endif.
