@@ -12,7 +12,7 @@ overload_test() ->
   Delay = 1000, % sleep 1 sec on every log
   KillerHWM = 10, % kill the manager if there are more than 10 pending logs
   KillerReinstallAfter = 1000, % reinstall killer after 1 sec
-  application:set_env(lager, handlers, [{lager_slow_backend, Delay}]),
+  application:set_env(lager, handlers, [{lager_slow_backend, [{delay, Delay}]}]),
   application:set_env(lager, async_threshold, undefined),
   application:set_env(lager, killer_hwm, KillerHWM),
   application:set_env(lager, killer_reinstall_after, KillerReinstallAfter),

@@ -151,38 +151,31 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
                         throw({error, bad_config})
                 end,
 
+    %% Conditionally start the high watermark killer.
+    case application:get_env(lager, killer_hwm) of
+        undefined -> ok;
+        {ok, undefined} -> ok;
+        {ok, KillerHWM} when is_integer(KillerHWM), KillerHWM >= 0 ->
+            KillerReinstallAfter = case application:get_env(lager, killer_reinstall_after) of
+                                       undefined -> 5000;
+                                       {ok, undefined} -> 5000;
+                                       {ok, V} when is_integer(V), V >= 0 -> V;
+                                       {ok, BadKillerReinstallAfter} ->
+                                           error_logger:error_msg("Invalid value for 'cooldown': ~p~n",
+                                                                  [BadKillerReinstallAfter]),
+                                           throw({error, bad_config})
+                                   end,
+            _ = supervisor:start_child(lager_handler_watcher_sup,
+                                       [?DEFAULT_SINK, lager_manager_killer,
+                                        [KillerHWM, KillerReinstallAfter]])
+    end,
+
     case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM, GlStrategy]]) of
         {ok, _} ->
             [begin error_logger:delete_report_handler(X), X end ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
         {error, _} ->
             []
-    end,
-
-    case application:get_env(lager, killer_hwm) of
-        undefined ->
-            ok;
-        {ok, undefined} ->
-            undefined;
-        {ok, KillerHWM} when is_integer(KillerHWM), KillerHWM >= 0 ->
-            KillerReinstallAfter =
-            case application:get_env(lager, killer_reinstall_after) of
-                undefined ->
-                    5000;
-                {ok, undefined} ->
-                    5000;
-                {ok, V} when is_integer(V), V >= 0 ->
-                    V;
-                {ok, BadKillerReinstallAfter} ->
-                    error_logger:error_msg("Invalid value for 'cooldown': ~p~n", [BadKillerReinstallAfter]),
-                    throw({error, bad_config})
-            end,
-            _ = supervisor:start_child(lager_handler_watcher_sup,
-                    [lager_event, lager_manager_killer, [KillerHWM, KillerReinstallAfter]]),
-            ok;
-        {ok, BadKillerHWM} ->
-            error_logger:error_msg("Invalid value for 'floodline': ~p~n", [BadKillerHWM]),
-            throw({error, bad_config})
     end,
 
     Handlers = case application:get_env(lager, handlers) of
