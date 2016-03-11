@@ -10,7 +10,7 @@
   delay :: non_neg_integer()
 }).
 
-init(Delay) ->
+init([{delay, Delay}]) ->
   {ok, #state{delay=Delay}}.
 
 handle_call(get_loglevel, State) ->
