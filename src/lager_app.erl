@@ -29,7 +29,8 @@
          start/2,
          start_handler/3,
          configure_sink/2,
-         stop/1]).
+         stop/1,
+         boot/0]).
 
 %% The `application:get_env/3` compatibility wrapper is useful
 %% for other modules
@@ -234,7 +235,10 @@ get_env_default({ok, Value}, _Default) ->
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
+    SavedHandlers = boot(),
+    {ok, Pid, SavedHandlers}.
 
+boot() ->
     %% Handle the default sink.
     determine_async_behavior(?DEFAULT_SINK,
                              application:get_env(lager, async_threshold),
@@ -260,8 +264,7 @@ start(_StartType, _StartArgs) ->
 
     clean_up_config_checks(),
 
-    {ok, Pid, SavedHandlers}.
-
+    SavedHandlers.
 
 stop(Handlers) ->
     lists:foreach(fun(Handler) ->

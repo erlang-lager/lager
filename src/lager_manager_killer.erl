@@ -4,12 +4,17 @@
 
 -export([init/1, handle_event/2, handle_call/2, handle_info/2, terminate/2, code_change/3]).
 
+-export([kill_me/0]).
+
 -include("lager.hrl").
 
 -record(state, {
           killer_hwm :: non_neg_integer(),
           killer_reinstall_after :: non_neg_integer()
          }).
+
+kill_me() ->
+    gen_event:call(lager_event, ?MODULE, kill_self).
 
 init([KillerHWM, KillerReinstallAfter]) ->
     {ok, #state{killer_hwm=KillerHWM, killer_reinstall_after=KillerReinstallAfter}}.
@@ -20,6 +25,8 @@ handle_call({set_loglevel, _Level}, State) ->
     {ok, ok, State};
 handle_call(get_settings, State = #state{killer_hwm=KillerHWM, killer_reinstall_after=KillerReinstallAfter}) ->
     {ok, [KillerHWM, KillerReinstallAfter], State};
+handle_call(kill_self, #state{killer_hwm=KillerHWM, killer_reinstall_after=KillerReinstallAfter}) ->
+    exit({kill_me, [KillerHWM, KillerReinstallAfter]});
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
