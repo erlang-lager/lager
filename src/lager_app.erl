@@ -28,7 +28,8 @@
 -export([start/0,
          start/2,
          start_handler/3,
-         stop/1]).
+         stop/1,
+         boot/0]).
 
 -define(FILENAMES, '__lager_file_backend_filenames').
 -define(THROTTLE, lager_backend_throttle).
@@ -220,7 +221,10 @@ get_env_default({ok, Value}, _Default) ->
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
+    SavedHandlers = boot(),
+    {ok, Pid, SavedHandlers}.
 
+boot() ->
     %% Handle the default sink.
     determine_async_behavior(?DEFAULT_SINK,
                              application:get_env(lager, async_threshold),
@@ -246,8 +250,7 @@ start(_StartType, _StartArgs) ->
 
     clean_up_config_checks(),
 
-    {ok, Pid, SavedHandlers}.
-
+    SavedHandlers.
 
 stop(Handlers) ->
     lists:foreach(fun(Handler) ->
