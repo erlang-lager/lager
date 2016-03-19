@@ -80,6 +80,9 @@ handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         ok
     end,
     {noreply, State};
+handle_info(reinstall_handler, #state{module=Module, config=Config, sink=Sink} = State) ->
+    install_handler(Sink, Module, Config),
+    {noreply, State};
 handle_info(reboot, State) ->
     lager_app:boot(),
     {noreply, State};
