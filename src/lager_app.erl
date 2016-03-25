@@ -30,6 +30,10 @@
          start_handler/3,
          stop/1]).
 
+%% The `application:get_env/3` compatibility wrapper is useful
+%% for other modules
+-export([get_env/3]).
+
 -define(FILENAMES, '__lager_file_backend_filenames').
 -define(THROTTLE, lager_backend_throttle).
 -define(DEFAULT_HANDLER_CONF,
