@@ -295,7 +295,10 @@ format_offender(Off) ->
         MFArgs ->
             %% regular supervisor
             MFA = format_mfa(MFArgs),
-            Name = get_value(name, Off),
+            Name = case get_value(name, Off) of
+                undefined -> get_value(id, Off);
+                V -> V
+            end,
             io_lib:format("~p started with ~s at ~w",
                 [Name, MFA, get_value(pid, Off)])
     end.
