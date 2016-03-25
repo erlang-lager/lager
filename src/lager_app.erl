@@ -256,11 +256,13 @@ add_configured_traces() ->
             TraceVal
     end,
 
-    lists:foreach(fun({Handler, Filter, Level}) ->
-                {ok, _} = lager:trace(Handler, Filter, Level)
-        end,
-        Traces),
+    lists:foreach(fun start_configured_trace/1, Traces),
     ok.
+
+start_configured_trace({Handler, Filter}) ->
+    {ok, _} = lager:trace(Handler, Filter);
+start_configured_trace({Handler, Filter, Level}) when is_atom(Level) ->
+    {ok, _} = lager:trace(Handler, Filter, Level).
 
 maybe_make_handler_id(Mod, Config) ->
     %% Allow the backend to generate a gen_event handler id, if it wants to.
