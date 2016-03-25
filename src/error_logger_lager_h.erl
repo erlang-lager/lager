@@ -295,7 +295,10 @@ format_offender(Off) ->
         MFArgs ->
             %% regular supervisor
             MFA = format_mfa(MFArgs),
-            Name = get_value(name, Off),
+
+            %% In 2014 the error report changed from `name' to
+            %% `id', so try that first.
+            Name = get_value(id, Off, get_value(name, Off)),
             io_lib:format("~p started with ~s at ~w",
                 [Name, MFA, get_value(pid, Off)])
     end.
