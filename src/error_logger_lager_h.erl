@@ -73,7 +73,10 @@ set_high_water(N) ->
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
     Shaper = #lager_shaper{hwm=HighWaterMark},
-    Raw = application:get_env(lager, error_logger_format_raw, false),
+    Raw = case application:get_env(lager, error_logger_format_raw) of
+        {ok, Value} -> Value;
+        undefined -> false
+    end,
     Sink = configured_sink(),
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.
 
@@ -104,7 +107,10 @@ terminate(_Reason, _State) ->
 
 
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
-    Raw = application:get_env(lager, error_logger_format_raw, false),
+    Raw = case application:get_env(lager, error_logger_format_raw) of
+        {ok, Value} -> Value;
+        undefined -> false
+    end,
     {ok, #state{
         sink=configured_sink(), 
         shaper=Shaper, 
@@ -112,7 +118,10 @@ code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
         raw=Raw
         }};
 code_change(_OldVsn, {state, Sink, Shaper, GLS}, _Extra) ->
-    Raw = application:get_env(lager, error_logger_format_raw, false),
+    Raw = case application:get_env(lager, error_logger_format_raw) of
+        {ok, Value} -> Value;
+        undefined -> false
+    end,
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GLS, raw=Raw}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -120,7 +129,11 @@ code_change(_OldVsn, State, _Extra) ->
 %% internal functions
 
 configured_sink() ->
-    case proplists:get_value(?ERROR_LOGGER_SINK, application:get_env(lager, extra_sinks, [])) of
+    ExtraSinks = case application:get_env(lager, extra_sinks) of
+        {ok, Value} -> Value;
+        undefined -> []
+    end,
+    case proplists:get_value(?ERROR_LOGGER_SINK, ExtraSinks) of
         undefined -> ?DEFAULT_SINK;
         _ -> ?ERROR_LOGGER_SINK
     end.
