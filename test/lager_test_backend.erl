@@ -796,6 +796,18 @@ setup() ->
     application:set_env(lager, error_logger_redirect, false),
     application:unset_env(lager, traces),
     lager:start(),
+    %% There is a race condition between the application start up, lager logging its own
+    %% start up condition and several tests that count messages or parse the output of
+    %% tests.  When the lager start up message wins the race, it causes these tests
+    %% which parse output or count message arrivals to fail.
+    %%
+    %% We introduce a sleep here to allow `flush' to arrive *after* the start up
+    %% message has been received and processed.
+    %%
+    %% This race condition was first exposed during the work on
+    %% 4b5260c4524688b545cc12da6baa2dfa4f2afec9 which introduced the lager
+    %% manager killer PR.
+    timer:sleep(5),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
