@@ -64,10 +64,14 @@ handle_info({gen_event_EXIT, Module, shutdown}, #state{module=Module} = State) -
 handle_info({gen_event_EXIT, Module, {'EXIT', {kill_me, [_KillerHWM, KillerReinstallAfter]}}},
         #state{module=Module, sink=Sink} = State) ->
     %% Brutally kill the manager but stay alive to restore settings.
-    Manager = whereis(Sink),
-    unlink(Manager),
-    exit(Manager, kill),
-    erlang:send_after(KillerReinstallAfter, self(), reboot),
+    %%
+    %% SinkPid here means the gen_event process. Handlers *all* live inside the
+    %% same gen_event process space, so when the Pid is killed, *all* of the 
+    %% pending log messages in its mailbox will die too.
+    SinkPid = whereis(Sink),
+    unlink(SinkPid),
+    exit(SinkPid, kill),
+    erlang:send_after(KillerReinstallAfter, self(), {reboot, Sink}),
     {noreply, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         config=Config, sink=Sink} = State) ->
@@ -83,8 +87,8 @@ handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
 handle_info(reinstall_handler, #state{module=Module, config=Config, sink=Sink} = State) ->
     install_handler(Sink, Module, Config),
     {noreply, State};
-handle_info(reboot, State) ->
-    lager_app:boot(),
+handle_info({reboot, Sink}, State) ->
+    lager_app:boot(Sink),
     {noreply, State};
 handle_info(stop, State) ->
     {stop, normal, State};
