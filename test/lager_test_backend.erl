@@ -890,12 +890,22 @@ error_logger_redirect_test_() ->
                 end
             },
             {"warning messages with unicode characters in Args are printed",
+             %% See comments at commit 7662a8040d5427907c041ca8e682fe09f6f17d26
+             %% for full details of why using the process dictionary is needed
+             %% for these next 4 tests.
+             %%
+             %% In short, the error level atom used in OTP releases changed
+             %% between 17 and 18 and the default used in sync_error_logger
+             %% isn't right for OTP 18 and later. Storing the expected level
+             %% in the process dictionary makes sync_error_logger use the
+             %% correct level when processing the log messages.
                 fun() ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_msg("~ts", ["Привет!"]),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("Привет!", lists:flatten(Msg))
                 end
@@ -903,33 +913,36 @@ error_logger_redirect_test_() ->
 
             {"warning messages are printed at the correct level",
                 fun() ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_msg("doom, doom has come upon you all"),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("doom, doom has come upon you all", lists:flatten(Msg))
                 end
             },
             {"warning reports are printed at the correct level",
                 fun() ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_report([{i, like}, pie]),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("i: like, pie", lists:flatten(Msg))
                 end
             },
             {"single term warning reports are printed at the correct level",
                 fun() ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_report({foolish, bees}),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("{foolish,bees}", lists:flatten(Msg))
                 end
