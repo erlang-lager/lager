@@ -799,6 +799,43 @@ filesystem_test_() ->
         ]
     }.
 
+trace_files_test_() ->
+    {foreach,
+        fun() ->
+                file:delete("events.log"),
+                file:delete("test.log"),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_file_backend, [{file, "test.log"},
+                                                                            {level, error},
+                                                                            {formatter, lager_default_formatter},
+                                                                            {formatter_config, [message, "\n"]}]}]),
+                application:set_env(lager, trace_files, [{"events.log", [{module, ?MODULE}]}]),
+                application:set_env(lager, async_threshold, undefined),
+                lager:start()
+        end,
+        fun(_) ->
+                application:stop(lager),
+                file:delete("events.log"),
+                file:delete("test.log"),
+                error_logger:tty(true)
+        end,
+        [
+            {"trace_files set up in configuration should work",
+                fun() ->
+                        lager:error("trace test error message"),
+                        %% not elegible for trace
+                        lager:log(error, self(), "Not trace test message"),
+                        {ok, BinInfo} = file:read_file("events.log"),
+                        ?assertMatch([_, _, "[error]", _, "trace test error message\n"], re:split(BinInfo, " ", [{return, list}, {parts, 5}])),
+                        ?assert(filelib:is_regular("test.log")),
+                        {ok, BinInfo2} = file:read_file("test.log"),
+                        ?assertMatch(["trace test error message", "Not trace test message\n"], re:split(BinInfo2, "\n", [{return, list}, {parts, 2}]))
+                end
+            }
+        ]
+    }.
+
 formatting_test_() ->
     {foreach,
         fun() ->
