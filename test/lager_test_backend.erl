@@ -1128,8 +1128,9 @@ error_logger_redirect_test_() ->
             },
             {"warning messages with unicode characters in Args are printed",
                 fun(Sink) ->
-                        sync_error_logger:warning_msg("~ts", ["Привет!"]),
                         Map = error_logger:warning_map(),
+                        put(warning_map, Map),
+                        sync_error_logger:warning_msg("~ts", ["Привет!"]),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
                         ?assertEqual(lager_util:level_to_num(Map),Level),
@@ -1140,8 +1141,9 @@ error_logger_redirect_test_() ->
 
             {"warning messages are printed at the correct level",
                 fun(Sink) ->
-                        sync_error_logger:warning_msg("doom, doom has come upon you all"),
                         Map = error_logger:warning_map(),
+                        put(warning_map, Map),
+                        sync_error_logger:warning_msg("doom, doom has come upon you all"),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
                         ?assertEqual(lager_util:level_to_num(Map),Level),
@@ -1151,8 +1153,9 @@ error_logger_redirect_test_() ->
             },
             {"warning reports are printed at the correct level",
                 fun(Sink) ->
-                        sync_error_logger:warning_report([{i, like}, pie]),
                         Map = error_logger:warning_map(),
+                        put(warning_map, Map),
+                        sync_error_logger:warning_report([{i, like}, pie]),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
                         ?assertEqual(lager_util:level_to_num(Map),Level),
@@ -1162,8 +1165,9 @@ error_logger_redirect_test_() ->
             },
             {"single term warning reports are printed at the correct level",
                 fun(Sink) ->
-                        sync_error_logger:warning_report({foolish, bees}),
                         Map = error_logger:warning_map(),
+                        put(warning_map, Map),
+                        sync_error_logger:warning_report({foolish, bees}),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
                         ?assertEqual(lager_util:level_to_num(Map),Level),
