@@ -28,6 +28,7 @@
 -export([start/0,
          start/2,
          start_handler/3,
+         configure_sink/2,
          stop/1]).
 
 %% The `application:get_env/3` compatibility wrapper is useful
