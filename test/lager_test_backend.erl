@@ -1127,46 +1127,66 @@ error_logger_redirect_test_() ->
                 end
             },
             {"warning messages with unicode characters in Args are printed",
+             %% The next 4 tests need to store the current value of
+             %% `error_logger:warning_map/0' into a process dictionary
+             %% key `warning_map' so that the error message level used
+             %% to process the log messages will match what lager
+             %% expects.
+             %%
+             %% The atom returned by `error_logger:warning_map/0'
+             %% changed between OTP 17 and 18 (and later releases)
+             %%
+             %% `warning_map' is consumed in the `test/sync_error_logger.erl'
+             %% module. The default message level used in sync_error_logger
+             %% was fine for OTP releases through 17 and then broke
+             %% when 18 was released. By storing the expected value
+             %% in the process dictionary, sync_error_logger will
+             %% use the correct message level to process the
+             %% messages and these tests will no longer
+             %% break.
                 fun(Sink) ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_msg("~ts", ["Привет!"]),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("Привет!", lists:flatten(Msg))
                 end
             },
-
             {"warning messages are printed at the correct level",
                 fun(Sink) ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_msg("doom, doom has come upon you all"),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("doom, doom has come upon you all", lists:flatten(Msg))
                 end
             },
             {"warning reports are printed at the correct level",
                 fun(Sink) ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_report([{i, like}, pie]),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("i: like, pie", lists:flatten(Msg))
                 end
             },
             {"single term warning reports are printed at the correct level",
                 fun(Sink) ->
+                        Lvl = error_logger:warning_map(),
+                        put(warning_map, Lvl),
                         sync_error_logger:warning_report({foolish, bees}),
-                        Map = error_logger:warning_map(),
                         _ = gen_event:which_handlers(error_logger),
                         {Level, _, Msg,Metadata} = pop(Sink),
-                        ?assertEqual(lager_util:level_to_num(Map),Level),
+                        ?assertEqual(lager_util:level_to_num(Lvl),Level),
                         ?assertEqual(self(),proplists:get_value(pid,Metadata)),
                         ?assertEqual("{foolish,bees}", lists:flatten(Msg))
                 end
