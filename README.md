@@ -596,6 +596,9 @@ to `debug` as in the last file backend example.
 The `traces` keyword works on alternative sinks too but the same limitations
 and caveats noted above apply.
 
+**IMPORTANT**: You **must** define a severity level in all lager releases
+up to and including 3.1.0 or previous. The 2-tuple form wasn't added until
+3.2.0.
 
 Setting the truncation limit at compile-time
 --------------------------------------------
