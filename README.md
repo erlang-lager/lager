@@ -568,6 +568,35 @@ The former can be ameliorated by opening multiple traces; the latter
 can be fixed by rearchitecting lager's file backend, but this has not
 been tackled.
 
+### Traces from configuration
+
+Lager supports starting traces from its configuration file. The keyword
+to define them is `traces`, followed by a proplist of tuples that define
+a backend handler and zero or more filters in a required list,
+followed by an optional message severity level.
+
+An example looks like this:
+
+```erlang
+{lager, [
+  {handlers, [...]},
+  {traces, [
+    %% handler,                         filter,                message level (defaults to debug if not given)
+    {lager_console_backend,             [{module, foo}],       info },
+    {{lager_file_backend, "trace.log"}, [{request, '>', 120}], error},
+    {{lager_file_backend, "event.log"}, [{module, bar}]             } %% implied debug level here
+  ]}
+]}.
+```
+
+In this example, we have three traces. One using the console backend, and two
+using the file backend. If the message severity level is left out, it defaults
+to `debug` as in the last file backend example.
+
+The `traces` keyword works on alternative sinks too but the same limitations
+and caveats noted above apply.
+
+
 Setting the truncation limit at compile-time
 --------------------------------------------
 Lager defaults to truncating messages at 4096 bytes, you can alter this by
