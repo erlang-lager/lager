@@ -25,7 +25,7 @@ gh280_crash_test() ->
             {Handler,Reason};
         X -> 
             X
-    after 1000 ->
+    after 5000 ->
         timeout
     end,
     ?assert(Result),
