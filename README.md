@@ -553,7 +553,7 @@ Traces are specific to a sink, which can be specified via trace
 filters:
 
 ```erlang
-lager:trace_file("log/security.log", [{sink, audit}, {function, myfunction}], warning)
+lager:trace_file("log/security.log", [{sink, audit_event}, {function, myfunction}], warning)
 ```
 
 If no sink is thus specified, the default lager sink will be used.
