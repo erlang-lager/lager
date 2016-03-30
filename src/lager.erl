@@ -37,7 +37,7 @@
         safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
         do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3, pr_stacktrace/1, pr_stacktrace/2]).
 
--type log_level() :: debug | info | notice | warning | error | critical | alert | emergency.
+-type log_level() :: none | debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
 
 -export_type([log_level/0, log_level_number/0]).
