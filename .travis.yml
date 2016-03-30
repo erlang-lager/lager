@@ -1,3 +1,4 @@
+sudo: false
 language: erlang
 notifications:
   email: eng@basho.com
