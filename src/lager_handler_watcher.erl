@@ -61,6 +61,14 @@ handle_info({gen_event_EXIT, Module, normal}, #state{module=Module} = State) ->
     {stop, normal, State};
 handle_info({gen_event_EXIT, Module, shutdown}, #state{module=Module} = State) ->
     {stop, normal, State};
+handle_info({gen_event_EXIT, Module, {'EXIT', {kill_me, [_KillerHWM, KillerReinstallAfter]}}},
+        #state{module=Module, sink=Sink} = State) ->
+    %% Brutally kill the manager but stay alive to restore settings.
+    Manager = whereis(Sink),
+    unlink(Manager),
+    exit(Manager, kill),
+    erlang:send_after(KillerReinstallAfter, self(), reboot),
+    {noreply, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         config=Config, sink=Sink} = State) ->
     case lager:log(error, self(), "Lager event handler ~p exited with reason ~s",
@@ -74,6 +82,9 @@ handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
     {noreply, State};
 handle_info(reinstall_handler, #state{module=Module, config=Config, sink=Sink} = State) ->
     install_handler(Sink, Module, Config),
+    {noreply, State};
+handle_info(reboot, State) ->
+    lager_app:boot(),
     {noreply, State};
 handle_info(stop, State) ->
     {stop, normal, State};
