@@ -798,6 +798,7 @@ setup() ->
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
+    catch ets:delete(lager_config), %% kill the ets config table with fire
     application:stop(lager),
     application:stop(goldrush),
     error_logger:tty(true).
