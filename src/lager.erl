@@ -615,7 +615,6 @@ filtermap(Fun, List1) ->
     lists:foldr(fun(Elem, Acc) ->
                        case Fun(Elem) of
                            false -> Acc;
-                           true -> [Elem|Acc];
                            {true,Value} -> [Value|Acc]
                        end
                 end, [], List1).
