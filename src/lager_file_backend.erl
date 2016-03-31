@@ -825,7 +825,9 @@ trace_files_test_() ->
         end,
         fun(_) ->
                 catch ets:delete(lager_config),
+                application:unset_env(lager, traces),
                 application:stop(lager),
+                  
                 file:delete("events.log"),
                 file:delete("test.log"),
                 file:delete("debug.log"),

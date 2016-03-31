@@ -794,6 +794,7 @@ setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
+    application:unset_env(lager, traces),
     lager:start(),
     gen_event:call(lager_event, ?MODULE, flush).
 
