@@ -794,10 +794,12 @@ setup() ->
     application:load(lager),
     application:set_env(lager, handlers, [{?MODULE, info}]),
     application:set_env(lager, error_logger_redirect, false),
+    application:unset_env(lager, traces),
     lager:start(),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
+    catch ets:delete(lager_config), %% kill the ets config table with fire
     application:stop(lager),
     application:stop(goldrush),
     error_logger:tty(true).
