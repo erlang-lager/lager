@@ -10,6 +10,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 gh280_crash_test() ->
+    {timeout, 30, fun() -> gh280_impl() end}.
+
+gh280_impl() ->
     application:stop(lager),
     application:stop(goldrush),
 
@@ -25,7 +28,7 @@ gh280_crash_test() ->
             {Handler,Reason};
         X -> 
             X
-    after 1000 ->
+    after 10000 ->
         timeout
     end,
     ?assert(Result),

@@ -609,9 +609,19 @@ pr_stacktrace(Stacktrace, {Class, Reason}) ->
     lists:flatten(
         pr_stacktrace(Stacktrace) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason])).
     
+
+%% R15 compatibility only
+filtermap(Fun, List1) ->
+    lists:foldr(fun(Elem, Acc) ->
+                       case Fun(Elem) of
+                           false -> Acc;
+                           {true,Value} -> [Value|Acc]
+                       end
+                end, [], List1).
+
 rotate_sink(Sink) ->
     Handlers = lager_config:global_get(handlers),
-    RotateHandlers = lists:filtermap(
+    RotateHandlers = filtermap(
         fun({Handler,_,S}) when S == Sink -> {true, {Handler, Sink}};
            (_)                            -> false 
         end, 

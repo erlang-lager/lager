@@ -46,8 +46,7 @@ rotate_test_() ->
                 lager:log(error, self(), "Test message 1"),
                 lager:log(sink_event, error, self(), "Sink test message 1", []),
                 lager:rotate_handler({lager_file_backend, "test1.log"}),
-                timer:sleep(1000),
-                true = filelib:is_regular("test1.log.0"),
+                ok = wait_until(fun() -> filelib:is_regular("test1.log.0") end, 10),
                 lager:log(error, self(), "Test message 2"),
                 lager:log(sink_event, error, self(), "Sink test message 2", []),
                 
@@ -73,8 +72,7 @@ rotate_test_() ->
                 lager:log(error, self(), "Test message 1"),
                 lager:log(sink_event, error, self(), "Sink test message 1", []),
                 lager:rotate_sink(sink_event),
-                timer:sleep(1000),
-                true = filelib:is_regular("test3.log.0"),
+                ok = wait_until(fun() -> filelib:is_regular("test3.log.0") end, 10),
                 lager:log(error, self(), "Test message 2"),
                 lager:log(sink_event, error, self(), "Sink test message 2", []),
                 {ok, File1} = file:read_file("test1.log"),
@@ -99,8 +97,7 @@ rotate_test_() ->
                 lager:log(error, self(), "Test message 1"),
                 lager:log(sink_event, error, self(), "Sink test message 1", []),
                 lager:rotate_all(),
-                timer:sleep(1000),
-                true = filelib:is_regular("test3.log.0"),
+                ok = wait_until(fun() -> filelib:is_regular("test3.log.0") end, 10),
                 lager:log(error, self(), "Test message 2"),
                 lager:log(sink_event, error, self(), "Sink test message 2", []),
                 {ok, File1} = file:read_file("test1.log"),
@@ -136,3 +133,11 @@ have_log(Data, Log) ->
 have_no_log(Data, Log) ->
     nomatch = binary:match(Data, Log).
 
+wait_until(_Fun, 0) -> {error, too_many_retries};
+wait_until(Fun, Retry) ->
+    case Fun() of
+        true -> ok;
+        false ->
+            timer:sleep(500),
+            wait_until(Fun, Retry-1)
+    end.
