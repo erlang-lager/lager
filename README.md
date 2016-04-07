@@ -25,6 +25,8 @@ Features
 * Syslog style log level comparison flags
 * Colored terminal output (requires R16+)
 * Map support (requires 17+)
+* Optional load shedding by setting a high water mark to kill (and reinstall)
+  a sink after a configurable cool down timer
 
 Usage
 -----
@@ -189,14 +191,19 @@ for the backend:
 ]}.
 ```
 
-Included is `lager_default_formatter`.  This provides a generic, default formatting for log messages using a structure similar to Erlang's [iolist](http://learnyousomeerlang.com/buckets-of-sockets#io-lists) which we call "semi-iolist":
+Included is `lager_default_formatter`.  This provides a generic, default
+formatting for log messages using a structure similar to Erlang's
+[iolist](http://learnyousomeerlang.com/buckets-of-sockets#io-lists) which we
+call "semi-iolist":
 
 * Any traditional iolist elements in the configuration are printed verbatim.
-* Atoms in the configuration are treated as placeholders for lager metadata and extracted from the log message.
+* Atoms in the configuration are treated as placeholders for lager metadata and
+  extracted from the log message.
     * The placeholders `date`, `time`, `message`, `sev` and `severity` will always exist.
-    * `sev` is an abbreviated severity which is interpreted as a capitalized single letter encoding of the severity level
-      (e.g. `'debug'` -> `$D`)
-    * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node` will always exist if the parse transform is used.
+    * `sev` is an abbreviated severity which is interpreted as a capitalized
+      single letter encoding of the severity level (e.g. `'debug'` -> `$D`)
+    * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node`
+      will always exist if the parse transform is used.
     * Applications can define their own metadata placeholder.
     * A tuple of `{atom(), semi-iolist()}` allows for a fallback for
       the atom placeholder. If the value represented by the atom
@@ -235,6 +242,7 @@ specified via the `crash_log_msg_size` application variable.
 
 Messages from `error_logger` will be redirected to `error_logger_lager_event` sink
 if it is defined so it can be redirected to another log file.
+
 For example:
 
 ```
@@ -249,15 +257,18 @@ For example:
            }]
 }].
 ```
-Will send all `error_logger` messages to `error_logger.log` file.
+will send all `error_logger` messages to `error_logger.log` file.
+
 Overload Protection
 -------------------
 
+### Asynchronous mode
+
 Prior to lager 2.0, the `gen_event` at the core of lager operated purely in
 synchronous mode. Asynchronous mode is faster, but has no protection against
-message queue overload. In lager 2.0, the `gen_event` takes a hybrid approach. it
-polls its own mailbox size and toggles the messaging between synchronous and
-asynchronous depending on mailbox size.
+message queue overload. As of lager 2.0, the `gen_event` takes a hybrid
+approach. it polls its own mailbox size and toggles the messaging between
+synchronous and asynchronous depending on mailbox size.
 
 ```erlang
 {async_threshold, 20},
@@ -282,6 +293,31 @@ related processes crash, you can set a limit:
 ```
 
 It is probably best to keep this number small.
+
+### Sink Killer
+
+In some high volume situations, it may be preferable to drop all pending log
+messages instead of letting them drain over time.
+
+If you prefer, you may choose to use the sink killer to shed load. In this
+operational mode, if the `gen_event` mailbox exceeds a configurable
+high water mark, the sink will be killed and reinstalled after a
+configurable cool down time.
+
+You can configure this behavior by using these configuration directives:
+
+```erlang
+{killer_hwm, 1000},
+{killer_reinstall_after, 5000}
+```
+
+This means if the sink's mailbox size exceeds 1000 messages, kill the
+entire sink and reload it after 5000 milliseconds. This behavior can
+also be installed into alternative sinks if desired.
+
+By default, the manager killer *is not installed* into any sink. If
+the `killer_reinstall_after` cool down time is not specified it defaults
+to 5000.
 
 "Unsafe"
 --------
