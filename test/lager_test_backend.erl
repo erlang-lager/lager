@@ -539,6 +539,7 @@ lager_test_() ->
                 end
             },
             {"stopped trace stops and removes its event handler - default sink (gh#267)",
+             {timeout, 10,
                 fun() ->
                         Sink = ?DEFAULT_SINK,
                         StartHandlers = gen_event:which_handlers(Sink),
@@ -562,14 +563,14 @@ lager_test_() ->
 
                         ?assertEqual(length(StartGlobal)+1, length(lager_config:global_get(handlers))),
                         ok = lager:stop_trace(TestTrace2),
-                        EndHandlers = gen_event:which_handlers(?DEFAULT_SINK),
+                        EndHandlers = gen_event:which_handlers(Sink),
                         EndGlobal = lager_config:global_get(handlers),
                         {_, T3} = lager_config:get({Sink, loglevel}),
                         ?assertEqual([], T3),
                         ?assertEqual(StartHandlers, EndHandlers),
                         ?assertEqual(StartGlobal, EndGlobal),
                         ok
-                end
+                end}
             },
             {"record printing works",
                 fun() ->
