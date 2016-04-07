@@ -515,6 +515,8 @@ lager_test_() ->
                         application:stop(lager),
                         application:set_env(lager, traces, [{lager_test_backend, [{foo, bar}], debug}]),
                         lager:start(),
+                        timer:sleep(5),
+                        flush(),
                         lager:debug([{foo, bar}], "hello world"),
                         ?assertEqual(1, count()),
                         application:unset_env(lager, traces),
