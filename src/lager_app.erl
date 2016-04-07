@@ -146,7 +146,7 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
     GlStrategy = case application:get_env(lager, error_logger_groupleader_strategy) of
                     undefined ->
                         handle;
-                    {ok, GlStrategy0} when 
+                    {ok, GlStrategy0} when
                             GlStrategy0 =:= handle;
                             GlStrategy0 =:= ignore;
                             GlStrategy0 =:= mirror ->
@@ -159,7 +159,7 @@ start_error_logger_handler(_, HWM, {ok, WhiteList}) ->
                 end,
 
 
-    case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM, GlStrategy]]) of
+    _ = case supervisor:start_child(lager_handler_watcher_sup, [error_logger, error_logger_lager_h, [HWM, GlStrategy]]) of
         {ok, _} ->
             [begin error_logger:delete_report_handler(X), X end ||
                 X <- gen_event:which_handlers(error_logger) -- [error_logger_lager_h | WhiteList]];
