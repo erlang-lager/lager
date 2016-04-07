@@ -1570,7 +1570,8 @@ async_threshold_test_() ->
                         ?assertEqual(true, lager_config:get(async)),
 
                         %% put a ton of things in the queue
-                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 1000)] end) || _ <- lists:seq(1, 15)],
+                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 100)] end)
+                                   || _ <- lists:seq(1, 10)],
 
                         %% serialize on mailbox
                         _ = gen_event:which_handlers(lager_event),
@@ -1588,7 +1589,9 @@ async_threshold_test_() ->
                         %% point in the past
                         ?assertMatch([{sync_toggled, N}] when N > 0,
                                                               ets:lookup(async_threshold_test, sync_toggled)),
-                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're definitely in sync mode at the end of the run)
+                        %% wait for all the workers to return, meaning that all
+                        %% the messages have been logged (since we're
+                        %% definitely in sync mode at the end of the run)
                         collect_workers(Workers),
                         %% serialize on the mailbox again
                         _ = gen_event:which_handlers(lager_event),
