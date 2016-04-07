@@ -88,7 +88,7 @@ handle_info(reinstall_handler, #state{module=Module, config=Config, sink=Sink} =
     install_handler(Sink, Module, Config),
     {noreply, State};
 handle_info({reboot, Sink}, State) ->
-    lager_app:boot(Sink),
+    _ = lager_app:boot(Sink),
     {noreply, State};
 handle_info(stop, State) ->
     {stop, normal, State};
