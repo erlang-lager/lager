@@ -188,7 +188,7 @@ configure_sink(Sink, SinkDef) ->
     determine_async_behavior(Sink, proplists:get_value(async_threshold, SinkDef),
                              proplists:get_value(async_threshold_window, SinkDef)
                             ),
-    maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef), 
+    _ = maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef), 
                               proplists:get_value(killer_reinstall_after, SinkDef)),
     start_handlers(Sink,
                    proplists:get_value(handlers, SinkDef, [])),
@@ -226,7 +226,7 @@ boot() ->
                              get_env(lager, async_threshold),
                              get_env(lager, async_threshold_window)),
 
-    maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm), 
+    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm), 
                               get_env(lager, killer_reinstall_after)),
 
     start_handlers(?DEFAULT_SINK,
