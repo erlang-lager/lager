@@ -423,6 +423,10 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 Changelog 2.x
 -------------
+2.2.2 - 08 April 2016
+    * Bugfix: Field name for processes changed from 'name' to 'id' in 2014. (#339)
+    * Bugfix: OTP 18 test failure fixes. (#338)
+
 2.2.1 - 27 January 2016
     * Dependency: Bump goldrush to 0.1.8
     * Bugfix: Properly remove backends from traces when stopped. (#308)
