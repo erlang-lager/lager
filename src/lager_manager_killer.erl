@@ -29,7 +29,9 @@ handle_call(kill_self, #state{killer_hwm=KillerHWM, killer_reinstall_after=Kille
     exit({kill_me, [KillerHWM, KillerReinstallAfter]});
 handle_call(_Request, State) ->
     {ok, ok, State}.
-
+%% It's not the best idea in the world to check the queue length for every
+%% log message.  We can make this operation work on a poll timer in the
+%% future.
 handle_event({log, _Message}, State = #state{killer_hwm=KillerHWM, killer_reinstall_after=KillerReinstallAfter}) ->
     {message_queue_len, Len} = process_info(self(), message_queue_len),
     case Len > KillerHWM of
