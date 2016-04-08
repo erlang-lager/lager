@@ -515,6 +515,8 @@ lager_test_() ->
                         application:stop(lager),
                         application:set_env(lager, traces, [{lager_test_backend, [{foo, bar}], debug}]),
                         lager:start(),
+                        timer:sleep(5),
+                        flush(),
                         lager:debug([{foo, bar}], "hello world"),
                         ?assertEqual(1, count()),
                         application:unset_env(lager, traces),
@@ -537,6 +539,7 @@ lager_test_() ->
                 end
             },
             {"stopped trace stops and removes its event handler - default sink (gh#267)",
+             {timeout, 10,
                 fun() ->
                         Sink = ?DEFAULT_SINK,
                         StartHandlers = gen_event:which_handlers(Sink),
@@ -560,14 +563,14 @@ lager_test_() ->
 
                         ?assertEqual(length(StartGlobal)+1, length(lager_config:global_get(handlers))),
                         ok = lager:stop_trace(TestTrace2),
-                        EndHandlers = gen_event:which_handlers(?DEFAULT_SINK),
+                        EndHandlers = gen_event:which_handlers(Sink),
                         EndGlobal = lager_config:global_get(handlers),
                         {_, T3} = lager_config:get({Sink, loglevel}),
                         ?assertEqual([], T3),
                         ?assertEqual(StartHandlers, EndHandlers),
                         ?assertEqual(StartGlobal, EndGlobal),
                         ok
-                end
+                end}
             },
             {"record printing works",
                 fun() ->
@@ -796,6 +799,18 @@ setup() ->
     application:set_env(lager, error_logger_redirect, false),
     application:unset_env(lager, traces),
     lager:start(),
+    %% There is a race condition between the application start up, lager logging its own
+    %% start up condition and several tests that count messages or parse the output of
+    %% tests.  When the lager start up message wins the race, it causes these tests
+    %% which parse output or count message arrivals to fail.
+    %%
+    %% We introduce a sleep here to allow `flush' to arrive *after* the start up
+    %% message has been received and processed.
+    %%
+    %% This race condition was first exposed during the work on
+    %% 4b5260c4524688b545cc12da6baa2dfa4f2afec9 which introduced the lager
+    %% manager killer PR.
+    timer:sleep(5),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
@@ -1555,7 +1570,8 @@ async_threshold_test_() ->
                         ?assertEqual(true, lager_config:get(async)),
 
                         %% put a ton of things in the queue
-                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 1000)] end) || _ <- lists:seq(1, 15)],
+                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 100)] end)
+                                   || _ <- lists:seq(1, 10)],
 
                         %% serialize on mailbox
                         _ = gen_event:which_handlers(lager_event),
@@ -1573,7 +1589,9 @@ async_threshold_test_() ->
                         %% point in the past
                         ?assertMatch([{sync_toggled, N}] when N > 0,
                                                               ets:lookup(async_threshold_test, sync_toggled)),
-                        %% wait for all the workers to return, meaning that all the messages have been logged (since we're definitely in sync mode at the end of the run)
+                        %% wait for all the workers to return, meaning that all
+                        %% the messages have been logged (since we're
+                        %% definitely in sync mode at the end of the run)
                         collect_workers(Workers),
                         %% serialize on the mailbox again
                         _ = gen_event:which_handlers(lager_event),
