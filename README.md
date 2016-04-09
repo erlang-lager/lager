@@ -654,6 +654,26 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 3.x Changelog
 -------------
+3.2.0 - 08 April 2016
+
+    * Feature: Optional sink killer to shed load when mailbox size exceeds a
+      configurable high water mark (#346)
+    * Feature: Export `configure_sink/2` so users may dynamically configure
+      previously setup and parse transformed sinks from their own code. (#342)
+    * Feature: Re-enable Travis CI and update .travis.yml (#340)
+    * Bugfix: Fix test race conditions for Travis CI (#344)
+    * Bugfix: Add the atom 'none' to the log_level() type so downstream
+      users won't get dialyzer failures if they use the 'none' log level. (#343)
+    * Bugfix: Fix typo in documentation. (#341)
+    * Bugfix: Fix OTP 18 test failures due to `warning_map/0` response
+      change. (#337)
+    * Bugfix: Make sure traces that use the file backend work correctly
+      when specified in lager configuration. (#336)
+    * Bugfix: Use `lager_app:get_env/3` for R15 compatibility. (#335)
+    * Bugfix: Make sure lager uses `id` instead of `name` when reporting
+      supervisor children failures. (The atom changed in OTP in 2014.) (#334)
+    * Bugfix: Make lager handle improper iolists (#327)
+
 3.1.0 - 27 January 2016
 
     * Feature: API calls to a rotate handler, sink or all.  This change
