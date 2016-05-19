@@ -237,9 +237,9 @@ boot() ->
     lager:update_loglevel_config(?DEFAULT_SINK),
 
     SavedHandlers = start_error_logger_handler(
-                                    get_env(lager, error_logger_redirect, true),
+                      get_env(lager, error_logger_redirect, true),
                       interpret_hwm(get_env(lager, error_logger_hwm, 0)),
-                                    get_env(lager, error_logger_whitelist, [])
+                      get_env(lager, error_logger_whitelist, [])
                      ),
 
     SavedHandlers.
