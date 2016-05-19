@@ -57,15 +57,18 @@ walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     walk_ast([{function, Line, Name, Arity,
                 walk_clauses([], Clauses)}|Acc], T);
 walk_ast(Acc, [{attribute, _, record, {Name, Fields}}=H|T]) ->
-    FieldNames = lists:map(fun({record_field, _, {atom, _, FieldName}}) ->
-                FieldName;
-            ({record_field, _, {atom, _, FieldName}, _Default}) ->
-                FieldName
-        end, Fields),
+    FieldNames = lists:map(fun record_field_name/1, Fields),
     stash_record({Name, FieldNames}),
     walk_ast([H|Acc], T);
 walk_ast(Acc, [H|T]) ->
     walk_ast([H|Acc], T).
+
+record_field_name({record_field, _, {atom, _, FieldName}}) ->
+    FieldName;
+record_field_name({record_field, _, {atom, _, FieldName}, _Default}) ->
+    FieldName;
+record_field_name({typed_record_field, Field, _Type}) ->
+    record_field_name(Field).
 
 walk_clauses(Acc, []) ->
     lists:reverse(Acc);
