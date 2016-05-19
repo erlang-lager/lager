@@ -178,12 +178,10 @@ reinstall_on_runtime_failure_test_() ->
                     try
                         ?assert(lists:member(lager_crash_backend, gen_event:which_handlers(lager_event))),
                         timer:sleep(6000),
-                        _ = lager_test_backend:pop(), %% throw away application start up message
-                        _ = lager_test_backend:pop(), %% throw away gen_event crash message
-                        {_Severity, _Date, Msg, _Metadata} = lager_test_backend:pop(),
-                        ?assertEqual("Lager event handler lager_crash_backend exited with reason crash", lists:flatten(Msg)),
-                        {_Severity2, _Date2, Msg2, _Metadata2} = lager_test_backend:pop(),
-                        ?assertMatch("Lager failed to install handler lager_crash_backend into lager_event, retrying later :"++_, lists:flatten(Msg2)),
+
+                        pop_until("Lager event handler lager_crash_backend exited with reason crash", fun lists:flatten/1),
+                        pop_until("Lager failed to install handler lager_crash_backend into lager_event, retrying later",
+                                  fun(Msg) -> string:substr(lists:flatten(Msg), 1, 84) end),
                         ?assertEqual(false, lists:member(lager_crash_backend, gen_event:which_handlers(lager_event)))
                     after
                        application:stop(lager),
@@ -194,5 +192,17 @@ reinstall_on_runtime_failure_test_() ->
         ]
     }.
 
+pop_until(String, Fun) ->
+    try_backend_pop(lager_test_backend:pop(), String, Fun).
+
+try_backend_pop(undefined, String, _Fun) ->
+    throw("Not found: " ++ String);
+try_backend_pop({_Severity, _Date, Msg, _Metadata}, String, Fun) ->
+    case Fun(Msg) of
+        String ->
+            ok;
+        _ ->
+            try_backend_pop(lager_test_backend:pop(), String, Fun)
+    end.
 
 -endif.
