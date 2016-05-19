@@ -23,6 +23,7 @@
 -behaviour(application).
 -include("lager.hrl").
 -ifdef(TEST).
+-compile([export_all]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 -export([start/0,
