@@ -22,13 +22,15 @@
 
 
 -define(LEVELS,
-    [debug, info, notice, warning, error, critical, alert, emergency, none]).
+    [all, trace, debug, info, notice, warning, error, critical, alert, emergency, none]).
 
 %% Use of these "functions" means that the argument list will not be
 %% truncated for safety
 -define(LEVELS_UNSAFE,
-    [{debug_unsafe, debug}, {info_unsafe, info}, {notice_unsafe, notice}, {warning_unsafe, warning}, {error_unsafe, error}, {critical_unsafe, critical}, {alert_unsafe, alert}, {emergency_unsafe, emergency}]).
+    [{all_unsafe, all}, {trace_unsafe, trace},{debug_unsafe, debug}, {info_unsafe, info}, {notice_unsafe, notice}, {warning_unsafe, warning}, {error_unsafe, error}, {critical_unsafe, critical}, {alert_unsafe, alert}, {emergency_unsafe, emergency}]).
 
+-define(ALL, 2147483647).
+-define(TRACE, 256).
 -define(DEBUG, 128).
 -define(INFO, 64).
 -define(NOTICE, 32).
@@ -41,6 +43,8 @@
 
 -define(LEVEL2NUM(Level),
     case Level of
+        all -> ?ALL;
+        trace -> ?TRACE;
         debug -> ?DEBUG;
         info -> ?INFO;
         notice -> ?NOTICE;
@@ -53,6 +57,8 @@
 
 -define(NUM2LEVEL(Num),
     case Num of
+        ?ALL -> all;
+        ?TRACE -> trace;
         ?DEBUG -> debug;
         ?INFO -> info;
         ?NOTICE -> notice;

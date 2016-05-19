@@ -32,8 +32,10 @@
 -include("lager.hrl").
 
 levels() ->
-    [debug, info, notice, warning, error, critical, alert, emergency, none].
+    [all, trace, debug, info, notice, warning, error, critical, alert, emergency, none].
 
+level_to_num(all)        -> ?ALL;
+level_to_num(trace)      -> ?TRACE;
 level_to_num(debug)      -> ?DEBUG;
 level_to_num(info)       -> ?INFO;
 level_to_num(notice)     -> ?NOTICE;
@@ -44,6 +46,8 @@ level_to_num(alert)      -> ?ALERT;
 level_to_num(emergency)  -> ?EMERGENCY;
 level_to_num(none)       -> ?LOG_NONE.
 
+level_to_chr(all)        -> $L;
+level_to_chr(trace)      -> $T;
 level_to_chr(debug)      -> $D;
 level_to_chr(info)       -> $I;
 level_to_chr(notice)     -> $N;
@@ -54,6 +58,8 @@ level_to_chr(alert)      -> $A;
 level_to_chr(emergency)  -> $M;
 level_to_chr(none)       -> $ .
 
+num_to_level(?ALL)       -> all;
+num_to_level(?TRACE)     -> trace;
 num_to_level(?DEBUG)     -> debug;
 num_to_level(?INFO)      -> info;
 num_to_level(?NOTICE)    -> notice;
