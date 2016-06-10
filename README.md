@@ -654,6 +654,11 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 3.x Changelog
 -------------
+3.2.1 - 10 June 2016
+
+    * Bugfix: Recent `get_env` changes resulted in launch failure (#355)
+    * OTP: Support typed records for Erlang 19.0 (#361)
+
 3.2.0 - 08 April 2016
 
     * Feature: Optional sink killer to shed load when mailbox size exceeds a
