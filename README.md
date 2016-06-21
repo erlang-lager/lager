@@ -235,7 +235,7 @@ You can also disable reformatting for OTP and Cowboy messages by setting variabl
 The `error_logger` handler will also log more complete error messages (protected
 with use of `trunc_io`) to a "crash log" which can be referred to for further
 information. The location of the crash log can be specified by the crash_log
-application variable. If set to `undefined` it is not written at all.
+application variable. If set to `false` it is not written at all.
 
 Messages in the crash log are subject to a maximum message size which can be
 specified via the `crash_log_msg_size` application variable.
