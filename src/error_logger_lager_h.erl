@@ -190,9 +190,9 @@ log_event(Event, #state{sink=Sink} = State) ->
                             ?LOGFMT(Sink, error, Worker,
                                 "Ranch listener ~p terminated with reason: ~s",
                                 [Ref, format_reason(Reason)]);
-                        [Ref, _Protocol, Ret] ->
+                        [Ref, Protocol, Ret] ->
                             %% ranch_conns_sup.erl module line 119-123 has three parameters error msg, log it.
-                            ?LOGFMT(Sink, error, undefined,
+                            ?LOGFMT(Sink, error, Protocol,
                                 "Ranch listener ~p terminated with result:~s",
                                 [Ref, format_reason(Ret)])
                     end;
