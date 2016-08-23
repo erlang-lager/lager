@@ -86,6 +86,8 @@ output(time,Msg) ->
     T;
 output(severity,Msg) ->
     atom_to_list(lager_msg:severity(Msg));
+output(severity_upper, Msg) ->
+    uppercase_severity(lager_msg:severity(Msg));
 output(blank,_Msg) ->
     output({blank," "},_Msg);
 output({blank,Fill},_Msg) ->
@@ -193,6 +195,15 @@ get_metadata(Key, Metadata, Default) ->
         {Key, Value} ->
             Value
     end.
+
+uppercase_severity(debug) -> "DEBUG";
+uppercase_severity(info) -> "INFO";
+uppercase_severity(notice) -> "NOTICE";
+uppercase_severity(warning) -> "WARNING";
+uppercase_severity(error) -> "ERROR";
+uppercase_severity(critical) -> "CRITICAL";
+uppercase_severity(alert) -> "ALERT";
+uppercase_severity(emergency) -> "EMERGENCY".
 
 -ifdef(TEST).
 date_time_now() ->
@@ -383,11 +394,79 @@ basic_test_() ->
                     []),
                     [{x,"",[time]}, {x,"",[date],20},blank,{x,"",[metadata],30},blank,{x,"",[sev],10},message, {message,message,"", {right,20}}]
                 )))
+        },
+        {"Uppercase Severity Formatting - DEBUG",
+            ?_assertEqual(<<"DEBUG Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            debug,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - INFO",
+            ?_assertEqual(<<"INFO Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            info,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - NOTICE",
+            ?_assertEqual(<<"NOTICE Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            notice,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - WARNING",
+            ?_assertEqual(<<"WARNING Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            warning,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - ERROR",
+            ?_assertEqual(<<"ERROR Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            error,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - CRITICAL",
+            ?_assertEqual(<<"CRITICAL Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            critical,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - ALERT",
+            ?_assertEqual(<<"ALERT Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            alert,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
+        },
+        {"Uppercase Severity Formatting - EMERGENCY",
+            ?_assertEqual(<<"EMERGENCY Simplist Format">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            emergency,
+                            [{pid, self()}],
+                            []),
+                        [severity_upper, " Simplist Format"])))
         }
-
-
-
-
     ].
 
 -endif.
