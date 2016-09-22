@@ -131,9 +131,9 @@ interpret_hwm(HWM) ->
 
 maybe_install_sink_killer(_Sink, undefined, _ReinstallTimer) -> ok;
 maybe_install_sink_killer(Sink, HWM, undefined) -> maybe_install_sink_killer(Sink, HWM, 5000);
-maybe_install_sink_killer(Sink, HWM, ReinstallTimer) when is_integer(HWM) andalso is_integer(ReinstallTimer) 
+maybe_install_sink_killer(Sink, HWM, ReinstallTimer) when is_integer(HWM) andalso is_integer(ReinstallTimer)
                                                         andalso HWM >= 0 andalso ReinstallTimer >= 0 ->
-    _ = supervisor:start_child(lager_handler_watcher_sup, [Sink, lager_manager_killer, 
+    _ = supervisor:start_child(lager_handler_watcher_sup, [Sink, lager_manager_killer,
                                                            [HWM, ReinstallTimer]]);
 maybe_install_sink_killer(_Sink, HWM, ReinstallTimer) ->
     error_logger:error_msg("Invalid value for 'killer_hwm': ~p or 'killer_reinstall_after': ~p", [HWM, ReinstallTimer]),
@@ -188,7 +188,7 @@ configure_sink(Sink, SinkDef) ->
     determine_async_behavior(Sink, proplists:get_value(async_threshold, SinkDef),
                              proplists:get_value(async_threshold_window, SinkDef)
                             ),
-    _ = maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef), 
+    _ = maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef),
                               proplists:get_value(killer_reinstall_after, SinkDef)),
     start_handlers(Sink,
                    proplists:get_value(handlers, SinkDef, [])),
@@ -229,7 +229,7 @@ boot() ->
                              get_env(lager, async_threshold),
                              get_env(lager, async_threshold_window)),
 
-    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm), 
+    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm),
                               get_env(lager, killer_reinstall_after)),
 
     start_handlers(?DEFAULT_SINK,
