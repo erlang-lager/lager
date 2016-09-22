@@ -98,7 +98,7 @@ start_handler(Sink, Module, Config) ->
                                            [Sink, Module, Config]),
     {Module, Watcher, Sink}.
 
-check_handler_config({lager_file_backend, F}, Config) when is_list(Config) ->
+check_handler_config({lager_file_backend, F}, Config) when is_list(Config); is_tuple(Config) ->
     Fs = case get(?FILENAMES) of
         undefined -> ordsets:new();
         X -> X
@@ -131,9 +131,9 @@ interpret_hwm(HWM) ->
 
 maybe_install_sink_killer(_Sink, undefined, _ReinstallTimer) -> ok;
 maybe_install_sink_killer(Sink, HWM, undefined) -> maybe_install_sink_killer(Sink, HWM, 5000);
-maybe_install_sink_killer(Sink, HWM, ReinstallTimer) when is_integer(HWM) andalso is_integer(ReinstallTimer) 
+maybe_install_sink_killer(Sink, HWM, ReinstallTimer) when is_integer(HWM) andalso is_integer(ReinstallTimer)
                                                         andalso HWM >= 0 andalso ReinstallTimer >= 0 ->
-    _ = supervisor:start_child(lager_handler_watcher_sup, [Sink, lager_manager_killer, 
+    _ = supervisor:start_child(lager_handler_watcher_sup, [Sink, lager_manager_killer,
                                                            [HWM, ReinstallTimer]]);
 maybe_install_sink_killer(_Sink, HWM, ReinstallTimer) ->
     error_logger:error_msg("Invalid value for 'killer_hwm': ~p or 'killer_reinstall_after': ~p", [HWM, ReinstallTimer]),
@@ -188,7 +188,7 @@ configure_sink(Sink, SinkDef) ->
     determine_async_behavior(Sink, proplists:get_value(async_threshold, SinkDef),
                              proplists:get_value(async_threshold_window, SinkDef)
                             ),
-    _ = maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef), 
+    _ = maybe_install_sink_killer(Sink, proplists:get_value(killer_hwm, SinkDef),
                               proplists:get_value(killer_reinstall_after, SinkDef)),
     start_handlers(Sink,
                    proplists:get_value(handlers, SinkDef, [])),
@@ -229,7 +229,7 @@ boot() ->
                              get_env(lager, async_threshold),
                              get_env(lager, async_threshold_window)),
 
-    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm), 
+    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm),
                               get_env(lager, killer_reinstall_after)),
 
     start_handlers(?DEFAULT_SINK,
@@ -387,6 +387,13 @@ check_handler_config_test_() ->
                                     {format, json},
                                     {json_encoder, jiffy}}],
     BadToo = [{fail, {fail}}],
+    OldSchoolLagerGood = expand_handlers([{lager_console_backend,info},
+                                          {lager_file_backend, [
+                                              {"./log/error.log",error,10485760,"$D0",5},
+                                              {"./log/console.log",info,10485760,"$D0",5},
+                                              {"./log/debug.log",debug,10485760,"$D0",5}
+                                          ]}]),
+    NewConfigMissingList = expand_handlers([{foo_backend, {file, "same_file.log"}}]),
     [
         {"lager_file_backend_good",
          ?_assertEqual([ok, ok, ok], [ check_handler_config(M,C) || {M,C} <- Good ])
@@ -399,6 +406,12 @@ check_handler_config_test_() ->
         },
         {"Invalid config dies",
          ?_assertThrow({error, {bad_config, _}}, start_handlers(foo, BadToo))
+        },
+        {"Old Lager config works",
+         ?_assertEqual([ok, ok, ok, ok], [ check_handler_config(M, C) || {M, C} <- OldSchoolLagerGood])
+        },
+        {"New Config missing its list should fail",
+         ?_assertThrow({error, {bad_config, foo_backend}}, [ check_handler_config(M, C) || {M, C} <- NewConfigMissingList])
         }
     ].
 -endif.
