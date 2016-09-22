@@ -654,6 +654,15 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 3.x Changelog
 -------------
+3.2.2 - 22 September 2016
+
+    * Bugfix: Backwards-compatibility fix for `{crash_log, undefined}` (#371)
+    * Fix documentation/README to reflect the preference for using `false`
+      as the `crash_log` setting value rather than `undefined` to indicate
+      that the crash log should not be written (#364)
+    * Bugfix: Backwards-compatibility fix for `lager_file_backend` "legacy"
+      configuration format (#374)
+
 3.2.1 - 10 June 2016
 
     * Bugfix: Recent `get_env` changes resulted in launch failure (#355)
