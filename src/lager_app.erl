@@ -98,7 +98,7 @@ start_handler(Sink, Module, Config) ->
                                            [Sink, Module, Config]),
     {Module, Watcher, Sink}.
 
-check_handler_config({lager_file_backend, F}, Config) when is_list(Config) ->
+check_handler_config({lager_file_backend, F}, Config) when is_list(Config); is_tuple(Config) ->
     Fs = case get(?FILENAMES) of
         undefined -> ordsets:new();
         X -> X
@@ -387,6 +387,13 @@ check_handler_config_test_() ->
                                     {format, json},
                                     {json_encoder, jiffy}}],
     BadToo = [{fail, {fail}}],
+    OldSchoolLagerGood = expand_handlers([{lager_console_backend,info},
+                                          {lager_file_backend, [
+                                              {"./log/error.log",error,10485760,"$D0",5},
+                                              {"./log/console.log",info,10485760,"$D0",5},
+                                              {"./log/debug.log",debug,10485760,"$D0",5}
+                                          ]}]),
+    NewConfigMissingList = expand_handlers([{foo_backend, {file, "same_file.log"}}]),
     [
         {"lager_file_backend_good",
          ?_assertEqual([ok, ok, ok], [ check_handler_config(M,C) || {M,C} <- Good ])
@@ -399,6 +406,12 @@ check_handler_config_test_() ->
         },
         {"Invalid config dies",
          ?_assertThrow({error, {bad_config, _}}, start_handlers(foo, BadToo))
+        },
+        {"Old Lager config works",
+         ?_assertEqual([ok, ok, ok, ok], [ check_handler_config(M, C) || {M, C} <- OldSchoolLagerGood])
+        },
+        {"New Config missing its list should fail",
+         ?_assertThrow({error, {bad_config, foo_backend}}, [ check_handler_config(M, C) || {M, C} <- NewConfigMissingList])
         }
     ].
 -endif.
