@@ -35,8 +35,8 @@ init([]) ->
     %% set up the config, is safe even during relups
     lager_config:new(),
     %% TODO:
-    %% Always start lager_event as the default and make sure that 
-    %% other gen_event stuff can start up as needed 
+    %% Always start lager_event as the default and make sure that
+    %% other gen_event stuff can start up as needed
     %%
     %% Maybe a new API to handle the sink and its policy?
     Children = [
@@ -69,6 +69,8 @@ determine_rotation_date({ok, Val3}) ->
 determine_rotation_date(_) ->
     undefined.
 
+decide_crash_log(undefined) ->
+    [];
 decide_crash_log(false) ->
     [];
 decide_crash_log(File) ->
