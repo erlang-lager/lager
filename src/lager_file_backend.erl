@@ -57,8 +57,8 @@
 -record(state, {
         name :: string(),
         level :: {'mask', integer()},
-        fd :: file:io_device(),
-        inode :: integer(),
+        fd :: file:io_device() | undefined,
+        inode :: integer() | undefined,
         flap=false :: boolean(),
         size = 0 :: integer(),
         date :: undefined | string(),
@@ -81,7 +81,7 @@
                   {check_interval, non_neg_integer()} | {formatter, atom()} |
                   {formatter_config, term()}.
 
--spec init([option(),...]) -> {ok, #state{}} | {error, bad_config}.
+-spec init([option(),...]) -> {ok, #state{}} | {error, {fatal,bad_config}}.
 init({FileName, LogLevel}) when is_list(FileName), is_atom(LogLevel) ->
     %% backwards compatibility hack
     init([{file, FileName}, {level, LogLevel}]);
@@ -158,7 +158,7 @@ handle_event({log, Message},
                     NewState = case Drop > 0 of
                         true ->
                             Report = io_lib:format(
-                                "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
+                                "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
                                 [Drop, Hwm]),
                             ReportMsg = lager_msg:new(Report, warning, [], []),
                             write(State, lager_msg:timestamp(ReportMsg),
@@ -652,7 +652,7 @@ filesystem_test_() ->
                         lager:log(error, self(), "Test message1"),
                         gen_event:call(lager_event, {lager_file_backend, "test.log"}, rotate, infinity),
                         lager:log(error, self(), "Test message1"),
-                        ?assert(filelib:is_regular("test.log.0")) 
+                        ?assert(filelib:is_regular("test.log.0"))
                 end
             },
             {"sync_on option should work",
@@ -832,7 +832,7 @@ trace_files_test_() ->
                 catch ets:delete(lager_config),
                 application:unset_env(lager, traces),
                 application:stop(lager),
-                  
+
                 file:delete("events.log"),
                 file:delete("test.log"),
                 file:delete("debug.log"),
