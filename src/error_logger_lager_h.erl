@@ -33,7 +33,7 @@
 
 -export([format_reason/1, format_mfa/1, format_args/3]).
 
--record(state, { 
+-record(state, {
         sink :: atom(),
         shaper :: lager_shaper(),
         %% group leader strategy
@@ -88,8 +88,8 @@ handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
         {true, 0, NewShaper} ->
             eval_gl(Event, State#state{shaper=NewShaper});
         {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} when Drop > 0 ->
-            ?LOGFMT(Sink, warning, self(), 
-                "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec", 
+            ?LOGFMT(Sink, warning, self(),
+                "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
                 [Drop, Hwm]),
             eval_gl(Event, State#state{shaper=NewShaper});
         {false, _, NewShaper} ->
@@ -106,9 +106,9 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
     Raw = lager_app:get_env(lager, error_logger_format_raw, false),
     {ok, #state{
-        sink=configured_sink(), 
-        shaper=Shaper, 
-        groupleader_strategy=GLStrategy, 
+        sink=configured_sink(),
+        shaper=Shaper,
+        groupleader_strategy=GLStrategy,
         raw=Raw
         }};
 code_change(_OldVsn, {state, Sink, Shaper, GLS}, _Extra) ->
@@ -151,11 +151,17 @@ log_event(Event, #state{sink=Sink} = State) ->
                     ?LOGFMT(Sink, error, Pid, "gen_server ~w terminated with reason: ~s",
                         [Name, format_reason(Reason)]);
                 {false, "** State machine "++_} ->
-                    %% gen_fsm terminate
-                    [Name, _Msg, StateName, _StateData, Reason] = Args,
+                    %% Check if the terminated process is gen_fsm or gen_statem
+                    %% since they generate the same exit message
+                    {Type, Name, StateName, Reason} = case Args of
+                        [TName, _Msg, TStateName, _StateData, TReason] ->
+                            {gen_fsm, TName, TStateName, TReason};
+                        [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _FsmType, Stacktrace] ->
+                            {gen_statem, TName, TStateName, {TReason, Stacktrace}}
+                    end,
                     ?CRASH_LOG(Event),
-                    ?LOGFMT(Sink, error, Pid, "gen_fsm ~w in state ~w terminated with reason: ~s",
-                        [Name, StateName, format_reason(Reason)]);
+                    ?LOGFMT(Sink, error, Pid, "~s ~w in state ~w terminated with reason: ~s",
+                        [Type, Name, StateName, format_reason(Reason)]);
                 {false, "** gen_event handler"++_} ->
                     %% gen_event handler terminate
                     [ID, Name, _Msg, _State, Reason] = Args,
