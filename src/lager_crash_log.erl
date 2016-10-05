@@ -46,8 +46,8 @@
 
 -record(state, {
         name :: string(),
-        fd :: pid(),
-        inode :: integer(),
+        fd :: pid() | undefined,
+        inode :: integer() | undefined,
         fmtmaxbytes :: integer(),
         size :: integer(),
         date :: undefined | string(),
@@ -119,7 +119,7 @@ schedule_rotation(Date) ->
 %% ===== Begin code lifted from riak_err =====
 
 -spec limited_fmt(string(), list(), integer()) -> iolist().
-%% @doc Format Fmt and Args similar to what io_lib:format/2 does but with 
+%% @doc Format Fmt and Args similar to what io_lib:format/2 does but with
 %%      limits on how large the formatted string may be.
 %%
 %% If the Args list's size is larger than TermMaxSize, then the
