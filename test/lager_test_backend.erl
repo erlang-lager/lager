@@ -248,6 +248,15 @@ lager_test_() ->
                         ok
                 end
             },
+            {"logging with only metadata works",
+                fun() ->
+                        ?assertEqual(0, count()),
+                        lager:warning([{just, metadata}]),
+                        lager:warning([{just, metadata}, {foo, bar}]),
+                        ?assertEqual(2, count()),
+                        ok
+                end
+            },
             {"variables inplace of literals in logging statements work",
                 fun() ->
                         ?assertEqual(0, count()),
