@@ -84,6 +84,8 @@ output(date,Msg) ->
 output(time,Msg) ->
     {_D, T} = lager_msg:datetime(Msg),
     T;
+output(node,Msg) ->
+    atom_to_list(node());
 output(severity,Msg) ->
     atom_to_list(lager_msg:severity(Msg));
 output(blank,_Msg) ->
