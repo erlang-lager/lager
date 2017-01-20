@@ -1,6 +1,6 @@
 %% -------------------------------------------------------------------
 %%
-%% Copyright (c) 2011-2015 Basho Technologies, Inc.
+%% Copyright (c) 2011-2017 Basho Technologies, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -20,23 +20,38 @@
 
 -module(lager_test_backend).
 
--include("lager.hrl").
-
 -behaviour(gen_event).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
         code_change/3]).
 
+-include("lager.hrl").
+
 -define(TEST_SINK_NAME, '__lager_test_sink').              %% <-- used by parse transform
 -define(TEST_SINK_EVENT, '__lager_test_sink_lager_event'). %% <-- used by lager API calls and internals for gen_event
 
--record(state, {level :: list(), buffer :: list(), ignored :: term()}).
+-record(state, {
+    level   :: list(),
+    buffer  :: list(),
+    ignored :: term()
+}).
 -compile({parse_transform, lager_transform}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--record(test, {attrs :: list(), format :: list(), args :: list()}).
--export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
+-record(test, {
+    attrs   :: list(),
+    format  :: list(),
+    args    :: list()
+}).
+-export([
+    count/0,
+    count_ignored/0,
+    flush/0,
+    message_stuffer/3,
+    pop/0,
+    print_state/0
+]).
 -endif.
 
 init(Level) ->
@@ -137,22 +152,12 @@ has_line_numbers() ->
     % this gets called a LOT - cache the answer
     case erlang:get({?MODULE, has_line_numbers}) of
         undefined ->
-            R = otp_version() >= 15,
+            R = lager_util:otp_version() >= 15,
             erlang:put({?MODULE, has_line_numbers}, R),
             R;
         Bool ->
             Bool
     end.
-
-otp_version() ->
-    otp_version(erlang:system_info(otp_release)).
-
-otp_version([$R | Rel]) ->
-    {Ver, _} = string:to_integer(Rel),
-    Ver;
-otp_version(Rel) ->
-    {Ver, _} = string:to_integer(Rel),
-    Ver.
 
 not_running_test() ->
     ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).
@@ -900,7 +905,7 @@ error_logger_redirect_crash_cleanup(_Sink) ->
     error_logger:tty(true).
 
 error_logger_redirect_crash_test_() ->
-    TestBody=fun(Name,CrashReason,Expected) -> 
+    TestBody=fun(Name,CrashReason,Expected) ->
         fun(Sink) ->
             {Name,
                 fun() ->
@@ -915,7 +920,7 @@ error_logger_redirect_crash_test_() ->
         end
     end,
     Tests = [
-        fun(Sink) -> 
+        fun(Sink) ->
             {"again, there is nothing up my sleeve",
                 fun() ->
                         ?assertEqual(undefined, pop(Sink)),
@@ -943,7 +948,7 @@ error_logger_redirect_crash_test_() ->
         TestBody("badfun",badfun,"gen_server crash terminated with reason: bad function booger in crash:handle_call/3")
     ],
     {"Error logger redirect crash", [
-        {"Redirect to default sink", 
+        {"Redirect to default sink",
             {foreach,
             fun error_logger_redirect_crash_setup/0,
             fun error_logger_redirect_crash_cleanup/1,
@@ -1520,7 +1525,7 @@ error_logger_redirect_test_() ->
         end,
         Tests),
     {"Error logger redirect", [
-        {"Redirect to default sink", 
+        {"Redirect to default sink",
             {foreach,
             fun error_logger_redirect_setup/0,
             fun error_logger_redirect_cleanup/1,
@@ -1543,77 +1548,107 @@ unsafe_format_test() ->
     ok.
 
 async_threshold_test_() ->
-    {foreach,
+    Cleanup = fun(Reset) ->
+        _ = error_logger:tty(false),
+        _ = application:stop(lager),
+        _ = application:stop(goldrush),
+        _ = application:unset_env(lager, async_threshold),
+        if
+            Reset ->
+                true = ets:delete(async_threshold_test),
+                error_logger:tty(true);
+            true ->
+                _ = (catch ets:delete(async_threshold_test)),
+                ok
+        end
+    end,
+    Setup = fun() ->
+        % Evidence suggests that previous tests somewhere are leaving some of this stuff
+        % loaded, and cleaning it out forcefully to allows the test to succeed.
+        _ = Cleanup(false),
+        _ = ets:new(async_threshold_test, [set, named_table, public]),
+        ?assertEqual(true, ets:insert_new(async_threshold_test, {sync_toggled, 0})),
+        ?assertEqual(true, ets:insert_new(async_threshold_test, {async_toggled, 0})),
+        _ = application:load(lager),
+        ok = application:set_env(lager, error_logger_redirect, false),
+        ok = application:set_env(lager, async_threshold, 2),
+        ok = application:set_env(lager, async_threshold_window, 1),
+        ok = application:set_env(lager, handlers, [{?MODULE, info}]),
+        ok = lager:start(),
+        true
+    end,
+    {foreach, Setup, Cleanup, [
+        {"async threshold works",
         fun() ->
-                error_logger:tty(false),
-                ets:new(async_threshold_test, [set, named_table, public]),
-                ets:insert_new(async_threshold_test, {sync_toggled, 0}),
-                ets:insert_new(async_threshold_test, {async_toggled, 0}),
-                application:load(lager),
-                application:set_env(lager, error_logger_redirect, false),
-                application:set_env(lager, async_threshold, 2),
-                application:set_env(lager, async_threshold_window, 1),
-                application:set_env(lager, handlers, [{?MODULE, info}]),
-                lager:start()
-        end,
-        fun(_) ->
-                application:unset_env(lager, async_threshold),
-                application:stop(lager),
-                application:stop(goldrush),
-                ets:delete(async_threshold_test),
-                error_logger:tty(true)
-        end,
-        [
-            {"async threshold works",
-                fun() ->
-                        %% we start out async
-                        ?assertEqual(true, lager_config:get(async)),
+            %% we start out async
+            ?assertEqual(true, lager_config:get(async)),
+            ?assertEqual([{sync_toggled, 0}],
+                ets:lookup(async_threshold_test, sync_toggled)),
 
-                        %% put a ton of things in the queue
-                        Workers = [spawn_monitor(fun() -> [lager:info("hello world") || _ <- lists:seq(1, 100)] end)
-                                   || _ <- lists:seq(1, 10)],
+            %% put a ton of things in the queue
+            WorkCnt = erlang:max(10, (erlang:system_info(schedulers) * 2)),
+            OtpVsn  = lager_util:otp_version(),
+            % newer OTPs *may* handle the messages faster, so we'll send more
+            MsgCnt  = ((OtpVsn * OtpVsn) div 2),
+            Workers = spawn_stuffers(WorkCnt, [MsgCnt, info, "hello world"], []),
 
-                        %% serialize on mailbox
-                        _ = gen_event:which_handlers(lager_event),
-                        timer:sleep(500),
+            %% serialize on mailbox
+            _ = gen_event:which_handlers(lager_event),
+            timer:sleep(500),
 
-                        %% By now the flood of messages will have
-                        %% forced the backend throttle to turn off
-                        %% async mode, but it's possible all
-                        %% outstanding requests have been processed,
-                        %% so checking the current status (sync or
-                        %% async) is an exercise in race control.
+            %% By now the flood of messages should have forced the backend throttle
+            %% to turn off async mode, but it's possible all outstanding requests
+            %% have been processed, so checking the current status (sync or async)
+            %% is an exercise in race control.
+            %% Instead, we'll see whether the backend throttle has toggled into sync
+            %% mode at any point in the past.
+            ?assertMatch([{sync_toggled, N}] when N > 0,
+                ets:lookup(async_threshold_test, sync_toggled)),
 
-                        %% Instead, we'll see whether the backend
-                        %% throttle has toggled into sync mode at any
-                        %% point in the past
-                        ?assertMatch([{sync_toggled, N}] when N > 0,
-                                                              ets:lookup(async_threshold_test, sync_toggled)),
-                        %% wait for all the workers to return, meaning that all
-                        %% the messages have been logged (since we're
-                        %% definitely in sync mode at the end of the run)
-                        collect_workers(Workers),
-                        %% serialize on the mailbox again
-                        _ = gen_event:which_handlers(lager_event),
-                        %% just in case...
-                        timer:sleep(1000),
-                        lager:info("hello world"),
-                        _ = gen_event:which_handlers(lager_event),
+            %% Wait for all the workers to return, meaning that all the messages have
+            %% been logged (since we're definitely in sync mode at the end of the run).
+            collect_workers(Workers),
 
-                        %% async is true again now that the mailbox has drained
-                        ?assertEqual(true, lager_config:get(async)),
-                        ok
-                end
-            }
-        ]
-    }.
+            %% serialize on the mailbox again
+            _ = gen_event:which_handlers(lager_event),
+
+            %% just in case...
+            timer:sleep(1000),
+            lager:info("hello world"),
+            _ = gen_event:which_handlers(lager_event),
+
+            %% async is true again now that the mailbox has drained
+            ?assertEqual(true, lager_config:get(async)),
+            ok
+        end}
+    ]}.
+
+% Fire off the stuffers with minimal resource overhead - speed is of the essence.
+spawn_stuffers(0, _, Refs) ->
+    % Attempt to return them in about the order that they'll finish.
+    lists:reverse(Refs);
+spawn_stuffers(N, Args, Refs) ->
+    {_Pid, Ref} = erlang:spawn_monitor(?MODULE, message_stuffer, Args),
+    spawn_stuffers((N - 1), Args, [Ref | Refs]).
+
+% Spawned process to stuff N copies of Message into lager's message queue as fast as possible.
+% Skip using a list function for speed and low memory footprint - don't want to take the
+% resources to create a sequence (or pass one in).
+message_stuffer(N, Level, Message) ->
+    message_stuffer_(N, Level, [{pid, erlang:self()}], Message).
+
+message_stuffer_(0, _, _, _) ->
+    ok;
+message_stuffer_(N, Level, Meta, Message) ->
+    lager:log(Level, Meta, Message),
+    message_stuffer_((N - 1), Level, Meta, Message).
 
 collect_workers([]) ->
     ok;
-collect_workers(Workers) ->
+collect_workers([Ref | Refs]) ->
     receive
         {'DOWN', Ref, _, _, _} ->
-            collect_workers(lists:keydelete(Ref, 2, Workers))
+            collect_workers(Refs)
     end.
 
 produce_n_error_logger_msgs(N) ->
