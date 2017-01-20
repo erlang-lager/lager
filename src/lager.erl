@@ -24,6 +24,9 @@
 -define(TRACE_SINK, '__trace_sink').
 -define(ROTATE_TIMEOUT, 100000).
 
+bla ->
+	ok.
+
 %% API
 -export([start/0,
         log/3, log/4, log/5,
