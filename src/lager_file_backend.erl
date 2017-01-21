@@ -971,12 +971,26 @@ trace_files_test_() ->
                     re:split(BinInfo2, "\n", [{return, list}, {parts, 2}])),
                 ?assert(filelib:is_regular(Debug)),
                 %% XXX Aughhhh, wish I could force this to flush somehow...
-                timer:sleep(1000),
-                {ok, BinInfo3} = file:read_file(Debug),
-                ?assertEqual(2, length(re:split(BinInfo3, "\n", [{return, list}, trim])))
+                % should take about 1 second, try for 3 ...
+                ?assertEqual(2, count_lines_until(2, add_secs(os:timestamp(), 3), Debug, 0))
             end}
         end
     ]}.
+
+count_lines_until(Lines, Timeout, File, Last) ->
+    case timer:now_diff(Timeout, os:timestamp()) > 0 of
+        true ->
+            timer:sleep(333),
+            {ok, Bin} = file:read_file(File),
+            case erlang:length(re:split(Bin, "\n", [{return, list}, trim])) of
+                Count when Count < Lines ->
+                    count_lines_until(Lines, Timeout, File, Count);
+                Count ->
+                    Count
+            end;
+        _ ->
+            Last
+    end.
 
 formatting_test_() ->
     {foreach,
