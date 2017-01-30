@@ -214,7 +214,7 @@ trace_file(File, Filter, Level, Options) ->
         {Sink, {ok, Trace}} ->
             Handlers = lager_config:global_get(handlers, []),
             %% check if this file backend is already installed
-            Res = case lists:keyfind({lager_file_backend, FileName}, 1, Handlers) of
+            Res = case lager_util:find_file(FileName, Handlers) of
                       false ->
                           %% install the handler
                           LogFileConfig =
