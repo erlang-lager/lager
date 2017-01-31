@@ -279,7 +279,7 @@ This will use async messaging until the mailbox exceeds 20 messages, at which
 point synchronous messaging will be used, and switch back to asynchronous, when
 size reduces to `20 - 5 = 15`.
 
-If you wish to disable this behaviour, simply set it to `undefined`. It defaults
+If you wish to disable this behaviour, simply set `async_threshold` to `undefined`. It defaults
 to a low number to prevent the mailbox growing rapidly beyond the limit and causing
 problems. In general, lager should process messages as fast as they come in, so getting
 20 behind should be relatively exceptional anyway.
