@@ -189,7 +189,13 @@ log_event(Event, #state{sink=Sink} = State) ->
                         [Ref, _Protocol, Worker, Reason] ->
                             ?LOGFMT(Sink, error, Worker,
                                 "Ranch listener ~p terminated with reason: ~s",
-                                [Ref, format_reason(Reason)])
+                                [Ref, format_reason(Reason)]);
+                        [Worker, {_, Ref, Reason}] ->
+                            ?LOGFMT(Sink, error, Worker,
+                                "Ranch listener ~p terminate with reason: ~s",
+                                [Ref, format_reason(Reason)]);
+                        _ ->
+                            ?LOGFMT(Sink, error, Pid, Fmt, Args)
                     end;
                 {false, "webmachine error"++_} ->
                     %% Webmachine HTTP server error
