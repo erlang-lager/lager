@@ -142,39 +142,7 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                                                                     {atom, Line, App}]},
                                          {nil, Line}}, DefaultAttrs0)
                    end,
-    {Meta, Message, Arguments} = case Arguments0 of
-                                       [Format] ->
-                                           {DefaultAttrs, Format, {atom, Line, none}};
-                                       [Arg1, Arg2] ->
-                                           %% some ambiguity here, figure out if these arguments are
-                                           %% [Format, Args] or [Attr, Format].
-                                           %% The trace attributes will be a list of tuples, so check
-                                           %% for that.
-                                           case {element(1, Arg1), Arg1} of
-                                               {_, {cons, _, {tuple, _, _}, _}} ->
-                                                   {concat_lists(Arg1, DefaultAttrs),
-                                                    Arg2, {atom, Line, none}};
-                                               {Type, _} when Type == var;
-                                                              Type == lc;
-                                                              Type == call;
-                                                              Type == record_field ->
-                                                   %% crap, its not a literal. look at the second
-                                                   %% argument to see if it is a string
-                                                   case Arg2 of
-                                                       {string, _, _} ->
-                                                           {concat_lists(Arg1, DefaultAttrs),
-                                                            Arg2, {atom, Line, none}};
-                                                       _ ->
-                                                           %% not a string, going to have to guess
-                                                           %% it's the argument list
-                                                           {DefaultAttrs, Arg1, Arg2}
-                                                   end;
-                                               _ ->
-                                                   {DefaultAttrs, Arg1, Arg2}
-                                           end;
-                                       [Attrs, Format, Args] ->
-                                           {concat_lists(Attrs, DefaultAttrs), Format, Args}
-                                   end,
+    {Meta, Message, Arguments} = handle_args(DefaultAttrs, Line, Arguments0),
     %% Generate some unique variable names so we don't accidentally export from case clauses.
     %% Note that these are not actual atoms, but the AST treats variable names as atoms.
     LevelVar = make_varname("__Level", Line),
@@ -236,6 +204,40 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                           {var, Line, PidVar}]}]},
           %% _ -> ok
           {clause,Line,[{var,Line,'_'}],[],[{atom,Line,ok}]}]}.
+ 
+handle_args(DefaultAttrs, Line, [{cons, LineNum, {tuple, _, _}, _} = Attrs]) ->
+    {concat_lists(DefaultAttrs, Attrs), {string, LineNum, ""}, {atom, Line, none}};
+handle_args(DefaultAttrs, Line, [Format]) ->
+    {DefaultAttrs, Format, {atom, Line, none}};
+handle_args(DefaultAttrs, Line, [Arg1, Arg2]) ->
+    %% some ambiguity here, figure out if these arguments are
+    %% [Format, Args] or [Attr, Format].
+    %% The trace attributes will be a list of tuples, so check
+    %% for that.
+    case {element(1, Arg1), Arg1} of
+        {_, {cons, _, {tuple, _, _}, _}} ->
+            {concat_lists(Arg1, DefaultAttrs),
+             Arg2, {atom, Line, none}};
+        {Type, _} when Type == var;
+                       Type == lc;
+                       Type == call;
+                       Type == record_field ->
+            %% crap, its not a literal. look at the second
+            %% argument to see if it is a string
+            case Arg2 of
+                {string, _, _} ->
+                    {concat_lists(Arg1, DefaultAttrs),
+                     Arg2, {atom, Line, none}};
+                _ ->
+                    %% not a string, going to have to guess
+                    %% it's the argument list
+                    {DefaultAttrs, Arg1, Arg2}
+            end;
+        _ ->
+            {DefaultAttrs, Arg1, Arg2}
+    end;
+handle_args(DefaultAttrs, _Line, [Attrs, Format, Args]) ->
+    {concat_lists(Attrs, DefaultAttrs), Format, Args}.
 
 make_varname(Prefix, Line) ->
     list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(Line)).
