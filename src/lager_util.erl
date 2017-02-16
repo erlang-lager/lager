@@ -1,4 +1,6 @@
-%% Copyright (c) 2011-2012 Basho Technologies, Inc.  All Rights Reserved.
+%% -------------------------------------------------------------------
+%%
+%% Copyright (c) 2011-2017 Basho Technologies, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -13,6 +15,8 @@
 %% KIND, either express or implied.  See the License for the
 %% specific language governing permissions and limitations
 %% under the License.
+%%
+%% -------------------------------------------------------------------
 
 -module(lager_util).
 
@@ -26,6 +30,7 @@
         trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1, make_internal_sink_name/1]).
 
 -ifdef(TEST).
+-export([create_test_dir/0, delete_test_dir/1]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
@@ -368,7 +373,7 @@ calculate_next_rotation([{date, Date}|T], {{Year, Month, Day}, _} = Now) ->
 trace_filter(Query) ->
     trace_filter(?DEFAULT_TRACER, Query).
 
-%% TODO: Support multiple trace modules 
+%% TODO: Support multiple trace modules
 %-spec trace_filter(Module :: atom(), Query :: 'none' | [tuple()]) -> {ok, any()}.
 trace_filter(Module, Query) when Query == none; Query == [] ->
     {ok, _} = glc:compile(Module, glc:null(false));
@@ -401,7 +406,7 @@ validate_trace(_) ->
 validate_trace_filter(Filter) when is_tuple(Filter), is_atom(element(1, Filter)) =:= false ->
     false;
 validate_trace_filter(Filter) ->
-        case lists:all(fun({Key, '*'}) when is_atom(Key) -> true; 
+        case lists:all(fun({Key, '*'}) when is_atom(Key) -> true;
                           ({Key, '!'}) when is_atom(Key) -> true;
                           ({Key, _Value})      when is_atom(Key) -> true;
                           ({Key, '=', _Value}) when is_atom(Key) -> true;
@@ -414,16 +419,16 @@ validate_trace_filter(Filter) ->
                 false
         end.
 
-trace_all(Query) -> 
+trace_all(Query) ->
 	glc:all(trace_acc(Query)).
 
-trace_any(Query) -> 
+trace_any(Query) ->
 	glc:any(Query).
 
 trace_acc(Query) ->
     trace_acc(Query, []).
 
-trace_acc([], Acc) -> 
+trace_acc([], Acc) ->
 	lists:reverse(Acc);
 trace_acc([{Key, '*'}|T], Acc) ->
 	trace_acc(T, [glc:wc(Key)|Acc]);
@@ -437,7 +442,7 @@ trace_acc([{Key, '>', Val}|T], Acc) ->
 	trace_acc(T, [glc:gt(Key, Val)|Acc]);
 trace_acc([{Key, '<', Val}|T], Acc) ->
 	trace_acc(T, [glc:lt(Key, Val)|Acc]).
-	
+
 
 check_traces(_, _,  [], Acc) ->
     lists:flatten(Acc);
@@ -614,49 +619,52 @@ rotation_calculation_test() ->
 
     ?assertMatch({{2000, 1, 7}, {16, 0, 0}},
         calculate_next_rotation([{day, 5}, {hour, 16}], {{2000, 1, 3}, {17, 34, 43}})),
-    
+
     ?assertMatch({{2000, 1, 3}, {16, 0, 0}},
         calculate_next_rotation([{day, 1}, {hour, 16}], {{1999, 12, 28}, {17, 34, 43}})),
     ok.
 
 rotate_file_test() ->
-    file:delete("rotation.log"),
-    [file:delete(["rotation.log.", integer_to_list(N)]) || N <- lists:seq(0, 9)],
-    [begin
-                file:write_file("rotation.log", integer_to_list(N)),
-                Count = case N > 10 of
-                    true -> 10;
-                    _ -> N
-                end,
-                [begin
-                            FileName = ["rotation.log.", integer_to_list(M)],
-                            ?assert(filelib:is_regular(FileName)),
-                            %% check the expected value is in the file
-                            Number = list_to_binary(integer_to_list(N - M - 1)),
-                            ?assertEqual({ok, Number}, file:read_file(FileName))
-                end
-                || M <- lists:seq(0, Count-1)],
-                rotate_logfile("rotation.log", 10)
-    end || N <- lists:seq(0, 20)].
+    RotCount = 10,
+    TestDir = create_test_dir(),
+    TestLog = filename:join(TestDir, "rotation.log"),
+    Outer = fun(N) ->
+        ?assertEqual(ok, file:write_file(TestLog, erlang:integer_to_list(N))),
+        Inner = fun(M) ->
+            File = lists:flatten([TestLog, $., erlang:integer_to_list(M)]),
+            ?assert(filelib:is_regular(File)),
+            %% check the expected value is in the file
+            Number = erlang:list_to_binary(integer_to_list(N - M - 1)),
+            ?assertEqual({ok, Number}, file:read_file(File))
+        end,
+        Count = erlang:min(N, RotCount),
+        % The first time through, Count == 0, so the sequence is empty,
+        % effectively skipping the inner loop so a rotation can occur that
+        % creates the file that Inner looks for.
+        % Don't shoot the messenger, it was worse before this refactoring.
+        lists:foreach(Inner, lists:seq(0, Count-1)),
+        rotate_logfile(TestLog, RotCount)
+    end,
+    lists:foreach(Outer, lists:seq(0, (RotCount * 2))),
+    delete_test_dir(TestDir).
 
 rotate_file_fail_test() ->
-    %% make sure the directory exists
-    ?assertEqual(ok, filelib:ensure_dir("rotation/rotation.log")),
-    %% fix the permissions on it
-    os:cmd("chown -R u+rwx rotation"),
-    %% delete any old files
-    [ok = file:delete(F) || F <- filelib:wildcard("rotation/*")],
+    TestDir = create_test_dir(),
+    TestLog = filename:join(TestDir, "rotation.log"),
+    %% set known permissions on it
+    os:cmd("chmod -R u+rwx " ++ TestDir),
     %% write a file
-    file:write_file("rotation/rotation.log", "hello"),
+    file:write_file(TestLog, "hello"),
     %% hose up the permissions
-    os:cmd("chown u-w rotation"),
-    ?assertMatch({error, _}, rotate_logfile("rotation.log", 10)),
-    ?assert(filelib:is_regular("rotation/rotation.log")),
-    os:cmd("chown u+w rotation"),
-    ?assertMatch(ok, rotate_logfile("rotation/rotation.log", 10)),
-    ?assert(filelib:is_regular("rotation/rotation.log.0")),
-    ?assertEqual(false, filelib:is_regular("rotation/rotation.log")),
-    ok.
+    os:cmd("chmod u-w " ++ TestDir),
+    ?assertMatch({error, _}, rotate_logfile(TestLog, 10)),
+    ?assert(filelib:is_regular(TestLog)),
+    %% fix the permissions
+    os:cmd("chmod u+w " ++ TestDir),
+    ?assertMatch(ok, rotate_logfile(TestLog, 10)),
+    ?assert(filelib:is_regular(TestLog ++ ".0")),
+    ?assertEqual(false, filelib:is_regular(TestLog)),
+    delete_test_dir(TestDir).
 
 check_trace_test() ->
     lager:start(),
@@ -802,5 +810,33 @@ sink_name_test_() ->
         ?_assertEqual(lager_event, make_internal_sink_name(lager)),
         ?_assertEqual(audit_lager_event, make_internal_sink_name(audit))
     ].
+
+create_test_dir() ->
+    Dir = filename:join(["/tmp", "lager_test",
+        erlang:integer_to_list(erlang:phash2(os:timestamp()))]),
+    ?assertEqual(ok, filelib:ensure_dir(Dir)),
+    case file:make_dir(Dir) of
+        ok ->
+            Dir;
+        Err ->
+            ?assertEqual({error, eexist}, Err),
+            create_test_dir()
+    end.
+
+delete_test_dir(Dir) ->
+    ListRet = file:list_dir_all(Dir),
+    ?assertMatch({ok, _}, ListRet),
+    {_, Entries} = ListRet,
+    lists:foreach(
+        fun(Entry) ->
+            FsElem = filename:join(Dir, Entry),
+            case filelib:is_dir(FsElem) of
+                true ->
+                    delete_test_dir(FsElem);
+                _ ->
+                    ?assertEqual(ok, file:delete(FsElem))
+            end
+        end, Entries),
+    ?assertEqual(ok, file:del_dir(Dir)).
 
 -endif.
