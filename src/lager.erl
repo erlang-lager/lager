@@ -200,49 +200,13 @@ validate_trace_filters(Filters, Level, Backend) ->
     }.
 
 trace_file(File, Filter) ->
-    trace_file(File, Filter, debug, []).
+    trace({lager_file_backend, File}, Filter).
 
-trace_file(File, Filter, Level) when is_atom(Level) ->
-    trace_file(File, Filter, Level, []);
-
-trace_file(File, Filter, Options) when is_list(Options) ->
-    trace_file(File, Filter, debug, Options).
+trace_file(File, Filter, LevelOrOptions) ->
+    trace({lager_file_backend, File}, Filter, LevelOrOptions).
 
 trace_file(File, Filter, Level, Options) ->
-    FileName = lager_util:expand_path(File),
-    case validate_trace_filters(Filter, Level, {lager_file_backend, FileName}) of
-        {Sink, {ok, Trace}} ->
-            Handlers = lager_config:global_get(handlers, []),
-            %% check if this file backend is already installed
-            Res = case lists:keyfind({lager_file_backend, FileName}, 1, Handlers) of
-                      false ->
-                          %% install the handler
-                          LogFileConfig =
-                              lists:keystore(level, 1,
-                                             lists:keystore(file, 1,
-                                                            Options,
-                                                            {file, FileName}),
-                                             {level, none}),
-                          HandlerInfo =
-                              lager_app:start_handler(Sink, {lager_file_backend, FileName},
-                                                      LogFileConfig),
-                          lager_config:global_set(handlers, [HandlerInfo|Handlers]),
-                          {ok, installed};
-                      {_Watcher, _Handler, Sink} ->
-                          {ok, exists};
-                      {_Watcher, _Handler, _OtherSink} ->
-                          {error, file_in_use}
-            end,
-            case Res of
-              {ok, _} ->
-                add_trace_to_loglevel_config(Trace, Sink),
-                {ok, {{lager_file_backend, FileName}, Filter, Level}};
-              {error, _} = E ->
-                E
-            end;
-        {_Sink, Error} ->
-            Error
-    end.
+    trace({lager_file_backend, File}, Filter, Level, Options).
 
 trace_console(Filter) ->
     trace_console(Filter, debug).
@@ -251,16 +215,66 @@ trace_console(Filter, Level) ->
     trace(lager_console_backend, Filter, Level).
 
 trace(Backend, Filter) ->
-    trace(Backend, Filter, debug).
+    trace(Backend, Filter, debug, []).
 
-trace({lager_file_backend, File}, Filter, Level) ->
-    trace_file(File, Filter, Level);
+trace(Backend, Filter, Level) when is_atom(Level) ->
+    trace(Backend, Filter, Level, []);
 
-trace(Backend, Filter, Level) ->
+trace(Backend, Filter, Options) when is_list(Options) ->
+    trace(Backend, Filter, debug, Options).
+
+%% @private
+trace(Backend, Filter, Level, []=_Options) when is_atom(Backend) ->
     case validate_trace_filters(Filter, Level, Backend) of
         {Sink, {ok, Trace}} ->
             add_trace_to_loglevel_config(Trace, Sink),
             {ok, {Backend, Filter, Level}};
+        {_Sink, Error} ->
+            Error
+    end;
+
+trace({lager_file_backend, File}, Filter, Level, Options) ->
+    FileName = lager_util:expand_path(File),
+    NewOptions = lists:keystore(file, 1, Options, {file, FileName}),
+    case trace_identified_backend({lager_file_backend, FileName},
+                                  Filter, Level, NewOptions)
+    of
+        {error, backend_in_use} ->
+            {error, file_in_use};
+        Result ->
+            Result
+    end;
+
+trace({Module, _}=Backend, Filter, Level, Options) when is_atom(Module) ->
+    trace_identified_backend(Backend, Filter, Level, Options).
+
+%% @private
+trace_identified_backend(Backend, Filter, Level, Options) ->
+    case validate_trace_filters(Filter, Level, Backend) of
+        {Sink, {ok, Trace}} ->
+            Handlers = lager_config:global_get(handlers, []),
+            %% check if this identified backend backend is already installed
+            Res = case lists:keyfind(Backend, 1, Handlers) of
+                      false ->
+                          %% install the handler
+                          BackendConfig = lists:keystore(level, 1, Options,
+                                                         {level, none}),
+                          HandlerInfo =
+                              lager_app:start_handler(Sink, Backend, BackendConfig),
+                          lager_config:global_set(handlers, [HandlerInfo|Handlers]),
+                          {ok, installed};
+                      {_Watcher, _Handler, Sink} ->
+                          {ok, exists};
+                      {_Watcher, _Handler, _OtherSink} ->
+                          {error, backend_in_use}
+            end,
+            case Res of
+              {ok, _} ->
+                add_trace_to_loglevel_config(Trace, Sink),
+                {ok, {Backend, Filter, Level}};
+              {error, _} = E ->
+                E
+            end;
         {_Sink, Error} ->
             Error
     end.

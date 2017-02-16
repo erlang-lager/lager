@@ -30,7 +30,8 @@
 -define(TEST_SINK_NAME, '__lager_test_sink').              %% <-- used by parse transform
 -define(TEST_SINK_EVENT, '__lager_test_sink_lager_event'). %% <-- used by lager API calls and internals for gen_event
 
--record(state, {level :: list(), buffer :: list(), ignored :: term()}).
+-record(state, {level :: list(), buffer :: list(), ignored :: term(),
+                id :: {?MODULE, term()} | ?MODULE}).
 -compile({parse_transform, lager_transform}).
 
 -ifdef(TEST).
@@ -39,8 +40,19 @@
 -export([pop/0, count/0, count_ignored/0, flush/0, print_state/0]).
 -endif.
 
+init(Options) when is_list(Options), is_tuple(hd(Options)) ->
+    {value, {level, Level}, RemainingOptions} = lists:keytake(level, 1, Options),
+    init(Level, RemainingOptions);
 init(Level) ->
-    {ok, #state{level=lager_util:config_to_mask(Level), buffer=[], ignored=[]}}.
+    init(Level, []).
+
+init(Level, Options) ->
+    Id = case lists:keyfind(id, 1, Options) of
+             {id, Identifier} -> {?MODULE, Identifier};
+             false -> ?MODULE
+         end,
+    {ok, #state{level=lager_util:config_to_mask(Level), buffer=[], ignored=[],
+                id=Id}}.
 
 handle_call(count, #state{buffer=Buffer} = State) ->
     {ok, length(Buffer), State};
@@ -71,8 +83,8 @@ handle_call(_Request, State) ->
     {ok, ok, State}.
 
 handle_event({log, Msg},
-             #state{level=LogLevel,buffer=Buffer,ignored=Ignored} = State) ->
-    case lager_util:is_loggable(Msg, LogLevel, ?MODULE) of
+             #state{level=LogLevel,buffer=Buffer,ignored=Ignored,id=Id} = State) ->
+    case lager_util:is_loggable(Msg, LogLevel, Id) of
         true ->
             {ok, State#state{buffer=Buffer ++
                              [{lager_msg:severity_as_int(Msg),
@@ -114,23 +126,40 @@ print_bad_state() ->
     print_bad_state(lager_event).
 
 pop(Sink) ->
-    gen_event:call(Sink, ?MODULE, pop).
+    pop(Sink, ?MODULE).
 
 count(Sink) ->
-    gen_event:call(Sink, ?MODULE, count).
+    count(Sink, ?MODULE).
 
 count_ignored(Sink) ->
-    gen_event:call(Sink, ?MODULE, count_ignored).
+    count_ignored(Sink, ?MODULE).
 
 flush(Sink) ->
-    gen_event:call(Sink, ?MODULE, flush).
+    flush(Sink, ?MODULE).
 
 print_state(Sink) ->
-    gen_event:call(Sink, ?MODULE, print_state).
+    print_state(Sink, ?MODULE).
 
 print_bad_state(Sink) ->
-    gen_event:call(Sink, ?MODULE, print_bad_state).
+    print_bad_state(Sink, ?MODULE).
 
+pop(Sink, Backend) ->
+    gen_event:call(Sink, Backend, pop).
+
+count(Sink, Backend) ->
+    gen_event:call(Sink, Backend, count).
+
+count_ignored(Sink, Backend) ->
+    gen_event:call(Sink, Backend, count_ignored).
+
+flush(Sink, Backend) ->
+    gen_event:call(Sink, Backend, flush).
+
+print_state(Sink, Backend) ->
+    gen_event:call(Sink, Backend, print_state).
+
+print_bad_state(Sink, Backend) ->
+    gen_event:call(Sink, Backend, print_bad_state).
 
 has_line_numbers() ->
     %% are we R15 or greater
@@ -587,7 +616,7 @@ lager_test_() ->
                         {Level, _Time, Message, _Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(info)),
                         {mask, Mask} = lager_util:config_to_mask(info),
-                        ?assertEqual("State #state{level={mask,"++integer_to_list(Mask)++"},buffer=[],ignored=[]}", lists:flatten(Message)),
+                        ?assertEqual("State #state{level={mask,"++integer_to_list(Mask)++"},buffer=[],ignored=[],id="++atom_to_list(?MODULE)++"}", lists:flatten(Message)),
                         ok
                 end
             },
@@ -1676,6 +1705,145 @@ high_watermark_test_() ->
                     ?assert(is_integer(count())),
                     timer:sleep(1000),
                     ?assert(count() < 10)
+                end
+            }
+        ]
+    }.
+
+identified_backend_test_() ->
+    Backend1 = {?MODULE, id1},
+    Backend2 = {?MODULE, "id two"},
+    Backend3 = {?MODULE, <<"the third id">>},
+    {foreach,
+        fun() ->
+            error_logger:tty(false),
+            application:load(lager),
+            application:set_env(lager, error_logger_redirect, false),
+            application:set_env(lager, handlers, [{Backend1, debug},
+                                                  {Backend2, info}]),
+            application:set_env(lager, extra_sinks,
+                                [{?TEST_SINK_EVENT, [{handlers, [{Backend3, info}]}]}]),
+            application:set_env(lager, async_threshold, undefined),
+            lager:start(),
+            gen_event:call(lager_event, Backend1, flush),
+            gen_event:call(lager_event, Backend2, flush),
+            gen_event:call(?TEST_SINK_EVENT, Backend3, flush)
+        end,
+        fun(_) ->
+            application:stop(lager),
+            error_logger:tty(true)
+        end,
+        [
+            {"messages are routed to identified backends running over the same module",
+                fun () ->
+                    lager:debug("debug message for lager_event"),
+                    ?assertEqual(1, count(lager_event, Backend1)),
+                    ?assertEqual(0, count(lager_event, Backend2)),
+                    ?assertEqual(0, count(?TEST_SINK_EVENT, Backend3)),
+
+                    lager:info("info message for lager_event"),
+                    ?assertEqual(2, count(lager_event, Backend1)),
+                    ?assertEqual(1, count(lager_event, Backend2)),
+                    ?assertEqual(0, count(?TEST_SINK_EVENT, Backend3)),
+
+                    lager:debug("another debug message for lager_event"),
+                    ?assertEqual(3, count(lager_event, Backend1)),
+                    ?assertEqual(1, count(lager_event, Backend2)),
+                    ?assertEqual(0, count(?TEST_SINK_EVENT, Backend3)),
+
+                    ?TEST_SINK_NAME:debug("a debug message for ~p", [?TEST_SINK_EVENT]),
+                    ?assertEqual(3, count(lager_event, Backend1)),
+                    ?assertEqual(1, count(lager_event, Backend2)),
+                    ?assertEqual(0, count(?TEST_SINK_EVENT, Backend3)),
+
+                    ?TEST_SINK_NAME:info("an info message for ~p", [?TEST_SINK_EVENT]),
+                    ?assertEqual(3, count(lager_event, Backend1)),
+                    ?assertEqual(1, count(lager_event, Backend2)),
+                    ?assertEqual(1, count(?TEST_SINK_EVENT, Backend3))
+                end
+            },
+            {"setting and getting logging level works with identified backends",
+                fun () ->
+                    ?assertEqual(lager:get_loglevel(Backend1), debug),
+                    lager:set_loglevel(Backend1, info),
+                    lager:debug("debug message for lager_event"),
+                    ?assertEqual(0, count(lager_event, Backend1)),
+                    ?assertEqual(0, count(lager_event, Backend2)),
+                    ?assertEqual(lager:get_loglevel(Backend1), info),
+
+                    ?assertEqual(lager:get_loglevel(Backend2), info),
+                    lager:set_loglevel(Backend2, debug),
+                    lager:debug("debug message for lager_event"),
+                    ?assertEqual(0, count(lager_event, Backend1)),
+                    ?assertEqual(1, count(lager_event, Backend2)),
+                    ?assertEqual(lager:get_loglevel(Backend2), debug),
+
+                    ?assertEqual(lager:get_loglevel(Backend1), info),
+                    lager:set_loglevel(Backend1, debug),
+                    lager:debug("debug message for lager_event"),
+                    ?assertEqual(1, count(lager_event, Backend1)),
+                    ?assertEqual(2, count(lager_event, Backend2)),
+                    ?assertEqual(lager:get_loglevel(Backend1), debug),
+
+                    ?assertEqual(lager:get_loglevel(Backend1), debug),
+                    lager:set_loglevel(Backend2, info),
+                    lager:debug("debug message for lager_event"),
+                    ?assertEqual(2, count(lager_event, Backend1)),
+                    ?assertEqual(2, count(lager_event, Backend2)),
+                    ?assertEqual(lager:get_loglevel(Backend2), info)
+                end
+            },
+            {"tracing with identified backends works",
+                fun () ->
+                    TraceId1 = 'trace backend #1',
+                    TraceId2 = 'trace backend #2',
+                    TraceBackend1 = {?MODULE, TraceId1},
+                    TraceBackend2 = {?MODULE, TraceId2},
+                    TraceOptions1 = [{id, TraceId1}],
+                    TraceOptions2 = [{id, TraceId2}],
+                    TraceFilterA = [{foo, bar}],
+                    TraceFilterB = [{bar, foo}],
+                    {ok, Trace1A} = lager:trace(TraceBackend1, TraceFilterA, TraceOptions1),
+                    {ok, Trace2B} = lager:trace(TraceBackend2, TraceFilterB, TraceOptions2),
+                    gen_event:call(lager_event, TraceBackend1, flush),
+                    gen_event:call(lager_event, TraceBackend2, flush),
+
+                    lager:debug([{foo, bar}], "message to tracer 1"),
+                    ?assertEqual(1, count(lager_event, TraceBackend1)),
+                    ?assertEqual(0, count(lager_event, TraceBackend2)),
+
+                    lager:debug([{bar, foo}], "message to tracer 2"),
+                    ?assertEqual(1, count(lager_event, TraceBackend1)),
+                    ?assertEqual(1, count(lager_event, TraceBackend2)),
+
+                    lager:debug([{foo, bar}, {bar, foo}], "message to both tracers"),
+                    ?assertEqual(2, count(lager_event, TraceBackend1)),
+                    ?assertEqual(2, count(lager_event, TraceBackend2)),
+
+                    lager:debug("message to no-one"),
+                    ?assertEqual(2, count(lager_event, TraceBackend1)),
+                    ?assertEqual(2, count(lager_event, TraceBackend2)),
+
+                    ?assertMatch(ok, lager:stop_trace(Trace1A)),
+                    ?assertMatch(ok, lager:stop_trace(Trace2B))
+                end
+            },
+            {"tracing with an identified backend is exclusive to one sink at a time",
+                fun () ->
+                    TraceBackend1 = {?MODULE, 'trace backend #1'},
+                    TraceBackend2 = {?MODULE, 'trace backend #2'},
+                    TraceFilterA = [{module, ?MODULE}, {sink, lager_event}],
+                    TraceFilterB = [{module, ?MODULE}, {sink, ?TEST_SINK_EVENT}],
+
+                    {ok, Trace1A} = lager:trace(TraceBackend1, TraceFilterA, debug),
+                    ?assertMatch({error, backend_in_use}, lager:trace(TraceBackend1, TraceFilterB, debug)),
+                    ?assertMatch({ok, Trace1A}, lager:trace(TraceBackend1, TraceFilterA, debug)),
+                    ?assertMatch(ok, lager:stop_trace(Trace1A)),
+
+                    {ok, Trace2B} = lager:trace(TraceBackend2, TraceFilterB, debug),
+                    ?assertMatch({ok, Trace2B}, lager:trace(TraceBackend2, TraceFilterB, debug)),
+                    ?assertMatch({error, backend_in_use}, lager:trace(TraceBackend2, TraceFilterA, debug)),
+                    ?assertMatch(ok, lager:stop_trace(Trace2B))
                 end
             }
         ]
