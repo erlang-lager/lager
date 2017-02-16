@@ -263,10 +263,15 @@ log_event(Event, #state{sink=Sink} = State) ->
                                     [App, Node])
                     end;
                 [{started, Started}, {supervisor, Name}] ->
-                    MFA = format_mfa(get_value(mfargs, Started)),
-                    Pid = get_value(pid, Started),
-                    ?LOGFMT(Sink, debug, P, "Supervisor ~w started ~s at pid ~w",
-                        [supervisor_name(Name), MFA, Pid]);
+                    case lager_app:get_env(lager, suppress_supervisor_start_stop, false) of
+                        true ->
+                            ok;
+                        _ ->
+                            MFA = format_mfa(get_value(mfargs, Started)),
+                            Pid = get_value(pid, Started),
+                            ?LOGFMT(Sink, debug, P, "Supervisor ~w started ~s at pid ~w",
+                                [supervisor_name(Name), MFA, Pid])
+                    end;
                 _ ->
                     ?LOGMSG(Sink, info, P, "PROGRESS REPORT " ++ print_silly_list(D))
             end;

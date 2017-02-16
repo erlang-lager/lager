@@ -652,6 +652,16 @@ You can also pass it to `erlc`, if you prefer:
 erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_size, 1024}' file.erl
 ```
 
+Suppress applications and supervisors start/stop logs
+-----------------------------------------------------
+
+If you don't want to see supervisors and applications start/stop logs in debug level of your application, you can use these configs to turn it off:
+
+```erlang
+{lager, [{suppress_application_start_stop, true},
+         {suppress_supervisor_start_stop, true}]}
+```
+
 3.x Changelog
 -------------
 3.2.2 - 22 September 2016
