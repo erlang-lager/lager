@@ -22,12 +22,15 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([levels/0, level_to_num/1, level_to_chr/1,
-        num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
-        open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
-        localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
-        calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-        trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1, make_internal_sink_name/1]).
+-export([
+    levels/0, level_to_num/1, level_to_chr/1,
+    num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
+    open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
+    localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
+    calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
+    trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1,
+    make_internal_sink_name/1, otp_version/0
+]).
 
 -ifdef(TEST).
 -export([create_test_dir/0, delete_test_dir/1]).
@@ -543,6 +546,18 @@ make_internal_sink_name(lager) ->
     ?DEFAULT_SINK;
 make_internal_sink_name(Sink) ->
     list_to_atom(atom_to_list(Sink) ++ "_lager_event").
+
+-spec otp_version() -> pos_integer().
+%% @doc Return the major version of the current Erlang/OTP runtime as an integer.
+otp_version() ->
+    {Vsn, _} = string:to_integer(
+        case erlang:system_info(otp_release) of
+            [$R | Rel] ->
+                Rel;
+            Rel ->
+                Rel
+        end),
+    Vsn.
 
 -ifdef(TEST).
 
