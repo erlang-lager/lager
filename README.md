@@ -538,7 +538,8 @@ second argument if desired.
 
 You can also specify multiple expressions in a filter, or use the `*` atom as
 a wildcard to match any message that has that attribute, regardless of its
-value.
+value. You may also use the special value `!` to mean, only select if this
+key is **not** present.
 
 Tracing to an existing logfile is also supported (but see **Multiple
 sink support** below):
@@ -566,19 +567,42 @@ data-type that serializes well. To trace by pid, use the pid as a string:
 lager:trace_console([{pid, "<0.410.0>"}])
 ```
 
-As of lager 2.0, you can also use a 3 tuple while tracing, where the second
+### Filter expressions
+As of lager 3.3.1, you can also use a 3 tuple while tracing where the second
 element is a comparison operator. The currently supported comparison operators
 are:
 
 * `<` - less than
+* `=<` - less than or equal
 * `=` - equal to
+* `!=` - not equal to
 * `>` - greater than
+* `>=` - greater than or equal
 
 ```erlang
 lager:trace_console([{request, '>', 117}, {request, '<', 120}])
 ```
 
 Using `=` is equivalent to the 2-tuple form.
+
+### Filter composition
+As of lager 3.3.1 you may also use the special filter composition keys of
+`all` or `any`. For example the filter example above could be
+expressed as:
+
+```erlang
+lager:trace_console([{all, [{request, '>', 117}, {request, '<', 120}]}])
+```
+
+`any` has the effect of "OR style" logical evaluation between filters; `all`
+means "AND style" logical evaluation between filters. These compositional filters
+expect a list of additional filter expressions as their values.
+
+### Null filters
+The `null` filter has a special meaning.  A filter of `{null, false}` acts as
+a black hole; nothing is passed through.  A filter of `{null, true}` means
+*everything* passes through. No other values for the null filter are valid and
+will be rejected.
 
 ### Multiple sink support
 
