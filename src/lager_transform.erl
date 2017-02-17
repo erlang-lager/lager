@@ -29,12 +29,15 @@
 
 %% @private
 parse_transform(AST, Options) ->
+    io:format("~p~n", [?MODULE]),
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     Enable = proplists:get_value(lager_print_records_flag, Options, true),
     Sinks = [lager] ++ proplists:get_value(lager_extra_sinks, Options, []),
+    Functions = proplists:get_value(lager_function_transforms, Options, []),
     put(print_records_flag, Enable),
     put(truncation_size, TruncSize),
     put(sinks, Sinks),
+    put(functions, Functions),
     erlang:put(records, []),
     %% .app file should either be in the outdir, or the same dir as the source file
     guess_application(proplists:get_value(outdir, Options), hd(AST)),
@@ -110,6 +113,18 @@ transform_statement(Stmt, Sinks) when is_list(Stmt) ->
 transform_statement(Stmt, _Sinks) ->
     Stmt.
 
+
+add_function_transforms(_Line, DefaultAttrs, []) ->
+    DefaultAttrs;
+add_function_transforms(Line, DefaultAttrs, [{Atom, {Module, Function}}|Remainder]) ->
+    io:format("Adding ~p:~p to line ~p~n", [Module, Function, Line]),
+    NewFunction = {tuple, Line, [
+                            {atom, Line, Atom},
+                            {call, Line, {remote, Line, {atom, Line, Module},  {atom, Line, Function}} , []}
+                          ]},
+    add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder).
+
+
 do_transform(Line, SinkName, Severity, Arguments0) ->
     do_transform(Line, SinkName, Severity, Arguments0, safe).
 
@@ -132,15 +147,17 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                          %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
                          {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}},
                                                 %{nil, Line}}}}}}},
+    Functions = get(functions),
+    DefaultAttrs1 = add_function_transforms(Line, DefaultAttrs0, Functions),
     DefaultAttrs = case erlang:get(application) of
                        undefined ->
-                           DefaultAttrs0;
+                           DefaultAttrs1;
                        App ->
                            %% stick the application in the attribute list
                            concat_lists({cons, Line, {tuple, Line, [
                                                                     {atom, Line, application},
                                                                     {atom, Line, App}]},
-                                         {nil, Line}}, DefaultAttrs0)
+                                         {nil, Line}}, DefaultAttrs1)
                    end,
     {Meta, Message, Arguments} = handle_args(DefaultAttrs, Line, Arguments0),
     %% Generate some unique variable names so we don't accidentally export from case clauses.
