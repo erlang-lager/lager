@@ -36,7 +36,7 @@ parse_transform(AST, Options) ->
     put(print_records_flag, Enable),
     put(truncation_size, TruncSize),
     put(sinks, Sinks),
-    put(functions, Functions),
+    put(functions, lists:keysort(1, Functions)),
     erlang:put(records, []),
     %% .app file should either be in the outdir, or the same dir as the source file
     guess_application(proplists:get_value(outdir, Options), hd(AST)),
@@ -59,7 +59,7 @@ walk_ast(Acc, [{attribute, _, module, Module}=H|T]) ->
 walk_ast(Acc, [{attribute, _, lager_function_transforms, FromModule }=H|T]) ->
     %% Merge transform options from the module over the compile options
     FromOptions = get(functions),
-    put(functions, orddict:merge(fun(_Key, _V1, V2) -> V2 end, FromOptions, FromModule)),
+    put(functions, orddict:merge(fun(_Key, _V1, V2) -> V2 end, FromOptions, lists:keysort(1, FromModule))),
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     put(function, Name),
