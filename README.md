@@ -636,6 +636,30 @@ and caveats noted above apply.
 up to and including 3.1.0 or previous. The 2-tuple form wasn't added until
 3.2.0.
 
+Setting dynamic metadata at compile-time
+----------------------------------------
+Lager supports supplying metadata from external sources. You can add these by 
+using the `{lager_parse_transform_functions, X}` option. In rebar, you can 
+add it to `erl_opts`:
+
+```erlang
+{erl_opts, [{parse_transform, lager_transform}, 
+            {lager_function_transforms, 
+              [{metadata_name, {module_name, function_name}]}.
+```
+
+The MF called should take no arguments and should return a value that can be be
+ formatted into a log message.
+
+This metadata is also persistent across processes. 
+ 
+**IMPORTANT**: Since you can calling functions, be aware that using these 
+could have an impact on your logging performance depending on what the call
+will need to do.
+
+Also there is no protection against against an undefined module:function or
+ensuring any required apps are started.
+
 Setting the truncation limit at compile-time
 --------------------------------------------
 Lager defaults to truncating messages at 4096 bytes, you can alter this by

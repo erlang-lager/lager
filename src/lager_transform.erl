@@ -29,7 +29,6 @@
 
 %% @private
 parse_transform(AST, Options) ->
-    io:format("~p~n", [?MODULE]),
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     Enable = proplists:get_value(lager_print_records_flag, Options, true),
     Sinks = [lager] ++ proplists:get_value(lager_extra_sinks, Options, []),
@@ -56,6 +55,11 @@ walk_ast(Acc, [{attribute, _, module, {Module, _PmodArgs}}=H|T]) ->
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{attribute, _, module, Module}=H|T]) ->
     put(module, Module),
+    walk_ast([H|Acc], T);
+walk_ast(Acc, [{attribute, _, lager_function_transforms, FromModule }=H|T]) ->
+    %% Merge transform options from the module over the compile options
+    FromOptions = get(functions),
+    put(functions, orddict:merge(fun(_Key, _V1, V2) -> V2 end, FromOptions, FromModule)),
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     put(function, Name),
@@ -117,7 +121,6 @@ transform_statement(Stmt, _Sinks) ->
 add_function_transforms(_Line, DefaultAttrs, []) ->
     DefaultAttrs;
 add_function_transforms(Line, DefaultAttrs, [{Atom, {Module, Function}}|Remainder]) ->
-    io:format("Adding ~p:~p to line ~p~n", [Module, Function, Line]),
     NewFunction = {tuple, Line, [
                             {atom, Line, Atom},
                             {call, Line, {remote, Line, {atom, Line, Module},  {atom, Line, Function}} , []}
