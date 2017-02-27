@@ -123,7 +123,9 @@ add_function_transforms(_Line, DefaultAttrs, []) ->
 add_function_transforms(Line, DefaultAttrs, [{Atom, {Module, Function}}|Remainder]) ->
     NewFunction = {tuple, Line, [
                             {atom, Line, Atom},
-                            {call, Line, {remote, Line, {atom, Line, Module},  {atom, Line, Function}} , []}
+                            {'fun', Line, {
+                              function, {atom, Line, Module}, {atom, Line, Function}, {integer, Line, 0}
+                            }}
                           ]},
     add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder).
 

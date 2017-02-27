@@ -24,7 +24,8 @@
 
 -lager_function_transforms([
   {returns_static, {lager_test_function_transform, transform_static}},
-  {returns_dynamic, {lager_test_function_transform, transform_dynamic}}
+  {returns_dynamic, {lager_test_function_transform, transform_dynamic}},
+  {returns_undefined, {not_real_module_fake, fake_not_real_function}}
 ]).
 
 -compile({parse_transform, lager_transform}).
@@ -43,7 +44,7 @@ transform_static() ->
   static_result.
 
 transform_dynamic() ->
-  rand:uniform(10).
+  erlang:monotonic_time().
 
 not_running_test() ->
   ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).
@@ -102,37 +103,46 @@ transform_function_test_() ->
           lager:warning("static message"),
           ?assertEqual(1, lager_test_backend:count()),
           {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
-          ?assertEqual(transform_static(), proplists:get_value(returns_static, Metadata)),
+          Function = proplists:get_value(returns_static, Metadata),
+          ?assertEqual(transform_static(), Function()),
           ok
         end
       },
       {"Test calling a function which returns content which can change",
         fun() ->
-          lager:warning("dynamic message 1"),
-          lager:warning("dynamic message 2"),
-          lager:warning("dynamic message 3"),
-          lager:warning("dynamic message 4"),
-          lager:warning("dynamic message 5"),
-          lager:warning("dynamic message 6"),
-          ?assertEqual(6, lager_test_backend:count()),
-          {_Level1, _Time1, _Message1, Metadata1} = lager_test_backend:pop(),
-          Replacement1 = proplists:get_value(returns_dynamic, Metadata1),
-          ?assert((1 =< Replacement1) and (Replacement1 =< 10)),
-          {_Level2, _Time2, _Message2, Metadata2} = lager_test_backend:pop(),
-          Replacement2 = proplists:get_value(returns_dynamic, Metadata2),
-          ?assert((1 =< Replacement2) and (Replacement2 =< 10)),
-          {_Level3, _Time3, _Message3, Metadata3} = lager_test_backend:pop(),
-          Replacement3 = proplists:get_value(returns_dynamic, Metadata3),
-          ?assert((1 =< Replacement3) and (Replacement3 =< 10)),
-          {_Level4, _Time4, _Message4, Metadata4} = lager_test_backend:pop(),
-          Replacement4 = proplists:get_value(returns_dynamic, Metadata4),
-          ?assert((1 =< Replacement4) and (Replacement4 =< 10)),
-          {_Level5, _Time5, _Message5, Metadata5} = lager_test_backend:pop(),
-          Replacement5 = proplists:get_value(returns_dynamic, Metadata5),
-          ?assert((1 =< Replacement5) and (Replacement5 =< 10)),
-          {_Level6, _Time6, _Message6, Metadata6} = lager_test_backend:pop(),
-          Replacement6 = proplists:get_value(returns_dynamic, Metadata6),
-          ?assert((1 =< Replacement6) and (Replacement6 =< 10)),
+          lager:warning("dynamic message"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          Function = proplists:get_value(returns_dynamic, Metadata),
+          ?assert(Function() < Function()),
+          ?assert(Function() < Function()),
+          ?assert(Function() < Function()),
+          ?assert(Function() < Function()),
+          ok
+        end
+      },
+      {"Testing a undefined function returns undefined",
+        fun() ->
+          lager:warning("Undefined error"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          Function = proplists:get_value(returns_undefined, Metadata),
+          [{module, Module}, {name, Name}|_] = erlang:fun_info(Function),
+          ?assertNot(erlang:function_exported(Module, Name, 0)),
+          ok
+        end
+      },
+      {"Testing a function provided via metadata",
+        fun()->
+          Provided = fun()->
+            provided_metadata
+          end,
+          lager:md([{provided, Provided}]),
+          lager:warning("Provided metadata"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          Function = proplists:get_value(provided, Metadata),
+          ?assertEqual(Provided(), Function()),
           ok
         end
       }

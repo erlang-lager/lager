@@ -649,16 +649,15 @@ add it to `erl_opts`:
 ```
 
 The MF called should take no arguments and should return a value that can be be
- formatted into a log message.
+ formatted into a log message. Any function which is not defined, loaded, or
+ throws an exception will return `undefined` or the provided default value.
 
-This metadata is also persistent across processes. 
+This metadata is also persistent across processes.
  
 **IMPORTANT**: Since you can calling functions, be aware that using these 
 could have an impact on your logging performance depending on what the call
 will need to do.
 
-Also there is no protection against against an undefined module:function or
-ensuring any required apps are started.
 
 Setting the truncation limit at compile-time
 --------------------------------------------
