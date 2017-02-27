@@ -46,7 +46,7 @@ transform_static() ->
 transform_dynamic() ->
   case lager_util:otp_version() >= 18 of
     true ->
-      erlang:monotonic_time()
+      erlang:monotonic_time();
     false ->
       erlang:now()
   end.
