@@ -44,7 +44,12 @@ transform_static() ->
   static_result.
 
 transform_dynamic() ->
-  erlang:monotonic_time().
+  case lager_util:otp_version() >= 18 of
+    true ->
+      erlang:monotonic_time()
+    false ->
+      erlang:now()
+  end.
 
 not_running_test() ->
   ?assertEqual({error, lager_not_running}, lager:log(info, self(), "not running")).

@@ -654,9 +654,10 @@ The MF called should take no arguments and should return a value that can be be
 
 This metadata is also persistent across processes.
  
-**IMPORTANT**: Since you can calling functions, be aware that using these 
-could have an impact on your logging performance depending on what the call
-will need to do.
+**IMPORTANT**: Since this feature relies on function calls injected at the
+point where a log message is emitted, your logging performance (ops/sec)
+will be impacted by what the functions you call do and how much latency they
+may introduce.
 
 
 Setting the truncation limit at compile-time
