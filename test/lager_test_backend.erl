@@ -1588,7 +1588,7 @@ async_threshold_test_() ->
     end,
     {foreach, Setup, Cleanup, [
         {"async threshold works",
-        fun() ->
+         {timeout, 30, fun() ->
             %% we start out async
             ?assertEqual(true, lager_config:get(async)),
             ?assertEqual([{sync_toggled, 0}],
@@ -1629,7 +1629,7 @@ async_threshold_test_() ->
             %% async is true again now that the mailbox has drained
             ?assertEqual(true, lager_config:get(async)),
             ok
-        end}
+        end}}
     ]}.
 
 % Fire off the stuffers with minimal resource overhead - speed is of the essence.
