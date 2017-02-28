@@ -839,6 +839,14 @@ create_test_dir() ->
     end.
 
 delete_test_dir(Dir) ->
+    case otp_version() of
+        15 ->
+            os:cmd("rm -rf " ++ Dir);
+        _ ->
+            do_delete_test_dir(Dir)
+    end.
+
+do_delete_test_dir(Dir) ->
     ListRet = file:list_dir_all(Dir),
     ?assertMatch({ok, _}, ListRet),
     {_, Entries} = ListRet,
