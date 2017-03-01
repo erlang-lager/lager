@@ -23,9 +23,12 @@
 -include("lager.hrl").
 
 -lager_function_transforms([
-  {returns_static, {lager_test_function_transform, transform_static}},
-  {returns_dynamic, {lager_test_function_transform, transform_dynamic}},
-  {returns_undefined, {not_real_module_fake, fake_not_real_function}}
+  {returns_static_emit, on_emit, {lager_test_function_transform, transform_static}},
+  {returns_dynamic_emit, on_emit, {lager_test_function_transform, transform_dynamic}},
+  {returns_undefined_emit, on_emit, {not_real_module_fake, fake_not_real_function}},
+
+  {returns_static_log, on_log, {lager_test_function_transform, transform_static}},
+  {returns_dynamic_log, on_log, {lager_test_function_transform, transform_dynamic}}
 ]).
 
 -compile({parse_transform, lager_transform}).
@@ -103,22 +106,22 @@ transform_function_test_() ->
           ok
         end
       },
-      {"Test calling a function returns the same content",
+      {"Testing calling a function returns the same content on emit",
         fun() ->
           lager:warning("static message"),
           ?assertEqual(1, lager_test_backend:count()),
           {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
-          Function = proplists:get_value(returns_static, Metadata),
+          Function = proplists:get_value(returns_static_emit, Metadata),
           ?assertEqual(transform_static(), Function()),
           ok
         end
       },
-      {"Test calling a function which returns content which can change",
+      {"Testing calling a function which returns content which can change on emit",
         fun() ->
           lager:warning("dynamic message"),
           ?assertEqual(1, lager_test_backend:count()),
           {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
-          Function = proplists:get_value(returns_dynamic, Metadata),
+          Function = proplists:get_value(returns_dynamic_emit, Metadata),
           ?assert(Function() < Function()),
           ?assert(Function() < Function()),
           ?assert(Function() < Function()),
@@ -126,14 +129,51 @@ transform_function_test_() ->
           ok
         end
       },
-      {"Testing a undefined function returns undefined",
+      {"Testing a undefined function returns undefined on emit",
         fun() ->
           lager:warning("Undefined error"),
           ?assertEqual(1, lager_test_backend:count()),
           {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
-          Function = proplists:get_value(returns_undefined, Metadata),
+          Function = proplists:get_value(returns_undefined_emit, Metadata),
           [{module, Module}, {name, Name}|_] = erlang:fun_info(Function),
           ?assertNot(erlang:function_exported(Module, Name, 0)),
+          ok
+        end
+      },
+      {"Testing calling a function returns the same content on log",
+        fun() ->
+          lager:warning("static message"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          ?assertEqual(transform_static(), proplists:get_value(returns_static_log, Metadata)),
+          ok
+        end
+      },
+      {"Testing calling a dynamic function on log which returns the same value",
+        fun() ->
+          lager:warning("dynamic message"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          Value = proplists:get_value(returns_dynamic_log, Metadata),
+          ?assert(Value < transform_dynamic()),
+          ?assert(Value < transform_dynamic()),
+          ?assert(Value < transform_dynamic()),
+          ?assert(Value < transform_dynamic()),
+          ?assert(Value < transform_dynamic()),
+          ok
+        end
+      },
+      {"Testing differences in results for on_log vs on emit from dynamic function",
+        fun() ->
+          lager:warning("on_log vs on emit"),
+          ?assertEqual(1, lager_test_backend:count()),
+          {_Level, _Time, _Message, Metadata} = lager_test_backend:pop(),
+          Value = proplists:get_value(returns_dynamic_log, Metadata),
+          Function = proplists:get_value(returns_dynamic_emit, Metadata),
+          FunctionResult = Function(),
+          ?assert(Value < FunctionResult),
+          ?assert(Value < Function()),
+          ?assert(FunctionResult < Function()),
           ok
         end
       },

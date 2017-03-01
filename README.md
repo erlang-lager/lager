@@ -645,19 +645,43 @@ add it to `erl_opts`:
 ```erlang
 {erl_opts, [{parse_transform, lager_transform}, 
             {lager_function_transforms, 
-              [{metadata_name, {module_name, function_name}]}.
+              [
+                {metadata_placeholder, on_emit, {module_name, function_name}},
+                {other_metadata_placeholder, on_log, {module_name, function_name}}
+              ]}]}.
 ```
 
 The MF called should take no arguments and should return a value that can be be
- formatted into a log message. Any function which is not defined, loaded, or
- throws an exception will return `undefined` or the provided default value.
+ formatted into a log message.
+
+Following the placeholder atom you have to specify either `on_emit` or 
+`on_log`. This is tell the function to resolve at the time of emit or
+ the time of logging. 
+ 
+ `on_emit`:
+  * Functions are not resolve until the message is emitted. 
+  * If the function cannot be resolve, not loaded or produces errors then 
+    `undefined` or the provided default value will be returned. 
+  * If the function call is dependent on another process, there is the chance
+    that message will be emitted after the dependent process has died.   
+ 
+ `on_log`:
+  * Functions are resolved regardless whether the message is emitted or not
+  * If the function cannot be resolved or not loaded the errors are not handled.
+  * Any potential errors should be handled by the calling function. If the 
+    function returns `undefined` then it should return the provided default 
+    value if supplied.
+  * Because the function is resolved at log time there should be less change
+    of the dependent process dying before you can resolve it, especially if
+    you are logging from the app which contains the module:function.
 
 This metadata is also persistent across processes.
  
-**IMPORTANT**: Since this feature relies on function calls injected at the
+**IMPORTANT**: Since `on_emit` relies on function calls injected at the
 point where a log message is emitted, your logging performance (ops/sec)
 will be impacted by what the functions you call do and how much latency they
-may introduce.
+may introduce. This impact will even greater with `on_log` since the calls
+are injected at the point a message is logged.
 
 
 Setting the truncation limit at compile-time

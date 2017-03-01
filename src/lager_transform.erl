@@ -120,12 +120,18 @@ transform_statement(Stmt, _Sinks) ->
 
 add_function_transforms(_Line, DefaultAttrs, []) ->
     DefaultAttrs;
-add_function_transforms(Line, DefaultAttrs, [{Atom, {Module, Function}}|Remainder]) ->
+add_function_transforms(Line, DefaultAttrs, [{Atom, on_emit, {Module, Function}}|Remainder]) ->
     NewFunction = {tuple, Line, [
                             {atom, Line, Atom},
                             {'fun', Line, {
                               function, {atom, Line, Module}, {atom, Line, Function}, {integer, Line, 0}
                             }}
+                          ]},
+    add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder);
+add_function_transforms(Line, DefaultAttrs, [{Atom, on_log, {Module, Function}}|Remainder]) ->
+    NewFunction = {tuple, Line, [
+                            {atom, Line, Atom},
+                            {call, Line, {remote, Line, {atom, Line, Module}, {atom, Line, Function}}, []}
                           ]},
     add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder).
 
