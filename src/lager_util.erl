@@ -413,6 +413,7 @@ validate_trace_filter(Filter) ->
                           ({Key, '!'}) when is_atom(Key) -> true;
                           ({Key, _Value})      when is_atom(Key) -> true;
                           ({Key, '=', _Value}) when is_atom(Key) -> true;
+                          ({Key, '!=', _Value}) when is_atom(Key) -> true;
                           ({Key, '<', _Value}) when is_atom(Key) -> true;
                           ({Key, '>', _Value}) when is_atom(Key) -> true;
                           (_) -> false end, Filter) of
@@ -441,6 +442,8 @@ trace_acc([{Key, Val}|T], Acc) ->
 	trace_acc(T, [glc:eq(Key, Val)|Acc]);
 trace_acc([{Key, '=', Val}|T], Acc) ->
 	trace_acc(T, [glc:eq(Key, Val)|Acc]);
+trace_acc([{Key, '!=', Val}|T], Acc) ->
+	trace_acc(T, [glc:neq(Key, Val)|Acc]);
 trace_acc([{Key, '>', Val}|T], Acc) ->
 	trace_acc(T, [glc:gt(Key, Val)|Acc]);
 trace_acc([{Key, '<', Val}|T], Acc) ->
