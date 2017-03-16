@@ -28,6 +28,18 @@ Features
 * Optional load shedding by setting a high water mark to kill (and reinstall)
   a sink after a configurable cool down timer
 
+OTP Support Policy
+------------------
+The lager maintainers intend to support the past three OTP releases from
+current on the main 3.x branch of the project. As of 3.4.0 that includes 19, 18
+and 17. As a special case, until OTP 20 is released, we will continue to accept
+PRs for and support R16.
+
+Lager may or may not run on older OTP releases but it will only be guaranteed
+tested on the previous three OTP releases. If you need a version of lager
+which runs on older OTP releases, we recommend you use either the 3.4.0 release
+or the 2.x branch.
+
 Usage
 -----
 To use lager in your application, you need to define it as a rebar dep or have
@@ -678,7 +690,6 @@ erlc -pa lager/ebin +'{parse_transform, lager_transform}' +'{lager_truncation_si
 
 Suppress applications and supervisors start/stop logs
 -----------------------------------------------------
-
 If you don't want to see supervisors and applications start/stop logs in debug
 level of your application, you can use these configs to turn it off:
 
@@ -689,6 +700,16 @@ level of your application, you can use these configs to turn it off:
 
 3.x Changelog
 -------------
+3.4.0 - 16 March 2017
+
+    * Policy: Adopt official OTP support policy. (This is the **last** lager 3.x release
+      that will support R15.)
+    * Test: Fix timeouts, R15 missing functions on possibly long-running tests in Travis. (#394, #395)
+    * Feature: capture and log metadata from error_logger messages (#397)
+    * Feature: Expose new trace filters and enable filter composition (#389)
+    * Feature: Log crashes from gen_fsm and gen_statem correctly (#391)
+    * Docs: Typo in badge URL (#390)
+
 3.3.0 - 16 February 2017
 
     * Docs: Fix documentation to make 'it' unambiguous when discussing asychronous
