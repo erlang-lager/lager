@@ -933,6 +933,99 @@ error_logger_redirect_crash_cleanup(_Sink) ->
     end,
     error_logger:tty(true).
 
+crash_fsm_setup() ->
+    error_logger:tty(false),
+    application:load(lager),
+    application:set_env(lager, error_logger_redirect, true),
+    application:set_env(lager, handlers, [{?MODULE, error}]),
+    lager:start(),
+    crash_fsm:start(),
+    crash_statem:start(),
+    lager:log(error, self(), "flush flush"),
+    timer:sleep(100),
+    gen_event:call(lager_event, ?MODULE, flush),
+    lager_event.
+
+crash_fsm_sink_setup() ->
+    ErrorSink = error_logger_lager_event,
+    error_logger:tty(false),
+    application:load(lager),
+    application:set_env(lager, error_logger_redirect, true),
+    application:set_env(lager, handlers, []),
+    application:set_env(lager, extra_sinks, [{ErrorSink, [{handlers, [{?MODULE, error}]}]}]),
+    lager:start(),
+    crash_fsm:start(),
+    crash_statem:start(),
+    lager:log(ErrorSink, error, self(), "flush flush", []),
+    timer:sleep(100),
+    flush(ErrorSink),
+    ErrorSink.
+
+crash_fsm_cleanup(_Sink) ->
+    application:stop(lager),
+    application:stop(goldrush),
+    application:unset_env(lager, extra_sinks),
+    lists:foreach(fun(N) -> kill_crasher(N) end, [crash_fsm, crash_statem]),
+    error_logger:tty(true).
+
+kill_crasher(RegName) ->
+    case whereis(RegName) of
+        undefined -> ok;
+        Pid -> exit(Pid, kill)
+    end.
+
+spawn_fsm_crash(Module) ->
+    spawn(fun() -> Module:crash() end),
+    timer:sleep(100),
+    _ = gen_event:which_handlers(error_logger),
+    ok.
+
+crash_fsm_test_() ->
+    TestBody = fun(Name, FsmModule, Expected) ->
+                   fun(Sink) ->
+                      {Name,
+                       fun() ->
+                            case {FsmModule =:= crash_statem, lager_util:otp_version() < 19} of
+                                {true, true} -> ok;
+                                _ ->
+                                    Pid = whereis(FsmModule),
+                                    spawn_fsm_crash(FsmModule),
+                                    {Level, _, Msg, Metadata} = pop(Sink),
+                                    test_body(Expected, lists:flatten(Msg)),
+                                    ?assertEqual(Pid, proplists:get_value(pid, Metadata)),
+                                    ?assertEqual(lager_util:level_to_num(error), Level)
+                            end
+                       end
+                      }
+                   end
+               end,
+    Tests = [
+        fun(Sink) ->
+            {"again, there is nothing up my sleeve",
+                fun() ->
+                        ?assertEqual(undefined, pop(Sink)),
+                        ?assertEqual(0, count(Sink))
+                end
+            }
+        end,
+
+        TestBody("gen_fsm crash", crash_fsm, "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/7"),
+        TestBody("gen_statem crash", crash_statem, "gen_statem crash_statem in state state1 terminated with reason: no function clause matching crash_statem:handle")
+    ],
+
+    {"FSM crash output tests", [
+        {"Default sink",
+         {foreach,
+            fun crash_fsm_setup/0,
+            fun crash_fsm_cleanup/1,
+            Tests}},
+        {"Error logger sink",
+         {foreach,
+            fun crash_fsm_sink_setup/0,
+            fun crash_fsm_cleanup/1,
+            Tests}}
+    ]}.
+
 error_logger_redirect_crash_test_() ->
     TestBody=fun(Name,CrashReason,Expected) ->
         fun(Sink) ->
