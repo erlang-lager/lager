@@ -698,6 +698,96 @@ level of your application, you can use these configs to turn it off:
          {suppress_supervisor_start_stop, true}]}
 ```
 
+Elixir Support
+--------------
+
+There are 2 ways in which Lager can be leveraged in an Elixir project:
+
+1. Lager Backend for Elixir Logger
+2. Directly
+
+### Lager Backend for Elixir Logger
+
+[Elixir's Logger](https://hexdocs.pm/logger/Logger.html) is the idiomatic way
+to add logging into elixir code. Logger has a plug-in model,
+allowing for different logging [Backends](https://hexdocs.pm/logger/Logger.html#module-backends)
+to be used without the need to change the logging code within your project.
+
+This approach will benefit from the fact that most elixir libs and frameworks
+are likely to use the elixir Logger and as such logging will all flow via the
+same logging mechanism.
+
+In [elixir 2.0 support for parse transforms will be deprecated](https://github.com/elixir-lang/elixir/issues/5762).
+Taking the "Lager as a Logger Backend" approach is likely bypass any related 
+regression issues that would be introduced into a project which is using lager 
+directly when updating to elixir 2.0.
+
+There are open source elixir Logger backends for Lager available:
+- [LagerLogger](https://github.com/PSPDFKit-labs/lager_logger)
+- [LoggerLagerBackend](https://github.com/jonathanperret/logger_lager_backend)
+
+### Directly
+
+It is fully possible prior to elixir 2.0 to use lager and all its features
+directly.
+
+After elixir 2.0 there will be no support for parse transforms, and it would be
+recommended to use an elixir wrapper for the lager api that provides compile time
+log level exclusion via elixir macros when opting for direct use of lager.
+
+Including Lager as a dependency:
+``` elixir
+# mix.exs
+def application do
+  [
+    applications: [:lager],
+    erl_opts: [parse_transform: "lager_transform"]
+  ]
+end
+
+defp deps do
+  [{:lager, "~> 3.2"}]
+end
+```
+
+Example Configuration:
+``` elixir
+# config.exs
+use Mix.Config
+
+# Stop lager writing a crash log
+config :lager, :crash_log, false
+
+config :lager,
+  log_root: '/var/log/hello',
+  handlers: [
+    lager_console_backend: :info,
+    lager_file_backend: [file: "error.log", level: :error],
+    lager_file_backend: [file: "console.log", level: :info]
+  ]
+```
+
+There is a known issue where Elixir's Logger and Lager both contest for the
+Erlang `error_logger` handle if used side by side.
+
+If using both add the following to your `config.exs`:
+```elixir
+# config.exs
+use Mix.Config
+
+# Stop lager redirecting :error_logger messages
+config :lager, :error_logger_redirect, false
+
+# Stop lager removing Logger's :error_logger handler
+config :lager, :error_logger_whitelist, [Logger.ErrorHandler]
+```
+
+Example Usage:
+``` elixir
+:lager.error('Some message')
+:lager.warning('Some message with a term: ~p', [term])
+```
+
 3.x Changelog
 -------------
 3.4.0 - 16 March 2017
