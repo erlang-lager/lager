@@ -790,6 +790,12 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.4.1 - 28 March 2017
+
+    * Docs: Added documentation around using lager in the context of elixir applications (#398)
+    * Bugfix: Properly expand paths when log_root is set. (#386)
+    * Policy: Removed R15 from Travis configuration
+
 3.4.0 - 16 March 2017
 
     * Policy: Adopt official OTP support policy. (This is the **last** lager 3.x release
