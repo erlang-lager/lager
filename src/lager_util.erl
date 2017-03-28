@@ -28,7 +28,7 @@
     open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
     localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
     calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-    trace_filter/1, trace_filter/2, expand_path/1, check_hwm/1,
+    trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1,
     make_internal_sink_name/1, otp_version/0
 ]).
 
@@ -513,6 +513,26 @@ expand_path(RelPath) ->
         undefined -> % No log_root given, keep relative path
             RelPath
     end.
+
+%% Find a file among the already installed handlers.
+%%
+%% The file is already expanded (i.e. lager_util:expand_path already added the
+%% "log_root"), but the file paths inside Handlers are not.
+find_file(_File1, _Handlers = []) ->
+    false;
+find_file(File1, [{{lager_file_backend, File2}, _Handler, _Sink} = HandlerInfo | Handlers]) ->
+    File1Abs = filename:absname(File1),
+    File2Abs = filename:absname(lager_util:expand_path(File2)),
+    case File1Abs =:= File2Abs of
+        true ->
+            % The file inside HandlerInfo is the same as the file we are looking
+            % for, so we are done.
+            HandlerInfo;
+        false ->
+            find_file(File1, Handlers)
+    end;
+find_file(File1, [_HandlerInfo | Handlers]) ->
+    find_file(File1, Handlers).
 
 %% Log rate limit, i.e. high water mark for incoming messages
 
