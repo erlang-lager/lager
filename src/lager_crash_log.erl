@@ -353,5 +353,112 @@ filesystem_test_() ->
         end
     ]}.
 
+-define(LOG_ROOT, "/tmp").
+-define(TEST_FILE, "ctest.log").
+-define(PATH(X), ?LOG_ROOT ++ "/" ++ X).
+
+logroot_test_() ->
+    {foreach,
+        fun() ->
+                file:write_file(?PATH(?TEST_FILE), ""),
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, info}]),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, log_root, ?LOG_ROOT),
+                application:unset_env(lager, crash_log),
+                lager:start(),
+                timer:sleep(100),
+                lager_test_backend:flush()
+        end,
+        fun(_) ->
+                case whereis(lager_crash_log) of
+                    P when is_pid(P) ->
+                        exit(P, kill);
+                    _ -> ok
+                end,
+                file:delete(?PATH(?TEST_FILE)),
+                application:stop(lager),
+                application:stop(goldrush),
+                error_logger:tty(true)
+        end,
+        [
+            {"under normal circumstances, file should be opened",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link(?TEST_FILE, 65535, 0, undefined, 0),
+                        _ = gen_event:which_handlers(error_logger),
+                        sync_error_logger:error_msg("Test message\n"),
+                        {ok, Bin} = file:read_file(?PATH(?TEST_FILE)),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
+                end
+            },
+            {"file can't be opened on startup triggers an error message",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info(?PATH(?TEST_FILE)),
+                        file:write_file_info(?PATH(?TEST_FILE), FInfo#file_info{mode = 0}),
+                        {ok, _} = ?MODULE:start_link(?TEST_FILE, 65535, 0, undefined, 0),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open crash log file " ++ ?PATH(?TEST_FILE) ++ " with error: permission denied", lists:flatten(Message))
+                end
+            },
+            {"file that becomes unavailable at runtime should trigger an error message",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link(?TEST_FILE, 65535, 0, undefined, 0),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        file:delete(?PATH(?TEST_FILE)),
+                        file:write_file(?PATH(?TEST_FILE), ""),
+                        {ok, FInfo} = file:read_file_info(?PATH(?TEST_FILE)),
+                        file:write_file_info(?PATH(?TEST_FILE), FInfo#file_info{mode = 0}),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        ?assertEqual(3, lager_test_backend:count()),
+                        lager_test_backend:pop(),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to reopen crash log " ++ ?PATH(?TEST_FILE) ++ " with error: permission denied", lists:flatten(Message))
+                end
+            },
+            {"unavailable files that are fixed at runtime should start having log messages written",
+                fun() ->
+                        {ok, FInfo} = file:read_file_info(?PATH(?TEST_FILE)),
+                        OldPerms = FInfo#file_info.mode,
+                        file:write_file_info(?PATH(?TEST_FILE), FInfo#file_info{mode = 0}),
+                        {ok, _} = ?MODULE:start_link(?TEST_FILE, 65535, 0, undefined, 0),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
+                        ?assertEqual("Failed to open crash log file "++?PATH(?TEST_FILE)++" with error: permission denied", lists:flatten(Message)),
+                        file:write_file_info(?PATH(?TEST_FILE), FInfo#file_info{mode = OldPerms}),
+                        sync_error_logger:error_msg("Test message~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin} = file:read_file(?PATH(?TEST_FILE)),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}]))
+                end
+            },
+            {"external logfile rotation/deletion should be handled",
+                fun() ->
+                        {ok, _} = ?MODULE:start_link(?TEST_FILE, 65535, 0, undefined, 0),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        sync_error_logger:error_msg("Test message~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin} = file:read_file(?PATH(?TEST_FILE)),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}])),
+                        file:delete(?PATH(?TEST_FILE)),
+                        file:write_file(?PATH(?TEST_FILE), ""),
+                        sync_error_logger:error_msg("Test message1~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin1} = file:read_file(?PATH(?TEST_FILE)),
+                        ?assertMatch([_, "Test message1\n"], re:split(Bin1, "\n", [{return, list}, {parts, 2}])),
+                        file:rename(?PATH(?TEST_FILE), ?PATH(?TEST_FILE) ++ ".0"),
+                        sync_error_logger:error_msg("Test message2~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin2} = file:read_file(?PATH(?TEST_FILE)),
+                        ?assertMatch([_, "Test message2\n"], re:split(Bin2, "\n", [{return, list}, {parts, 2}]))
+                end
+            }
+        ]
+    }.
 -endif.
 
