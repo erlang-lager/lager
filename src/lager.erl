@@ -122,7 +122,7 @@ do_log_impl(Severity, Metadata, Format, Args, SeverityAsInt, LevelThreshold, Tra
                     Format
             end,
             LagerMsg = lager_msg:new(Msg,
-                Severity, Metadata, Destinations),
+                Severity, Metadata, Destinations, Format, Args),
             case lager_config:get({Sink, async}, false) of
                 true ->
                     gen_event:notify(SinkPid, {log, LagerMsg});
