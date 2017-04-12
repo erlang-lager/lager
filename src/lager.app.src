@@ -3,7 +3,7 @@
 {application, lager,
  [
   {description, "Erlang logging framework"},
-  {vsn, "3.4.0"},
+  {vsn, "3.4.1"},
   {modules, []},
   {applications, [
                   kernel,
@@ -56,5 +56,8 @@
             %% async_threshold_window. This value only applies to the
             %% default sink; extra sinks can supply their own.
             {async_threshold_window, 5}
-        ]}
+        ]},
+  {maintainers, ["Mark Allen", "Andrew Thompson"]},
+  {licenses, ["Apache 2"]},
+  {links, [{"Github", "https://github.com/erlang-lager/lager"}]}
  ]}.
