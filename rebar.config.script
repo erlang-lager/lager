@@ -1,0 +1,10 @@
+case erlang:function_exported(rebar3, main, 1) of
+    true -> % rebar3
+        CONFIG;
+    false -> % rebar 2.x or older
+        %% Rebuild deps, possibly including those that have been moved to
+        %% profiles
+        [{deps, [
+	   {goldrush, ".*", {git, "https://github.com/DeadZen/goldrush.git", {tag, "0.1.9"}}}
+        ]} | lists:keydelete(deps, 1, CONFIG)]
+end.
