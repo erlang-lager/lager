@@ -216,6 +216,8 @@ call "semi-iolist":
       single letter encoding of the severity level (e.g. `'debug'` -> `$D`)
     * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node`
       will always exist if the parse transform is used.
+    * If the error logger integration is used, the placeholder `pid`
+      will always exist and the placeholder `name` may exist.
     * Applications can define their own metadata placeholder.
     * A tuple of `{atom(), semi-iolist()}` allows for a fallback for
       the atom placeholder. If the value represented by the atom
