@@ -710,6 +710,7 @@ lager_test_() ->
                 fun() ->
                         application:set_env(sasl, utc_log, true),
                         lager:warning("so long, and thanks for all the fish"),
+                        application:set_env(sasl, utc_log, false),
                         ?assertEqual(1, count()),
                         {_Level, {_Date, Time}, _Message, _Metadata}  = pop(),
                         ?assertNotEqual(nomatch, binary:match(iolist_to_binary(Time), <<"UTC">>)),
