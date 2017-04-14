@@ -237,6 +237,16 @@ Examples:
 [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
 ```
 
+Universal time
+-----------------
+Lager reads the `sasl` application's configuration, if `utc_log` is set to `true`, the times will be displayed in UTC format.
+
+Example:
+
+```
+application:set_env(sasl, utc_log, true).
+```
+
 Error logger integration
 ------------------------
 Lager is also supplied with a `error_logger` handler module that translates
