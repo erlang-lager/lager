@@ -40,6 +40,13 @@ tested on the previous three OTP releases. If you need a version of lager
 which runs on older OTP releases, we recommend you use either the 3.4.0 release
 or the 2.x branch.
 
+Monthly triage cadence
+----------------------
+We have (at least) monthly issue and PR triage for lager in the #lager room on the 
+[freenode](https://freenode.net) IRC network every third Thursday at 2 pm US/Pacific,
+9 pm UTC. You are welcome to join us there to ask questions about lager or 
+participate in the triage.
+
 Usage
 -----
 To use lager in your application, you need to define it as a rebar dep or have
