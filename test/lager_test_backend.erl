@@ -696,6 +696,26 @@ lager_test_() ->
                         ?assertError(badarg, lager:md("zookeeper zephyr")),
                         ok
                 end
+            },
+            {"dates should be local by default",
+                fun() ->
+                        lager:warning("so long, and thanks for all the fish"),
+                        ?assertEqual(1, count()),
+                        {_Level, {_Date, Time}, _Message, _Metadata}  = pop(),
+                        ?assertEqual(nomatch, binary:match(iolist_to_binary(Time), <<"UTC">>)),
+                        ok
+                end
+            },
+            {"dates should be UTC if SASL is configured as UTC",
+                fun() ->
+                        application:set_env(sasl, utc_log, true),
+                        lager:warning("so long, and thanks for all the fish"),
+                        application:set_env(sasl, utc_log, false),
+                        ?assertEqual(1, count()),
+                        {_Level, {_Date, Time}, _Message, _Metadata}  = pop(),
+                        ?assertNotEqual(nomatch, binary:match(iolist_to_binary(Time), <<"UTC">>)),
+                        ok
+                end
             }
         ]
     }.
