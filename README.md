@@ -237,6 +237,22 @@ Examples:
 [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
 ```
 
+Universal time
+--------------
+By default, lager formats timestamps as local time for whatever computer
+generated the log message.
+
+To make lager use UTC timestamps, you can set the `sasl` application's
+`utc_log` configuration parameter to `true` in your application configuration
+file.
+
+Example:
+
+```
+%% format log timestamps as UTC
+[{sasl, [{utc_log, true}]}].
+```
+
 Error logger integration
 ------------------------
 Lager is also supplied with a `error_logger` handler module that translates
