@@ -451,7 +451,7 @@ See the `.app.src` file for further details.
 Syslog Support
 --------------
 Lager syslog output is provided as a separate application:
-[lager_syslog](https://github.com/basho/lager_syslog). It is packaged as a
+[lager_syslog](https://github.com/erlang-lager/lager_syslog). It is packaged as a
 separate application so lager itself doesn't have an indirect dependency on a
 port driver. Please see the `lager_syslog` README for configuration information.
 
