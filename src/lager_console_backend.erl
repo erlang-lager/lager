@@ -14,8 +14,17 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
-%% @doc Console backend for lager. Configured with a single option, the loglevel
-%% desired.
+%% @doc Console backend for lager.
+%% Configuration is a proplist with the following keys:
+%% <ul>
+%%    <li>`level' - log level to use</li>
+%%    <li>`use_stderr' - either `true' or `false', defaults to false. If set to true,
+%%                       use standard error to output log messages</li>
+%%    <li>`formatter' - the module to use when formatting log messages. Defaults to
+%%                      `lager_default_formatter'</li>
+%%    <li>`formatter_config' - the format configuration string. Defaults to
+%%                             time [ severity ] message</li>
+%% </ul>
 
 -module(lager_console_backend).
 
@@ -25,6 +34,7 @@
         code_change/3]).
 
 -record(state, {level :: {'mask', integer()},
+                out = user :: user | standard_error,
                 formatter :: atom(),
                 format_config :: any(),
                 colors=[] :: list()}).
@@ -34,17 +44,33 @@
 -compile([{parse_transform, lager_transform}]).
 -endif.
 
+
 -include("lager.hrl").
+
 -define(TERSE_FORMAT,[time, " ", color, "[", severity,"] ", message]).
+-define(DEFAULT_FORMAT_CONFIG, ?TERSE_FORMAT ++ [eol()]).
+-define(FORMAT_CONFIG_OFF, [{eol, eol()}]).
+
+-ifdef(TEST).
+-define(DEPRECATION(_Msg), ok).
+-else.
+-define(DEPRECATION(Msg),
+        io:format(user, "WARNING: This is a deprecated console configuration. Please use \"~p\" instead.", [Msg])).
+-endif.
 
 %% @private
 init([Level]) when is_atom(Level) ->
-    init(Level);
-init([Level, true]) -> % for backwards compatibility
-    init([Level,{lager_default_formatter,[{eol, eol()}]}]);
-init([Level,false]) -> % for backwards compatibility
-    init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]);
-init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
+    ?DEPRECATION([{level, Level}]),
+    init([{level, Level}]);
+init([Level, true]) when is_atom(Level) -> % for backwards compatibility
+    ?DEPRECATION([{level, Level}, {formatter_config, [{eol, "\\r\\n\\"}]}]),
+    init([{level, Level}, {formatter_config, ?FORMAT_CONFIG_OFF}]);
+init([Level,false]) when is_atom(Level) -> % for backwards compatibility
+    ?DEPRECATION([{level, Level}]),
+    init([{level, Level}]);
+
+init(Options) when is_list(Options) ->
+    true = validate_options(Options),
     Colors = case application:get_env(lager, colored) of
         {ok, true} ->
             {ok, LagerColors} = application:get_env(lager, colors),
@@ -52,6 +78,7 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
         _ -> []
     end,
 
+    Level = get_option(level, Options, undefined),
     try {is_new_style_console_available(), lager_util:config_to_mask(Level)} of
         {false, _} ->
             Msg = "Lager's console backend is incompatible with the 'old' shell, not enabling it",
@@ -65,23 +92,57 @@ init([Level,{Formatter,FormatterConfig}]) when is_atom(Formatter) ->
             io:format("WARNING: " ++ Msg ++ "~n"),
             ?INT_LOG(warning, Msg, []),
             {error, {fatal, old_shell}};
-        {true, Levels} ->
-            {ok, #state{level=Levels,
+        {true, L} ->
+            [UseErr, Formatter, Config] = [ get_option(K, Options, Default) || {K, Default} <- [
+                                                                                   {use_stderr, false},
+                                                                                   {formatter, lager_default_formatter},
+                                                                                   {formatter_config, ?DEFAULT_FORMAT_CONFIG}
+                                                                                               ]
+                                          ],
+            Out = case UseErr of
+                     false -> user;
+                     true -> standard_error
+                  end,
+            {ok, #state{level=L,
+                    out=Out,
                     formatter=Formatter,
-                    format_config=FormatterConfig,
+                    format_config=Config,
                     colors=Colors}}
     catch
         _:_ ->
             {error, {fatal, bad_log_level}}
     end;
-init(Level) ->
-    init([Level,{lager_default_formatter,?TERSE_FORMAT ++ [eol()]}]).
+init(Level) when is_atom(Level) ->
+    ?DEPRECATION([{level, Level}]),
+    init([{level, Level}]);
+init(Other) ->
+    {error, {fatal, {bad_console_config, Other}}}.
+
+validate_options([]) -> true;
+validate_options([{level, L}|T]) when is_atom(L) ->
+    validate_options(T);
+validate_options([{use_stderr, true}|T]) ->
+    validate_options(T);
+validate_options([{use_stderr, false}|T]) ->
+    validate_options(T);
+validate_options([{formatter, M}|T]) when is_atom(M) ->
+    validate_options(T);
+validate_options([{formatter_config, C}|T]) when is_list(C) ->
+    validate_options(T);
+validate_options([H|_]) ->
+    throw({error, {fatal, {bad_console_config, H}}}).
+
+get_option(K, Options, Default) ->
+   case lists:keyfind(K, 1, Options) of
+       {K, V} -> V;
+       false -> Default
+   end.
 
 %% @private
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loglevel, Level}, State) ->
-   try lager_util:config_to_mask(Level) of
+    try lager_util:config_to_mask(Level) of
         Levels ->
             {ok, ok, State#state{level=Levels}}
     catch
@@ -93,10 +154,10 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Message},
-    #state{level=L,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
+    #state{level=L,out=Out,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
     case lager_util:is_loggable(Message, L, ?MODULE) of
         true ->
-            io:put_chars(user, Formatter:format(Message,FormatConfig,Colors)),
+            io:put_chars(Out, Formatter:format(Message,FormatConfig,Colors)),
             {ok, State};
         false ->
             {ok, State}
@@ -186,7 +247,7 @@ console_log_test_() ->
                         unregister(user),
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:log(info, self(), "Test message"),
                         receive
@@ -227,7 +288,7 @@ console_log_test_() ->
                         register(user, Pid),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         gen_event:add_handler(lager_event, lager_console_backend,
-                          [info, {lager_default_formatter, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
+                          [{level, info}, {formatter, lager_default_formatter}, {formatter_config, [date,"#",time,"#",severity,"#",node,"#",pid,"#",
                                                             module,"#",function,"#",file,"#",line,"#",message,"\r\n"]}]),
                         lager_config:set({lager_event, loglevel}, {?INFO, []}),
                         lager:info("Test message"),
@@ -250,7 +311,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}]),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:debug("Test message"),
@@ -280,7 +341,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         erlang:group_leader(Pid, whereis(lager_event)),
                         lager:debug("Test message"),
@@ -319,7 +380,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:set_loglevel(lager_console_backend, '!=info'),
                         erlang:group_leader(Pid, whereis(lager_event)),
@@ -350,7 +411,7 @@ console_log_test_() ->
                         Pid = spawn(F(self())),
                         unregister(user),
                         register(user, Pid),
-                        gen_event:add_handler(lager_event, lager_console_backend, info),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}]),
                         lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
                         lager:set_loglevel(lager_console_backend, '=debug'),
                         erlang:group_leader(Pid, whereis(lager_event)),
@@ -384,7 +445,7 @@ set_loglevel_test_() ->
         fun() ->
                 error_logger:tty(false),
                 application:load(lager),
-                application:set_env(lager, handlers, [{lager_console_backend, info}]),
+                application:set_env(lager, handlers, [{lager_console_backend, [{level, info}]),
                 application:set_env(lager, error_logger_redirect, false),
                 lager:start()
         end,
