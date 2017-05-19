@@ -19,11 +19,11 @@
 %% <ul>
 %%    <li>`level' - log level to use</li>
 %%    <li>`use_stderr' - either `true' or `false', defaults to false. If set to true,
-%%                       use standard error to output log messages</li>
+%%                       use standard error to output console log messages</li>
 %%    <li>`formatter' - the module to use when formatting log messages. Defaults to
 %%                      `lager_default_formatter'</li>
 %%    <li>`formatter_config' - the format configuration string. Defaults to
-%%                             time [ severity ] message</li>
+%%                             `time [ severity ] message'</li>
 %% </ul>
 
 -module(lager_console_backend).
@@ -52,21 +52,21 @@
 -define(FORMAT_CONFIG_OFF, [{eol, eol()}]).
 
 -ifdef(TEST).
--define(DEPRECATION(_Msg), ok).
+-define(DEPRECATED(_Msg), ok).
 -else.
--define(DEPRECATION(Msg),
-        io:format(user, "WARNING: This is a deprecated console configuration. Please use \"~p\" instead.", [Msg])).
+-define(DEPRECATED(Msg),
+        io:format(user, "WARNING: This is a deprecated console configuration. Please use \"~w\" instead.~n", [Msg])).
 -endif.
 
 %% @private
 init([Level]) when is_atom(Level) ->
-    ?DEPRECATION([{level, Level}]),
+    ?DEPRECATED([{level, Level}]),
     init([{level, Level}]);
 init([Level, true]) when is_atom(Level) -> % for backwards compatibility
-    ?DEPRECATION([{level, Level}, {formatter_config, [{eol, "\\r\\n\\"}]}]),
+    ?DEPRECATED([{level, Level}, {formatter_config, [{eol, "\\r\\n\\"}]}]),
     init([{level, Level}, {formatter_config, ?FORMAT_CONFIG_OFF}]);
-init([Level,false]) when is_atom(Level) -> % for backwards compatibility
-    ?DEPRECATION([{level, Level}]),
+init([Level, false]) when is_atom(Level) -> % for backwards compatibility
+    ?DEPRECATED([{level, Level}]),
     init([{level, Level}]);
 
 init(Options) when is_list(Options) ->
@@ -113,7 +113,7 @@ init(Options) when is_list(Options) ->
             {error, {fatal, bad_log_level}}
     end;
 init(Level) when is_atom(Level) ->
-    ?DEPRECATION([{level, Level}]),
+    ?DEPRECATED([{level, Level}]),
     init([{level, Level}]);
 init(Other) ->
     {error, {fatal, {bad_console_config, Other}}}.
@@ -445,7 +445,7 @@ set_loglevel_test_() ->
         fun() ->
                 error_logger:tty(false),
                 application:load(lager),
-                application:set_env(lager, handlers, [{lager_console_backend, [{level, info}]),
+                application:set_env(lager, handlers, [{lager_console_backend, [{level, info}]}]),
                 application:set_env(lager, error_logger_redirect, false),
                 lager:start()
         end,
