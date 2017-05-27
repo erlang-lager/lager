@@ -1029,7 +1029,7 @@ crash_fsm_test_() ->
             }
         end,
 
-        TestBody("gen_fsm crash", crash_fsm, "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/7"),
+        TestBody("gen_fsm crash", crash_fsm, "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/"),
         TestBody("gen_statem crash", crash_statem, "gen_statem crash_statem in state state1 terminated with reason: no function clause matching crash_statem:handle")
     ],
 
