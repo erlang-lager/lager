@@ -72,7 +72,7 @@ set_high_water(N) ->
 
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
-    Shaper = #lager_shaper{hwm=HighWaterMark},
+    Shaper = #lager_shaper{hwm=HighWaterMark, filter=shaper_fun(), id=?MODULE},
     Raw = lager_app:get_env(lager, error_logger_format_raw, false),
     Sink = configured_sink(),
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.
@@ -83,8 +83,37 @@ handle_call({set_high_water, N}, #state{shaper=Shaper} = State) ->
 handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
+shaper_fun() ->
+    case {lager_app:get_env(lager, suppress_supervisor_start_stop, false), lager_app:get_env(lager, suppress_application_start_stop, false)} of
+        {false, false} ->
+            fun(_) -> false end;
+        {true, true} ->
+            fun({info_report, _GL, {_Pid, std_info, D}}) when is_list(D) ->
+                    lists:member({exited, stopped}, D);
+               ({info_report, _GL, {_P, progress, D}}) ->
+                    (lists:keymember(application, 1, D) andalso lists:keymember(started_at, 1, D)) orelse
+                    (lists:keymember(started, 1, D) andalso lists:keymember(supervisor, 1, D));
+               (_) ->
+                    false
+            end;
+        {false, true} ->
+            fun({info_report, _GL, {_Pid, std_info, D}}) when is_list(D) ->
+                    lists:member({exited, stopped}, D);
+               ({info_report, _GL, {_P, progress, D}}) ->
+                    lists:keymember(application, 1, D) andalso lists:keymember(started_at, 1, D);
+               (_) ->
+                    false
+            end;
+        {true, false} ->
+            fun({info_report, _GL, {_P, progress, D}}) ->
+                    lists:keymember(started, 1, D) andalso lists:keymember(supervisor, 1, D);
+               (_) ->
+                    false
+            end
+    end.
+
 handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
-    case lager_util:check_hwm(Shaper) of
+    case lager_util:check_hwm(Shaper, Event) of
         {true, 0, NewShaper} ->
             eval_gl(Event, State#state{shaper=NewShaper});
         {true, Drop, #lager_shaper{hwm=Hwm} = NewShaper} when Drop > 0 ->
@@ -96,6 +125,11 @@ handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
             {ok, State#state{shaper=NewShaper}}
     end.
 
+handle_info({shaper_expired, ?MODULE}, #state{sink=Sink, shaper=Shaper} = State) ->
+    ?LOGFMT(Sink, warning, self(),
+            "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
+            [Shaper#lager_shaper.dropped, Shaper#lager_shaper.hwm]),
+    {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=1, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.
 
