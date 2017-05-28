@@ -40,7 +40,7 @@
 -define(FILENAMES, '__lager_file_backend_filenames').
 -define(THROTTLE, lager_backend_throttle).
 -define(DEFAULT_HANDLER_CONF,
-        [{lager_console_backend, info},
+        [{lager_console_backend, [{level, info}]},
          {lager_file_backend,
           [{file, "log/error.log"}, {level, error},
            {size, 10485760}, {date, "$D0"}, {count, 5}]

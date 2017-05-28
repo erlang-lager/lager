@@ -28,6 +28,29 @@ Features
 * Optional load shedding by setting a high water mark to kill (and reinstall)
   a sink after a configurable cool down timer
 
+Contributing
+------------
+We welcome contributions from the community. We are always excited to get ideas
+for improving lager.
+
+If you are looking for an idea to help out, please take a look at our open
+issues - a number of them are tagged with [Help Wanted](https://github.com/erlang-lager/lager/issues?q=is%3Aopen+is%3Aissue+label%3A%22Help+Wanted%22)
+and [Easy](https://github.com/erlang-lager/lager/issues?q=is%3Aopen+is%3Aissue+label%3AEasy) - some
+of them are tagged as both! We are happy to mentor people get started with any
+of these issues, and they don't need prior discussion.
+
+That being said, before you send large changes please open an issue first to
+discuss the change you'd like to make along with an idea of your proposal to
+implement that change.
+
+### PR guidelines ###
+
+* Large changes without prior discussion are likely to be rejected.
+* Changes without test cases are likely to be rejected.
+* Please use the style of the existing codebase when submitting PRs.
+
+We review PRs and issues at least once a month as described below.
+
 OTP Support Policy
 ------------------
 The lager maintainers intend to support the past three OTP releases from
@@ -42,9 +65,9 @@ or the 2.x branch.
 
 Monthly triage cadence
 ----------------------
-We have (at least) monthly issue and PR triage for lager in the #lager room on the 
+We have (at least) monthly issue and PR triage for lager in the #lager room on the
 [freenode](https://freenode.net) IRC network every third Thursday at 2 pm US/Pacific,
-9 pm UTC. You are welcome to join us there to ask questions about lager or 
+10 pm UTC. You are welcome to join us there to ask questions about lager or
 participate in the triage.
 
 Usage
@@ -103,7 +126,7 @@ your app.config):
 {lager, [
   {log_root, "/var/log/hello"},
   {handlers, [
-    {lager_console_backend, info},
+    {lager_console_backend, [{level, info}],
     {lager_file_backend, [{file, "error.log"}, {level, error}]},
     {lager_file_backend, [{file, "console.log"}, {level, info}]}
   ]}
@@ -168,7 +191,7 @@ will be applied on that sink.
 
           %% Default handlers for lager/lager_event
           {handlers, [
-                      {lager_console_backend, info},
+                      {lager_console_backend, [{level, info}]},
                       {lager_file_backend, [{file, "error.log"}, {level, error}]},
                       {lager_file_backend, [{file, "console.log"}, {level, info}]}
                      ]},
@@ -202,7 +225,8 @@ for the backend:
 ```erlang
 {lager, [
   {handlers, [
-    {lager_console_backend, [info, {lager_default_formatter, [time," [",severity,"] ", message, "\n"]}]},
+    {lager_console_backend, [{level, info}, {formatter, lager_default_formatter},
+      {formatter_config, [time," [",severity,"] ", message, "\n"]}]},
     {lager_file_backend, [{file, "error.log"}, {level, error}, {formatter, lager_default_formatter},
       {formatter_config, [date, " ", time," [",severity,"] ",pid, " ", message, "\n"]}]},
     {lager_file_backend, [{file, "console.log"}, {level, info}]}
@@ -528,7 +552,8 @@ The output will be colored from the first occurrence of the atom color
 in the formatting configuration. For example:
 
 ```erlang
-{lager_console_backend, [info, {lager_default_formatter, [time, color, " [",severity,"] ", message, "\e[0m\r\n"]}]}
+{lager_console_backend, [{level, info}, {formatter, lager_default_formatter},
+  {formatter_config, [time, color, " [",severity,"] ", message, "\e[0m\r\n"]}]]}
 ```
 
 This will make the entire log message, except time, colored. The
@@ -815,6 +840,14 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.4.2 - 26 April 2017
+
+    * Docs: Document how to make lager use UTC timestamps (#405)
+    * Docs: Add a note about our triage cadence.
+    * Docs: Update lager_syslog URL
+    * Docs: Document placeholders for error_logger integration (#404)
+    * Feature: Add hex.pm metadata and full rebar3 support.
+
 3.4.1 - 28 March 2017
 
     * Docs: Added documentation around using lager in the context of elixir applications (#398)
