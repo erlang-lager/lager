@@ -120,7 +120,12 @@ init(Other) ->
 
 validate_options([]) -> true;
 validate_options([{level, L}|T]) when is_atom(L) ->
-    validate_options(T);
+    case lists:member(L, ?LEVELS) of
+        false ->
+            throw({error, {fatal, {bad_level, L}}});
+        true ->
+            validate_options(T)
+    end;
 validate_options([{use_stderr, true}|T]) ->
     validate_options(T);
 validate_options([{use_stderr, false}|T]) ->
@@ -206,6 +211,20 @@ is_new_style_console_available() ->
 -endif.
 
 -ifdef(TEST).
+console_config_validation_test_() ->
+    Good = [{level, info}, {use_stderr, true}],
+    Bad1 = [{level, foo}, {use_stderr, flase}],
+    Bad2 = [{level, info}, {use_stderr, flase}],
+    AllGood = [{level, info}, {formatter, my_formatter},
+               {formatter_config, ["blort", "garbage"]},
+               {use_stderr, false}],
+    [
+     ?_assertEqual(true, validate_options(Good)),
+     ?_assertThrow({error, {fatal, {bad_level, foo}}}, validate_options(Bad1)),
+     ?_assertThrow({error, {fatal, {bad_console_config, {use_stderr, flase}}}}, validate_options(Bad2)),
+     ?_assertEqual(true, validate_options(AllGood))
+    ].
+
 console_log_test_() ->
     %% tiny recursive fun that pretends to be a group leader
     F = fun(Self) ->
