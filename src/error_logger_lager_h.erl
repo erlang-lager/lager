@@ -146,7 +146,14 @@ log_event(Event, #state{sink=Sink} = State) ->
             case {FormatRaw, Fmt} of
                 {false, "** Generic server "++_} ->
                     %% gen_server terminate
-                    [Name, _Msg, _State, Reason] = Args,
+                    {Reason, Name} = case Args of
+                                         [N, _Msg, _State, R] ->
+                                             {R, N};
+                                         [N, _Msg, _State, R, _Client, _Stacktrace] ->
+                                             %% OTP 20 crash reports contain the pid of the client and stacktrace
+                                             %% TODO do something with them
+                                             {R, N}
+                                     end,
                     ?CRASH_LOG(Event),
                     {Md, Formatted} = format_reason_md(Reason),
                     ?LOGFMT(Sink, error, [{pid, Pid}, {name, Name} | Md], "gen_server ~w terminated with reason: ~s",
