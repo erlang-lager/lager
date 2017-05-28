@@ -88,29 +88,27 @@ shaper_fun() ->
         {false, false} ->
             fun(_) -> false end;
         {true, true} ->
-            fun({info_report, _GL, {_Pid, std_info, D}}) when is_list(D) ->
-                    lists:member({exited, stopped}, D);
-               ({info_report, _GL, {_P, progress, D}}) ->
-                    (lists:keymember(application, 1, D) andalso lists:keymember(started_at, 1, D)) orelse
-                    (lists:keymember(started, 1, D) andalso lists:keymember(supervisor, 1, D));
-               (_) ->
-                    false
-            end;
+            fun suppress_supervisor_start_and_application_start/1;
         {false, true} ->
-            fun({info_report, _GL, {_Pid, std_info, D}}) when is_list(D) ->
-                    lists:member({exited, stopped}, D);
-               ({info_report, _GL, {_P, progress, D}}) ->
-                    lists:keymember(application, 1, D) andalso lists:keymember(started_at, 1, D);
-               (_) ->
-                    false
-            end;
+            fun suppress_application_start/1;
         {true, false} ->
-            fun({info_report, _GL, {_P, progress, D}}) ->
-                    lists:keymember(started, 1, D) andalso lists:keymember(supervisor, 1, D);
-               (_) ->
-                    false
-            end
+            fun suppress_supervisor_start/1
     end.
+
+suppress_supervisor_start_and_application_start(E) ->
+    suppress_supervisor_start(E) orelse suppress_application_start(E).
+
+suppress_application_start({info_report, _GL, {_Pid, std_info, D}}) when is_list(D) ->
+    lists:member({exited, stopped}, D);
+suppress_application_start({info_report, _GL, {_P, progress, D}}) ->
+    lists:keymember(application, 1, D) andalso lists:keymember(started_at, 1, D);
+suppress_application_start(_) ->
+    false.
+
+suppress_supervisor_start({info_report, _GL, {_P, progress, D}}) ->
+    lists:keymember(started, 1, D) andalso lists:keymember(supervisor, 1, D);
+suppress_supervisor_start(_) ->
+    false.
 
 handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
     case lager_util:check_hwm(Shaper, Event) of
