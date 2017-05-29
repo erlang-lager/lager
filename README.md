@@ -840,6 +840,17 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.5.0 - 28 May 2017
+
+    * Bugfix: Support OTP 20 gen_event messages (#410)
+    * Feature: Enable console output to standard_error.
+               Convert to proplist configuration style (like file handler)
+               Deprecate previous configuration directives (#409)
+    * Bugfix: Enable the event shaper to filter messages before they're
+              counted; do not count application/supervisor start/stops
+              toward high water mark. (#411)
+    * Docs: Add PR guidelines; add info about the #lager chat room on freenode.
+
 3.4.2 - 26 April 2017
 
     * Docs: Document how to make lager use UTC timestamps (#405)
