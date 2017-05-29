@@ -112,7 +112,7 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
               [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, high_water_mark, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
             Name = lager_util:expand_path(RelName),
             schedule_rotation(Name, Date),
-            Shaper = #lager_shaper{hwm=HighWaterMark},
+            Shaper = #lager_shaper{hwm=HighWaterMark, id=Name},
             State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, shaper=Shaper, formatter=Formatter,
                 formatter_config=FormatterConfig, sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize,
                 check_interval=CheckInterval},
@@ -188,6 +188,14 @@ handle_info({rotate, File}, #state{name=File,count=Count,date=Date} = State) ->
     State1 = close_file(State),
     schedule_rotation(File, Date),
     {ok, State1};
+handle_info({shaper_expired, Name}, #state{shaper=Shaper, name=Name, formatter=Formatter, formatter_config=FormatConfig} = State) ->
+    Report = io_lib:format(
+               "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
+               [Shaper#lager_shaper.dropped, Shaper#lager_shaper.hwm]),
+    ReportMsg = lager_msg:new(Report, warning, [], []),
+    write(State, lager_msg:timestamp(ReportMsg),
+          lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig)),
+    {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=1, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.
 

@@ -28,7 +28,7 @@
     open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
     localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
     calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
-    trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1,
+    trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1, check_hwm/2,
     make_internal_sink_name/1, otp_version/0
 ]).
 
@@ -534,6 +534,15 @@ find_file(File1, [{{lager_file_backend, File2}, _Handler, _Sink} = HandlerInfo |
 find_file(File1, [_HandlerInfo | Handlers]) ->
     find_file(File1, Handlers).
 
+%% conditionally check the HWM if the event would not have been filtered
+check_hwm(Shaper = #lager_shaper{filter = Filter}, Event) ->
+    case Filter(Event) of
+        true ->
+            {true, 0, Shaper};
+        false ->
+            check_hwm(Shaper)
+    end.
+
 %% Log rate limit, i.e. high water mark for incoming messages
 
 check_hwm(Shaper = #lager_shaper{hwm = undefined}) ->
@@ -545,16 +554,23 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
     %% are we still in the same second?
     {M, S, _} = Now = os:timestamp(),
     case Last of
-        {M, S, _} ->
+        {M, S, N} ->
             %% still in same second, but have exceeded the high water mark
-            NewDrops = discard_messages(Now, 0),
-            {false, 0, Shaper#lager_shaper{dropped=Drop+NewDrops}};
+            NewDrops = discard_messages(Now, Shaper#lager_shaper.filter, 0),
+            Timer = case erlang:read_timer(Shaper#lager_shaper.timer) of
+                        false ->
+                            erlang:send_after(trunc((1000000 - N)/1000), self(), {shaper_expired, Shaper#lager_shaper.id});
+                        _ ->
+                            Shaper#lager_shaper.timer
+                    end,
+            {false, 0, Shaper#lager_shaper{dropped=Drop+NewDrops, timer=Timer}};
         _ ->
+            erlang:cancel_timer(Shaper#lager_shaper.timer),
             %% different second, reset all counters and allow it
             {true, Drop, Shaper#lager_shaper{dropped = 0, mps=1, lasttime = Now}}
     end.
 
-discard_messages(Second, Count) ->
+discard_messages(Second, Filter, Count) ->
     {M, S, _} = os:timestamp(),
     case Second of
         {M, S, _} ->
@@ -562,8 +578,12 @@ discard_messages(Second, Count) ->
                 %% we only discard gen_event notifications, because
                 %% otherwise we might discard gen_event internal
                 %% messages, such as trapped EXITs
-                {notify, _Event} ->
-                    discard_messages(Second, Count+1)
+                {notify, Event} ->
+                    NewCount = case Filter(Event) of
+                                   false -> Count+1;
+                                   true -> Count
+                               end,
+                    discard_messages(Second, Filter, NewCount)
             after 0 ->
                     Count
             end;
