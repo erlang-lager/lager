@@ -126,7 +126,7 @@ your app.config):
 {lager, [
   {log_root, "/var/log/hello"},
   {handlers, [
-    {lager_console_backend, [{level, info}],
+    {lager_console_backend, [{level, info}]},
     {lager_file_backend, [{file, "error.log"}, {level, error}]},
     {lager_file_backend, [{file, "console.log"}, {level, info}]}
   ]}
