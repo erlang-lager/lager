@@ -638,50 +638,134 @@ up to and including 3.1.0 or previous. The 2-tuple form wasn't added until
 
 Setting dynamic metadata at compile-time
 ----------------------------------------
-Lager supports supplying metadata from external sources. You can add these by 
-using the `{lager_parse_transform_functions, X}` option. In rebar, you can 
-add it to `erl_opts`:
+Lager supports supplying metadata from external sources by registering a 
+callback function. This metadata is also persistent across processes even if 
+the process dies.
+
+In general use you won't need to use this feature. However it is useful in 
+situations such as:
+ * Tracing information provided by 
+   [seq_trace](http://erlang.org/doc/man/seq_trace.html)
+ * Contextual information about your application
+ * Persistent information which isn't provided by the default placeholders
+ * Situations where you would have to set the metadata before every logging call 
+
+You can add the callbacks by using the `{lager_parse_transform_functions, X}` 
+option.  It is only available when using `parse_transform`. In rebar, you can 
+add it to `erl_opts` as below:
 
 ```erlang
 {erl_opts, [{parse_transform, lager_transform}, 
             {lager_function_transforms, 
               [
-                {metadata_placeholder, on_emit, {module_name, function_name}},
-                {other_metadata_placeholder, on_log, {module_name, function_name}}
+                 %% Placeholder              Resolve type  Callback tuple
+                {metadata_placeholder,       on_emit,      {module_name, function_name}},
+                {other_metadata_placeholder, on_log,       {module_name, function_name}}
               ]}]}.
 ```
 
-The MF called should take no arguments and should return a value that can be be
- formatted into a log message.
+The first atom is the placeholder atom used for the substitution in your custom
+ formatter. See [Custom Formatting](#custom-formatting) for more information.
 
-Following the placeholder atom you have to specify either `on_emit` or 
-`on_log`. This is tell the function to resolve at the time of emit or
- the time of logging. 
+The second atom is the resolve type. This specify the callback to resolve at 
+the time of the message being emitted or at the time of the logging call. You 
+have to specify either the atom `on_emit` or `on_log`. There is not a 'right' 
+resolve type to use, so please read the uses/caveats of each and pick the option 
+which fits your requirements best.
  
- `on_emit`:
-  * Functions are not resolve until the message is emitted. 
-  * If the function cannot be resolve, not loaded or produces errors then 
-    `undefined` or the provided default value will be returned. 
-  * If the function call is dependent on another process, there is the chance
-    that message will be emitted after the dependent process has died.   
+`on_emit`:
+  * The callback functions are not resolved until the message is emitted by the
+    backend.
+  * If the callback function cannot be resolved, not loaded or produces 
+    unhandled errors then `undefined` will be returned.
+  * Since the callback function is dependent on a process, there is the 
+    chance that message will be emitted after the dependent process has died 
+    resulting in `undefined` being returned. This process can also be your own
+    process
  
- `on_log`:
-  * Functions are resolved regardless whether the message is emitted or not
-  * If the function cannot be resolved or not loaded the errors are not handled.
-  * Any potential errors should be handled by the calling function. If the 
-    function returns `undefined` then it should return the provided default 
-    value if supplied.
-  * Because the function is resolved at log time there should be less change
+`on_log`:
+  * The callback functions are resolved regardless whether the message is  
+    emitted or not
+  * If the callback function cannot be resolved or not loaded the errors are 
+    not handled by lager itself.
+  * Any potential errors in callback should be handled in the callback function
+    itself.
+  * Because the function is resolved at log time there should be less chance
     of the dependent process dying before you can resolve it, especially if
-    you are logging from the app which contains the module:function.
+    you are logging from the app which contains the callback.
 
-This metadata is also persistent across processes.
- 
+The third element is the callback to your function consisting of a tuple in the
+form `{Module Function}`. The callback should look like the following 
+regardless if using `on_emit` or `on_log`:  
+  * It should be exported
+  * It should takes no arguments e.g. has an arity of 0
+  * It should return any traditional iolist elements or the atom `undefined`
+  * For errors generated within your callback see the resolve type documentation
+    above.
+
+If the callback returns `undefined` then it will follow the same fallback and
+conditional operator rules as documented in the 
+[Custom Formatting](#custom-formatting) section. 
+
+This example would work with `on_emit` but could be unsafe to use with 
+`on_log`. If the call failed in `on_emit` it would default to `undefined`, 
+however with `on_log` it would error.
+
+```erlang
+-export([my_callback/0]).
+
+my_callback() ->
+  my_app_serv:call('some options').
+```
+
+This example would be to safe to work with both `on_emit` and `on_log`
+
+```erlang
+-export([my_callback/0]).
+
+my_callback() ->
+  try my_app_serv:call('some options') of
+    Result ->
+      Result
+  catch
+    _ ->
+      %% You could define any traditional iolist elements you wanted here
+      undefined
+  end.
+```
+
+Note that the callback can be any Module:Function/0. It does not have be part 
+of your application. For example you could use `cpu_sup:avg1/0` as your  
+callback function like so `{cpu_avg1, on_emit, {cpu_sup, avg1}}`
+
+
+Examples:
+
+```erlang
+-export([reductions/0]).
+
+reductions() ->
+  proplists:get_value(reductions, erlang:process_info(self())).
+```
+
+```erlang
+-export([seq_trace/0]).
+
+seq_trace() ->
+  case seq_trace:get_token(label) of
+    {label, TraceLabel} ->
+      TraceLabel;
+    _ ->
+      undefined
+  end.
+```
+
 **IMPORTANT**: Since `on_emit` relies on function calls injected at the
 point where a log message is emitted, your logging performance (ops/sec)
 will be impacted by what the functions you call do and how much latency they
 may introduce. This impact will even greater with `on_log` since the calls
 are injected at the point a message is logged.
+
 
 
 Setting the truncation limit at compile-time
