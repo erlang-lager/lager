@@ -32,9 +32,11 @@ parse_transform(AST, Options) ->
     TruncSize = proplists:get_value(lager_truncation_size, Options, ?DEFAULT_TRUNCATION),
     Enable = proplists:get_value(lager_print_records_flag, Options, true),
     Sinks = [lager] ++ proplists:get_value(lager_extra_sinks, Options, []),
+    Functions = proplists:get_value(lager_function_transforms, Options, []),
     put(print_records_flag, Enable),
     put(truncation_size, TruncSize),
     put(sinks, Sinks),
+    put(functions, lists:keysort(1, Functions)),
     erlang:put(records, []),
     %% .app file should either be in the outdir, or the same dir as the source file
     guess_application(proplists:get_value(outdir, Options), hd(AST)),
@@ -53,6 +55,11 @@ walk_ast(Acc, [{attribute, _, module, {Module, _PmodArgs}}=H|T]) ->
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{attribute, _, module, Module}=H|T]) ->
     put(module, Module),
+    walk_ast([H|Acc], T);
+walk_ast(Acc, [{attribute, _, lager_function_transforms, FromModule }=H|T]) ->
+    %% Merge transform options from the module over the compile options
+    FromOptions = get(functions),
+    put(functions, orddict:merge(fun(_Key, _V1, V2) -> V2 end, FromOptions, lists:keysort(1, FromModule))),
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     put(function, Name),
@@ -110,6 +117,25 @@ transform_statement(Stmt, Sinks) when is_list(Stmt) ->
 transform_statement(Stmt, _Sinks) ->
     Stmt.
 
+
+add_function_transforms(_Line, DefaultAttrs, []) ->
+    DefaultAttrs;
+add_function_transforms(Line, DefaultAttrs, [{Atom, on_emit, {Module, Function}}|Remainder]) ->
+    NewFunction = {tuple, Line, [
+                            {atom, Line, Atom},
+                            {'fun', Line, {
+                              function, {atom, Line, Module}, {atom, Line, Function}, {integer, Line, 0}
+                            }}
+                          ]},
+    add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder);
+add_function_transforms(Line, DefaultAttrs, [{Atom, on_log, {Module, Function}}|Remainder]) ->
+    NewFunction = {tuple, Line, [
+                            {atom, Line, Atom},
+                            {call, Line, {remote, Line, {atom, Line, Module}, {atom, Line, Function}}, []}
+                          ]},
+    add_function_transforms(Line, {cons, Line, NewFunction, DefaultAttrs}, Remainder).
+
+
 do_transform(Line, SinkName, Severity, Arguments0) ->
     do_transform(Line, SinkName, Severity, Arguments0, safe).
 
@@ -132,15 +158,17 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                          %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
                          {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}},
                                                 %{nil, Line}}}}}}},
+    Functions = get(functions),
+    DefaultAttrs1 = add_function_transforms(Line, DefaultAttrs0, Functions),
     DefaultAttrs = case erlang:get(application) of
                        undefined ->
-                           DefaultAttrs0;
+                           DefaultAttrs1;
                        App ->
                            %% stick the application in the attribute list
                            concat_lists({cons, Line, {tuple, Line, [
                                                                     {atom, Line, application},
                                                                     {atom, Line, App}]},
-                                         {nil, Line}}, DefaultAttrs0)
+                                         {nil, Line}}, DefaultAttrs1)
                    end,
     {Meta, Message, Arguments} = handle_args(DefaultAttrs, Line, Arguments0),
     %% Generate some unique variable names so we don't accidentally export from case clauses.

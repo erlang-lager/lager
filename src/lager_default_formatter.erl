@@ -185,6 +185,15 @@ make_printable(A,{Align,W}) when is_integer(W) ->
 
 make_printable(A,_W) -> make_printable(A).
 
+run_function(Function, Default) ->
+    try Function() of
+        Result ->
+            Result
+    catch
+        _:_ ->
+          Default
+    end.
+
 get_metadata(Key, Metadata) ->
     get_metadata(Key, Metadata, undefined).
 
@@ -192,6 +201,8 @@ get_metadata(Key, Metadata, Default) ->
     case lists:keyfind(Key, 1, Metadata) of
         false ->
             Default;
+        {Key, Value} when is_function(Value) ->
+            run_function(Value, Default);
         {Key, Value} ->
             Value
     end.
