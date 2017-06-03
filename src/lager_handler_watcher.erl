@@ -128,7 +128,7 @@ install_handler2(Sink, Module, Config) ->
         Error ->
             %% try to reinstall it later
             ?INT_LOG(error, "Lager failed to install handler ~p into"
-               " ~p, retrying later : ~p", [Module, Sink, Error]),
+               " ~p, retrying later :~n  ~100p", [Module, Sink, Error]),
             erlang:send_after(5000, self(), reinstall_handler),
             ok
     end.
