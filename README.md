@@ -247,6 +247,8 @@ call "semi-iolist":
       single letter encoding of the severity level (e.g. `'debug'` -> `$D`)
     * The placeholders `pid`, `file`, `line`, `module`, `function`, and `node`
       will always exist if the parse transform is used.
+    * The placeholder `application` may exist if the parse transform is used.
+      It is dependent on finding the applications `app.src` file.
     * If the error logger integration is used, the placeholder `pid`
       will always exist and the placeholder `name` may exist.
     * Applications can define their own metadata placeholder.
