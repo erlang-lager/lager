@@ -974,6 +974,14 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.5.1 - 15 June 2017
+
+    * Doc fix: Missed a curly brace in an example. (#412)
+    * Feature: Dynamic metadata functions (#392) - It is now possible to
+               dynamically add metadata to lager messages. See the "dynamic
+               metadata" section above for more information.
+    * Doc fix: Add information about the "application" placeholder. (#414)
+
 3.5.0 - 28 May 2017
 
     * Bugfix: Support OTP 20 gen_event messages (#410)
