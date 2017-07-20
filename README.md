@@ -54,9 +54,8 @@ We review PRs and issues at least once a month as described below.
 OTP Support Policy
 ------------------
 The lager maintainers intend to support the past three OTP releases from
-current on the main 3.x branch of the project. As of 3.4.0 that includes 19, 18
-and 17. As a special case, until OTP 20 is released, we will continue to accept
-PRs for and support R16.
+current on the main 3.x branch of the project. As of July 2017 that includes 
+20, 19, and 18. 
 
 Lager may or may not run on older OTP releases but it will only be guaranteed
 tested on the previous three OTP releases. If you need a version of lager
