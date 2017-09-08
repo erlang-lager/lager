@@ -874,7 +874,8 @@ depth_limit_test() ->
 print_terms_without_format_string_test() ->
     ?assertError(badarg, format({hello, world}, [], 50)),
     ?assertError(badarg, format([{google, bomb}], [], 50)),
-    ?assertError(badarg, format([$h,$e,$l,$l,$o, 3594], [], 50)),
+    ?assertEqual([$h,$e,$l,$l,$o, 3594], format([$h,$e,$l,$l,$o, 3594], [], 50)),
+    ?assertError(badarg, format([$h,$e,$l,$l,$o, 65535], [], 50)),
     ?assertEqual("helloworld", lists:flatten(format([$h,$e,$l,$l,$o, "world"], [], 50))),
     ?assertEqual("hello", lists:flatten(format(<<"hello">>, [], 50))),
     ?assertEqual("hello", lists:flatten(format('hello', [], 50))),
