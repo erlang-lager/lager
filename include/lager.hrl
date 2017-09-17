@@ -20,6 +20,48 @@
 -define(DEFAULT_SINK, lager_event).
 -define(ERROR_LOGGER_SINK, error_logger_lager_event).
 
+-define(METADATA(Extras), [{severity, info},
+                           {pid, self()},
+                           {node, node()},
+                           {module, ?MODULE},
+                           {function, ?FUNCTION_NAME},
+                           {function_arity, ?FUNCTION_ARITY},
+                           {file, ?FILE},
+                           {line, ?LINE} | Extras]).
+
+-define(log(Level, Format, Args, Safety),
+        lager:dispatch_log(?DEFAULT_SINK, Level, ?METADATA([]), Format, Args,
+                           ?DEFAULT_TRUNCATION, Safety)).
+-define(log(Level, Metadata, Format, Args, Safety),
+        lager:dispatch_log(?DEFAULT_SINK, Level, ?METADATA(Metadata), Format, Args,
+                           ?DEFAULT_TRUNCATION, Safety)).
+
+-define(debug(Format, Args), ?log(debug, Format, Args, safe)).
+-define(debug(Metadata, Format, Args), ?log(debug, Metadata, Format, Args, safe)).
+
+-define(info(Format, Args), ?log(info, Format, Args, safe)).
+-define(info(Metadata, Format, Args), ?log(info, Metadata, Format, Args, safe)).
+
+-define(notice(Format, Args), ?log(notice, Format, Args, safe)).
+-define(notice(Metadata, Format, Args), ?log(notice, Metadata, Format, Args, safe)).
+
+-define(warning(Format, Args), ?log(warning, Format, Args, safe)).
+-define(warning(Metadata, Format, Args), ?log(warning, Metadata, Format, Args, safe)).
+
+-define(error(Format, Args), ?log(error, Format, Args, safe)).
+-define(error(Metadata, Format, Args), ?log(error, Metadata, Format, Args, safe)).
+
+-define(critical(Format, Args), ?log(critical, Format, Args, safe)).
+-define(critical(Metadata, Format, Args), ?log(critical, Metadata, Format, Args, safe)).
+
+-define(alert(Format, Args), ?log(alert, Format, Args, safe)).
+-define(alert(Metadata, Format, Args), ?log(alert, Metadata, Format, Args, safe)).
+
+-define(emergency(Format, Args), ?log(emergency, Format, Args, safe)).
+-define(emergency(Metadata, Format, Args), ?log(emergency, Metadata, Format, Args, safe)).
+
+-define(none(Format, Args), ?log(none, Format, Args, safe)).
+-define(none(Metadata, Format, Args), ?log(none, Metadata, Format, Args, safe)).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
