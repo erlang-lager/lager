@@ -25,7 +25,7 @@
 -export([
     levels/0, level_to_num/1, level_to_chr/1,
     num_to_level/1, config_to_mask/1, config_to_levels/1, mask_to_levels/1,
-    open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
+    create_logfile/2, open_logfile/2, ensure_logfile/4, rotate_logfile/2, format_time/0, format_time/1,
     localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
     calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
     trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1, check_hwm/2,
@@ -140,6 +140,9 @@ level_to_atom(String) ->
             erlang:error(badarg)
     end.
 
+create_logfile(Name, Buffer) ->
+    open_logfile(Name, Buffer).
+
 open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
         ok ->
@@ -244,19 +247,34 @@ format_time({{Y, M, D}, {H, Mi, S}}) ->
     {[integer_to_list(Y), $-, i2l(M), $-, i2l(D)],
      [i2l(H), $:, i2l(Mi), $:, i2l(S)]}.
 
-parse_rotation_day_spec([], Res) ->
-    {ok, Res ++ [{hour, 0}]};
-parse_rotation_day_spec([$D, D1, D2], Res) ->
-    case list_to_integer([D1, D2]) of
-        X when X >= 0, X =< 23 ->
-            {ok, Res ++ [{hour, X}]};
+parse_rotation_hour_spec([], Res) ->
+    {ok, Res};
+parse_rotation_hour_spec([$H, M1, M2], Res) ->
+    case list_to_integer([M1, M2]) of
+        X when X >= 0, X =< 59 ->
+            {ok, Res ++ [{minute, X}]};
         _ ->
             {error, invalid_date_spec}
     end;
-parse_rotation_day_spec([$D, D], Res)  when D >= $0, D =< $9 ->
-    {ok, Res ++ [{hour, D - 48}]};
-parse_rotation_day_spec(_, _) ->
+parse_rotation_hour_spec([$H, M], Res) when M >= $0, M =< $9 ->
+    {ok, Res ++ [{minute, M - 48}]};
+parse_rotation_hour_spec(_,_) ->
     {error, invalid_date_spec}.
+
+%% Default to 00:00:00 rotation
+parse_rotation_day_spec([], Res) ->
+    {ok, Res ++ [{hour ,0}]};
+parse_rotation_day_spec([$D, D1, D2|T], Res) ->
+    case list_to_integer([D1, D2]) of
+        X when X >= 0, X =< 23 ->
+            parse_rotation_hour_spec(T, Res ++ [{hour, X}]);
+        _ ->
+            {error, invalid_date_spec}
+    end;
+parse_rotation_day_spec([$D, D|T], Res)  when D >= $0, D =< $9 ->
+    parse_rotation_hour_spec(T, Res ++ [{hour, D - 48 }]);
+parse_rotation_day_spec(X, Res) ->
+    parse_rotation_hour_spec(X, Res).
 
 parse_rotation_date_spec([$$, $W, W|T]) when W >= $0, W =< $6 ->
     Week = W - 48,
@@ -295,6 +313,17 @@ calculate_next_rotation(Spec) ->
 
 calculate_next_rotation([], Now) ->
     Now;
+calculate_next_rotation([{minute, X}|T], {{_, _, _}, {Hour, Minute, _}} = Now) when Minute < X ->
+    %% rotation is this hour
+    NewNow = setelement(2, Now, {Hour, X, 0}),
+    calculate_next_rotation(T, NewNow);
+calculate_next_rotation([{minute, X}|T], Now) ->
+    %% rotation is next hour
+    Seconds = calendar:datetime_to_gregorian_seconds(Now) + 3600,
+    DateTime = calendar:gregorian_seconds_to_datetime(Seconds),
+    {_, {NewHour, _, _}} = DateTime,
+    NewNow = setelement(2, DateTime, {NewHour, X, 0}),
+    calculate_next_rotation(T, NewNow);
 calculate_next_rotation([{hour, X}|T], {{_, _, _}, {Hour, _, _}} = Now) when Hour < X ->
     %% rotation is today, sometime
     NewNow = setelement(2, Now, {X, 0, 0}),
@@ -630,10 +659,13 @@ maybe_flush(Flag, #lager_shaper{} = S) when is_boolean(Flag) ->
 -ifdef(TEST).
 
 parse_test() ->
+    ?assertEqual({ok, [{minute, 0}]}, parse_rotation_date_spec("$H0")),
+    ?assertEqual({ok, [{minute, 59}]}, parse_rotation_date_spec("$H59")),
     ?assertEqual({ok, [{hour, 0}]}, parse_rotation_date_spec("$D0")),
     ?assertEqual({ok, [{hour, 23}]}, parse_rotation_date_spec("$D23")),
     ?assertEqual({ok, [{day, 0}, {hour, 23}]}, parse_rotation_date_spec("$W0D23")),
     ?assertEqual({ok, [{day, 5}, {hour, 16}]}, parse_rotation_date_spec("$W5D16")),
+    ?assertEqual({ok, [{day, 0}, {hour, 12}, {minute, 30}]}, parse_rotation_date_spec("$W0D12H30")),
     ?assertEqual({ok, [{date, 1}, {hour, 0}]}, parse_rotation_date_spec("$M1D0")),
     ?assertEqual({ok, [{date, 5}, {hour, 6}]}, parse_rotation_date_spec("$M5D6")),
     ?assertEqual({ok, [{date, 5}, {hour, 0}]}, parse_rotation_date_spec("$M5")),
@@ -645,6 +677,8 @@ parse_test() ->
     ok.
 
 parse_fail_test() ->
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$H")),
+    ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$H60")),
     ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$D")),
     ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$D24")),
     ?assertEqual({error, invalid_date_spec}, parse_rotation_date_spec("$W7")),
@@ -658,6 +692,12 @@ parse_fail_test() ->
     ok.
 
 rotation_calculation_test() ->
+    ?assertMatch({{2000, 1, 1}, {13, 0, 0}},
+        calculate_next_rotation([{minute, 0}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 1}, {12, 45, 0}},
+        calculate_next_rotation([{minute, 45}], {{2000, 1, 1}, {12, 34, 43}})),
+    ?assertMatch({{2000, 1, 2}, {0, 0, 0}},
+        calculate_next_rotation([{minute, 0}], {{2000, 1, 1}, {23, 45, 43}})),
     ?assertMatch({{2000, 1, 2}, {0, 0, 0}},
         calculate_next_rotation([{hour, 0}], {{2000, 1, 1}, {12, 34, 43}})),
     ?assertMatch({{2000, 1, 1}, {16, 0, 0}},
