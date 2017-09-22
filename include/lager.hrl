@@ -30,11 +30,11 @@
                            {line, ?LINE} | Extras]).
 
 -define(lager_log(Severity, Format, Args, Safety),
-        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA([]), Format, Args,
-             ?DEFAULT_TRUNCATION, Safety)).
+        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA(lager:md()), Format, Args,
+                   ?DEFAULT_TRUNCATION, Safety)).
 -define(lager_log(Severity, Metadata, Format, Args, Safety),
-        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA(Metadata), Format, Args,
-             ?DEFAULT_TRUNCATION, Safety)).
+        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA(Metadata++lager:md()), Format, Args,
+                   ?DEFAULT_TRUNCATION, Safety)).
 
 -define(lager_log(Sink, Severity, Metadata, Format, Args, Size, Safety),
         lager:dispatch_log(Sink, Severity, Metadata, Format, Args, Size, Safety)).
