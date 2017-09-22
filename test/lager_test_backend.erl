@@ -190,7 +190,7 @@ lager_test_() ->
             },
             {"logging with macro works",
                 fun() ->
-                        ?warning("test message", []),
+                        ?lager_warning("test message", []),
                         ?assertEqual(1, count()),
                         {Level, _Time, Message, _Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
@@ -220,7 +220,7 @@ lager_test_() ->
             },
             {"logging with macro and arguments works",
                 fun() ->
-                        ?warning("test message ~p", [self()]),
+                        ?lager_warning("test message ~p", [self()]),
                         ?assertEqual(1, count()),
                         {Level, _Time, Message,_Metadata}  = pop(),
                         ?assertMatch(Level, lager_util:level_to_num(warning)),
