@@ -39,6 +39,8 @@
 
 -include("lager.hrl").
 
+-behaviour(lager_rotator_behaviour).
+
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency, none].
 
