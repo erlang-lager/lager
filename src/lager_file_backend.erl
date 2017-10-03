@@ -68,7 +68,7 @@
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
-        rotator :: atom(),
+        rotator = lager_util :: atom(),
         shaper :: lager_shaper(),
         formatter :: atom(),
         formatter_config :: any(),
@@ -469,7 +469,7 @@ rotation_test_() ->
                 {ok, {FD, Inode, _}} = lager_util:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{fd=FD, inode=Inode},
                 ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode},
-                    write(State0, os:timestamp(), ?DEBUG, "hello world")),
+                write(State0, os:timestamp(), ?DEBUG, "hello world")),
                 file:delete(TestLog),
                 Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
                 %% assert file has changed
