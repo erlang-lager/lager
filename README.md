@@ -973,6 +973,11 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.5.2 - 19 October 2017
+
+    * Bugfix: Properly check for unicode characters in potentially deep
+              character list. (#417)
+
 3.5.1 - 15 June 2017
 
     * Doc fix: Missed a curly brace in an example. (#412)
