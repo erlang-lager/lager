@@ -36,7 +36,7 @@ format(FmtStr, Args, MaxLen, Opts) when is_atom(FmtStr) ->
 format(FmtStr, Args, MaxLen, Opts) when is_binary(FmtStr) ->
     format(binary_to_list(FmtStr), Args, MaxLen, Opts);
 format(FmtStr, Args, MaxLen, Opts) when is_list(FmtStr) ->
-    case lager_stdlib:string_p(FmtStr) of
+    case io_lib:deep_char_list(FmtStr) of
         true ->
             Options = make_options(Opts, #options{}),
             Cs = collect(FmtStr, Args),
