@@ -521,6 +521,22 @@ Some examples:
           6:00 hr
 ```
 
+On top of the day, week and month time format from newsyslog,
+hour specification is added from PR [#420](https://github.com/erlang-lager/lager/pull/420)
+
+```
+Format of hour specification is : [Hmm]
+The range for minute specification is:
+
+  mm      minutes, range 0 ... 59
+
+Some examples:
+
+  $H00    rotate every hour at HH:00
+  $D12H30 rotate every day at 12:30
+  $W0D0H0 rotate every week on Sunday at 00:00
+```
+
 To configure the crash log rotation, the following application variables are
 used:
 * `crash_log_size`
@@ -528,6 +544,34 @@ used:
 * `crash_log_count`
 
 See the `.app.src` file for further details.
+
+Custom Log Rotation
+-------------------
+Custom log rotator could be configured with option for `lager_file_backend`
+```erlang
+{rotator, lager_util}
+```
+
+The module should provide the following callbacks as `lager_rotator_behaviour`
+
+```erlang
+%% @doc Create a log file
+-callback(create_logfile(Name::list(), Buffer::{integer(), integer()} | any()) ->
+    {ok, {FD::file:io_device(), Inode::integer(), Size::integer()}} | {error, any()}).
+
+%% @doc Open a log file
+-callback(open_logfile(Name::list(), Buffer::{integer(), integer()} | any()) ->
+    {ok, {FD::file:io_device(), Inode::integer(), Size::integer()}} | {error, any()}).
+
+%% @doc Ensure reference to current target, could be rotated
+-callback(ensure_logfile(Name::list(), FD::file:io_device(), Inode::integer(),
+                         Buffer::{integer(), integer()} | any()) ->
+    {ok, {FD::file:io_device(), Inode::integer(), Size::integer()}} | {error, any()}).
+
+%% @doc Rotate the log file
+-callback(rotate_logfile(Name::list(), Count::integer()) ->
+    ok).
+```
 
 Syslog Support
 --------------
