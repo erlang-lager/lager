@@ -597,18 +597,32 @@ is_record_known(Record, Module) ->
 
 %% @doc Print stacktrace in human readable form
 pr_stacktrace(Stacktrace) ->
+    Stacktrace1 = case application:get_env(lager, reverse_pretty_stacktrace, true) of
+                      true ->
+                          lists:reverse(Stacktrace);
+                      _ ->
+                          Stacktrace
+                  end,
+    pr_stacktrace_(Stacktrace1).
+
+pr_stacktrace_(Stacktrace) ->
     Indent = "\n    ",
     lists:foldl(
         fun(Entry, Acc) ->
             Acc ++ Indent ++ error_logger_lager_h:format_mfa(Entry)
         end,
         [],
-        lists:reverse(Stacktrace)).
+        Stacktrace).
 
 pr_stacktrace(Stacktrace, {Class, Reason}) ->
-    lists:flatten(
-        pr_stacktrace(Stacktrace) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason])).
-    
+    case application:get_env(lager, reverse_pretty_stacktrace, true) of
+        true ->
+            lists:flatten(
+              pr_stacktrace_(lists:reverse(Stacktrace)) ++ "\n" ++ io_lib:format("~s:~p", [Class, Reason]));
+        _ ->
+            lists:flatten(
+              io_lib:format("~s:~p", [Class, Reason]) ++ pr_stacktrace_(Stacktrace))
+    end.
 
 %% R15 compatibility only
 filtermap(Fun, List1) ->
