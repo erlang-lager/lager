@@ -181,6 +181,9 @@ log_event(Event, #state{sink=Sink} = State) ->
                     {Reason, Name} = case Args of
                                          [N, _Msg, _State, R] ->
                                              {R, N};
+                                         [N, _Msg, _State, R, _Client] ->
+                                             %% OTP 20 crash reports where the client pid is dead don't include the stacktrace
+                                             {R, N};
                                          [N, _Msg, _State, R, _Client, _Stacktrace] ->
                                              %% OTP 20 crash reports contain the pid of the client and stacktrace
                                              %% TODO do something with them
