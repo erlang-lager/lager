@@ -53,3 +53,17 @@ ExpectedPart = "
     lists:concat([], [])
 error:undef",
     ?assertNotEqual(0, string:str(Result, ExpectedPart)).
+
+pr_stacktrace_no_reverse_test() ->
+    application:set_env(lager, reverse_pretty_stacktrace, false),
+    Result = try
+        bad_arity()
+    catch
+        Class:Reason ->
+            lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})
+    end,
+ExpectedPart = "error:undef
+    lists:concat([], [])
+    pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 60",
+
+    ?assertEqual(0, string:str(Result, ExpectedPart)).
