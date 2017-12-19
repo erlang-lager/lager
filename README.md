@@ -356,6 +356,24 @@ related processes crash, you can set a limit:
 
 It is probably best to keep this number small.
 
+### Event queue flushing
+
+When the high-water mark is exceeded, lager can be configured to flush all
+event notifications in the message queue. This can have unintended consequences
+for other handlers in the same event manager (in e.g. the `error_logger'), as
+events they rely on may be wrongly discarded. By default, this behavior is disabled,
+but can be controlled, for the `error_logger' via:
+
+```erlang
+{error_logger_flush_queue, true | false}
+```
+
+or for a specific sink, using the option:
+
+```erlang
+{flush_queue, true | false}
+```
+
 ### Sink Killer
 
 In some high volume situations, it may be preferable to drop all pending log

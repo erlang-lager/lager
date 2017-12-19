@@ -121,6 +121,8 @@
                   lasttime = os:timestamp() :: erlang:timestamp(),
                   %% count of dropped messages this second
                   dropped = 0 :: non_neg_integer(),
+                  %% If true, flush notify messages from msg queue at overload
+                  flush_queue = false :: boolean(),
                   %% timer
                   timer = make_ref() :: reference(),
                   %% optional filter fun to avoid counting suppressed messages against HWM totals

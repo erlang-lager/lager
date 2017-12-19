@@ -72,7 +72,8 @@ set_high_water(N) ->
 
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
-    Shaper = #lager_shaper{hwm=HighWaterMark, filter=shaper_fun(), id=?MODULE},
+    Flush = lager_app:get_env(lager, error_logger_flush_queue, false),
+    Shaper = #lager_shaper{hwm=HighWaterMark, flush_queue = Flush, filter=shaper_fun(), id=?MODULE},
     Raw = lager_app:get_env(lager, error_logger_format_raw, false),
     Sink = configured_sink(),
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.

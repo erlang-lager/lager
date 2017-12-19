@@ -108,11 +108,11 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
             {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever
-            [RelName, Level, Date, Size, Count, HighWaterMark, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
-              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, high_water_mark, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
+            [RelName, Level, Date, Size, Count, HighWaterMark, Flush, SyncInterval, SyncSize, SyncOn, CheckInterval, Formatter, FormatterConfig] =
+              [proplists:get_value(Key, Config) || Key <- [file, level, date, size, count, high_water_mark, flush_queue, sync_interval, sync_size, sync_on, check_interval, formatter, formatter_config]],
             Name = lager_util:expand_path(RelName),
             schedule_rotation(Name, Date),
-            Shaper = #lager_shaper{hwm=HighWaterMark, id=Name},
+            Shaper = lager_util:maybe_flush(Flush, #lager_shaper{hwm=HighWaterMark, id=Name}),
             State0 = #state{name=Name, level=Level, size=Size, date=Date, count=Count, shaper=Shaper, formatter=Formatter,
                 formatter_config=FormatterConfig, sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize,
                 check_interval=CheckInterval},
