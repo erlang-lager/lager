@@ -556,7 +556,7 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
     case Last of
         {M, S, N} ->
             %% still in same second, but have exceeded the high water mark
-            NewDrops = case Shaper#lager_shaper.flush_queue of
+            NewDrops = case should_flush(Shaper) of
                            true ->
                                discard_messages(Now, Shaper#lager_shaper.filter, 0);
                            false ->
@@ -574,6 +574,12 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
             %% different second, reset all counters and allow it
             {true, Drop, Shaper#lager_shaper{dropped = 0, mps=1, lasttime = Now}}
     end.
+
+should_flush(#lager_shaper{flush_queue = true, flush_threshold = 0}) ->
+    true;
+should_flush(#lager_shaper{flush_queue = true, flush_threshold = T}) ->
+    {_, L} = process_info(self(), message_queue_len),
+    L > T.
 
 discard_messages(Second, Filter, Count) ->
     {M, S, _} = os:timestamp(),
