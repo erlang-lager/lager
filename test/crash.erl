@@ -81,6 +81,9 @@ handle_call(port_limit, _, State) ->
 handle_call(noproc, _, State) ->
     Res = gen_event:call(foo, bar, baz),
     {reply, Res, State};
+handle_call(noproc_proc_lib, _, State) ->
+    Res = proc_lib:stop(foo),
+    {reply, Res, State};
 handle_call(badarity, _, State) ->
     F = fun(A, B, C) -> A + B + C end,
     Res = F(State),
