@@ -20,6 +20,51 @@
 -define(DEFAULT_SINK, lager_event).
 -define(ERROR_LOGGER_SINK, error_logger_lager_event).
 
+-define(METADATA(Extras), [{severity, info},
+                           {pid, self()},
+                           {node, node()},
+                           {module, ?MODULE},
+                           {function, ?FUNCTION_NAME},
+                           {function_arity, ?FUNCTION_ARITY},
+                           {file, ?FILE},
+                           {line, ?LINE} | Extras]).
+
+-define(lager_log(Severity, Format, Args, Safety),
+        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA(lager:md()), Format, Args,
+                   ?DEFAULT_TRUNCATION, Safety)).
+-define(lager_log(Severity, Metadata, Format, Args, Safety),
+        ?lager_log(?DEFAULT_SINK, Severity, ?METADATA(Metadata++lager:md()), Format, Args,
+                   ?DEFAULT_TRUNCATION, Safety)).
+
+-define(lager_log(Sink, Severity, Metadata, Format, Args, Size, Safety),
+        lager:dispatch_log(Sink, Severity, Metadata, Format, Args, Size, Safety)).
+
+-define(lager_debug(Format, Args), ?lager_log(debug, Format, Args, safe)).
+-define(lager_debug(Metadata, Format, Args), ?lager_log(debug, Metadata, Format, Args, safe)).
+
+-define(lager_info(Format, Args), ?lager_log(info, Format, Args, safe)).
+-define(lager_info(Metadata, Format, Args), ?lager_log(info, Metadata, Format, Args, safe)).
+
+-define(lager_notice(Format, Args), ?lager_log(notice, Format, Args, safe)).
+-define(lager_notice(Metadata, Format, Args), ?lager_log(notice, Metadata, Format, Args, safe)).
+
+-define(lager_warning(Format, Args), ?lager_log(warning, Format, Args, safe)).
+-define(lager_warning(Metadata, Format, Args), ?lager_log(warning, Metadata, Format, Args, safe)).
+
+-define(lager_error(Format, Args), ?lager_log(error, Format, Args, safe)).
+-define(lager_error(Metadata, Format, Args), ?lager_log(error, Metadata, Format, Args, safe)).
+
+-define(lager_critical(Format, Args), ?lager_log(critical, Format, Args, safe)).
+-define(lager_critical(Metadata, Format, Args), ?lager_log(critical, Metadata, Format, Args, safe)).
+
+-define(lager_alert(Format, Args), ?lager_log(alert, Format, Args, safe)).
+-define(lager_alert(Metadata, Format, Args), ?lager_log(alert, Metadata, Format, Args, safe)).
+
+-define(lager_emergency(Format, Args), ?lager_log(emergency, Format, Args, safe)).
+-define(lager_emergency(Metadata, Format, Args), ?lager_log(emergency, Metadata, Format, Args, safe)).
+
+-define(lager_none(Format, Args), ?lager_log(none, Format, Args, safe)).
+-define(lager_none(Metadata, Format, Args), ?lager_log(none, Metadata, Format, Args, safe)).
 
 -define(LEVELS,
     [debug, info, notice, warning, error, critical, alert, emergency, none]).
