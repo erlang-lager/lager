@@ -29,7 +29,7 @@
     localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
     calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
     trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1, check_hwm/2,
-    make_internal_sink_name/1, otp_version/0
+    make_internal_sink_name/1, otp_version/0, maybe_flush/2
 ]).
 
 -ifdef(TEST).
@@ -556,7 +556,12 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
     case Last of
         {M, S, N} ->
             %% still in same second, but have exceeded the high water mark
-            NewDrops = discard_messages(Now, Shaper#lager_shaper.filter, 0),
+            NewDrops = case should_flush(Shaper) of
+                           true ->
+                               discard_messages(Now, Shaper#lager_shaper.filter, 0);
+                           false ->
+                               1
+                       end,
             Timer = case erlang:read_timer(Shaper#lager_shaper.timer) of
                         false ->
                             erlang:send_after(trunc((1000000 - N)/1000), self(), {shaper_expired, Shaper#lager_shaper.id});
@@ -569,6 +574,12 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
             %% different second, reset all counters and allow it
             {true, Drop, Shaper#lager_shaper{dropped = 0, mps=1, lasttime = Now}}
     end.
+
+should_flush(#lager_shaper{flush_queue = true, flush_threshold = 0}) ->
+    true;
+should_flush(#lager_shaper{flush_queue = true, flush_threshold = T}) ->
+    {_, L} = process_info(self(), message_queue_len),
+    L > T.
 
 discard_messages(Second, Filter, Count) ->
     {M, S, _} = os:timestamp(),
@@ -610,6 +621,11 @@ otp_version() ->
                 Rel
         end),
     Vsn.
+
+maybe_flush(undefined, #lager_shaper{} = S) ->
+    S;
+maybe_flush(Flag, #lager_shaper{} = S) when is_boolean(Flag) ->
+    S#lager_shaper{flush_queue = Flag}.
 
 -ifdef(TEST).
 
