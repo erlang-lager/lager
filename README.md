@@ -550,7 +550,7 @@ Custom Log Rotation
 -------------------
 Custom log rotator could be configured with option for `lager_file_backend`
 ```erlang
-{rotator, lager_util}
+{rotator, lager_rotator_default}
 ```
 
 The module should provide the following callbacks as `lager_rotator_behaviour`
