@@ -72,7 +72,7 @@ start(Filename, MaxBytes, Size, Date, Count) ->
 %% @private
 init([RelFilename, MaxBytes, Size, Date, Count]) ->
     Filename = lager_util:expand_path(RelFilename),
-    case lager_util:open_logfile(Filename, false) of
+    case lager_rotator_default:open_logfile(Filename, false) of
         {ok, {FD, Inode, _}} ->
             schedule_rotation(Date),
             {ok, #state{name=Filename, fd=FD, inode=Inode,
@@ -100,7 +100,7 @@ handle_cast(_Request, State) ->
 
 %% @private
 handle_info(rotate, #state{name=Name, count=Count, date=Date} = State) ->
-    _ = lager_util:rotate_logfile(Name, Count),
+    _ = lager_rotator_default:rotate_logfile(Name, Count),
     schedule_rotation(Date),
     {noreply, State};
 handle_info(_Info, State) ->
@@ -202,9 +202,9 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
     if ReportStr == ignore ->
             {ok, State};
         true ->
-            case lager_util:ensure_logfile(Name, FD, Inode, false) of
+            case lager_rotator_default:ensure_logfile(Name, FD, Inode, false) of
                 {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
-                    _ = lager_util:rotate_logfile(Name, Count),
+                    _ = lager_rotator_default:rotate_logfile(Name, Count),
                     handle_cast({log, Event}, State);
                 {ok, {NewFD, NewInode, _Size}} ->
                     {Date, TS} = lager_util:format_time(

@@ -53,7 +53,7 @@
 -define(DEFAULT_ROTATION_SIZE, 10485760). %% 10mb
 -define(DEFAULT_ROTATION_DATE, "$D0"). %% midnight
 -define(DEFAULT_ROTATION_COUNT, 5).
--define(DEFAULT_ROTATION_MOD, lager_util).
+-define(DEFAULT_ROTATION_MOD, lager_rotator_default).
 -define(DEFAULT_SYNC_LEVEL, error).
 -define(DEFAULT_SYNC_INTERVAL, 1000).
 -define(DEFAULT_SYNC_SIZE, 1024*64). %% 64kb
@@ -452,21 +452,23 @@ rotation_test_() ->
             SyncLevel = validate_loglevel(?DEFAULT_SYNC_LEVEL),
             SyncSize = ?DEFAULT_SYNC_SIZE,
             SyncInterval = ?DEFAULT_SYNC_INTERVAL,
+            Rotator = ?DEFAULT_ROTATION_MOD,
             CheckInterval = 0, %% hard to test delayed mode
             TestDir = lager_util:create_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             #state{name=TestLog, level=?DEBUG, sync_on=SyncLevel,
-                sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval}
+                sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval,
+                rotator=Rotator}
 
         end,
         fun(#state{name=TestLog}) ->
             lager_util:delete_test_dir(filename:dirname(TestLog))
         end, [
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval}) ->
+        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval, rotator = Rotator}) ->
             {"External rotation should work",
             fun() ->
-                {ok, {FD, Inode, _}} = lager_util:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{fd=FD, inode=Inode},
                 ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode},
                 write(State0, os:timestamp(), ?DEBUG, "hello world")),
@@ -483,7 +485,7 @@ rotation_test_() ->
                 ok
             end}
         end,
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval}) ->
+        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval, rotator = Rotator}) ->
             {"Internal rotation and delayed write",
             fun() ->
                 TestLog0 = TestLog ++ ".0",
@@ -491,7 +493,7 @@ rotation_test_() ->
                 RotationSize = 15,
                 PreviousCheck = os:timestamp(),
 
-                {ok, {FD, Inode, _}} = lager_util:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{
                     fd=FD, inode=Inode, size=RotationSize,
                     check_interval=CheckInterval, last_check=PreviousCheck},
