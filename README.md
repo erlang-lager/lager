@@ -542,6 +542,7 @@ used:
 * `crash_log_size`
 * `crash_log_date`
 * `crash_log_count`
+* `crash_log_rotator`
 
 See the `.app.src` file for further details.
 
