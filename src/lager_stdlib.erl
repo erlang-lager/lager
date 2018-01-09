@@ -83,7 +83,7 @@ maybe_utc(Time) ->
             Val;
         undefined ->
             %% Backwards compatible:
-            lager_app:get_env(stdlib, utc_log, false)
+            application:get_env(stdlib, utc_log, false)
     end,
     if
         UTC =:= true ->

@@ -33,8 +33,8 @@
          stop/1,
          boot/1]).
 
-%% The `application:get_env/3` compatibility wrapper is useful
-%% for other modules
+%% The `application:get_env/3` compatibility wrapper was useful
+%% for other modules in r15 and before
 -export([get_env/3]).
 
 -define(FILENAMES, '__lager_file_backend_filenames').
@@ -200,20 +200,9 @@ configure_extra_sinks(Sinks) ->
     lists:foreach(fun({Sink, Proplist}) -> configure_sink(Sink, Proplist) end,
                   Sinks).
 
--spec get_env(atom(), atom()) -> term().
-get_env(Application, Key) ->
-    get_env(Application, Key, undefined).
-
-%% R15 doesn't know about application:get_env/3
 -spec get_env(atom(), atom(), term()) -> term().
 get_env(Application, Key, Default) ->
-    get_env_default(application:get_env(Application, Key), Default).
-
--spec get_env_default('undefined' | {'ok', term()}, term()) -> term().
-get_env_default(undefined, Default) ->
-    Default;
-get_env_default({ok, Value}, _Default) ->
-    Value.
+    application:get_env(Application, Key, Default).
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
@@ -226,21 +215,21 @@ start(_StartType, _StartArgs) ->
 boot() ->
     %% Handle the default sink.
     determine_async_behavior(?DEFAULT_SINK,
-                             get_env(lager, async_threshold),
-                             get_env(lager, async_threshold_window)),
+                             application:get_env(lager, async_threshold, undefined),
+                             application:get_env(lager, async_threshold_window, undefined)),
 
-    _ = maybe_install_sink_killer(?DEFAULT_SINK, get_env(lager, killer_hwm),
-                              get_env(lager, killer_reinstall_after)),
+    _ = maybe_install_sink_killer(?DEFAULT_SINK, application:get_env(lager, killer_hwm, undefined),
+                                  application:get_env(lager, killer_reinstall_after, undefined)),
 
     start_handlers(?DEFAULT_SINK,
-                   get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
+                   application:get_env(lager, handlers, ?DEFAULT_HANDLER_CONF)),
 
     lager:update_loglevel_config(?DEFAULT_SINK),
 
     SavedHandlers = start_error_logger_handler(
-                      get_env(lager, error_logger_redirect, true),
-                      interpret_hwm(get_env(lager, error_logger_hwm, 0)),
-                      get_env(lager, error_logger_whitelist, [])
+                      application:get_env(lager, error_logger_redirect, true),
+                      interpret_hwm(application:get_env(lager, error_logger_hwm, 0)),
+                      application:get_env(lager, error_logger_whitelist, [])
                      ),
 
     SavedHandlers.
@@ -250,11 +239,11 @@ boot('__traces') ->
     ok = add_configured_traces();
 
 boot('__all_extra') ->
-    configure_extra_sinks(get_env(lager, extra_sinks, []));
+    configure_extra_sinks(application:get_env(lager, extra_sinks, []));
 
 boot(?DEFAULT_SINK) -> boot();
 boot(Sink) ->
-    AllSinksDef = get_env(lager, extra_sinks, []),
+    AllSinksDef = application:get_env(lager, extra_sinks, []),
     boot_sink(Sink, lists:keyfind(Sink, 1, AllSinksDef)).
 
 boot_sink(Sink, {Sink, Def}) ->

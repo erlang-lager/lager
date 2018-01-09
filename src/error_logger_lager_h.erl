@@ -72,10 +72,10 @@ set_high_water(N) ->
 
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
-    Flush = lager_app:get_env(lager, error_logger_flush_queue, false),
-    FlushThr = lager_app:get_env(lager, error_logger_flush_threshold, 0),
+    Flush = application:get_env(lager, error_logger_flush_queue, false),
+    FlushThr = application:get_env(lager, error_logger_flush_threshold, 0),
     Shaper = #lager_shaper{hwm=HighWaterMark, flush_queue = Flush, flush_threshold = FlushThr, filter=shaper_fun(), id=?MODULE},
-    Raw = lager_app:get_env(lager, error_logger_format_raw, false),
+    Raw = application:get_env(lager, error_logger_format_raw, false),
     Sink = configured_sink(),
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GlStrategy, raw=Raw}}.
 
@@ -86,7 +86,7 @@ handle_call(_Request, State) ->
     {ok, unknown_call, State}.
 
 shaper_fun() ->
-    case {lager_app:get_env(lager, suppress_supervisor_start_stop, false), lager_app:get_env(lager, suppress_application_start_stop, false)} of
+    case {application:get_env(lager, suppress_supervisor_start_stop, false), application:get_env(lager, suppress_application_start_stop, false)} of
         {false, false} ->
             fun(_) -> false end;
         {true, true} ->
@@ -138,7 +138,7 @@ terminate(_Reason, _State) ->
 
 
 code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
-    Raw = lager_app:get_env(lager, error_logger_format_raw, false),
+    Raw = application:get_env(lager, error_logger_format_raw, false),
     {ok, #state{
         sink=configured_sink(),
         shaper=Shaper,
@@ -146,7 +146,7 @@ code_change(_OldVsn, {state, Shaper, GLStrategy}, _Extra) ->
         raw=Raw
         }};
 code_change(_OldVsn, {state, Sink, Shaper, GLS}, _Extra) ->
-    Raw = lager_app:get_env(lager, error_logger_format_raw, false),
+    Raw = application:get_env(lager, error_logger_format_raw, false),
     {ok, #state{sink=Sink, shaper=Shaper, groupleader_strategy=GLS, raw=Raw}};
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -154,7 +154,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% internal functions
 
 configured_sink() ->
-    case proplists:get_value(?ERROR_LOGGER_SINK, lager_app:get_env(lager, extra_sinks, [])) of
+    case proplists:get_value(?ERROR_LOGGER_SINK, application:get_env(lager, extra_sinks, [])) of
         undefined -> ?DEFAULT_SINK;
         _ -> ?ERROR_LOGGER_SINK
     end.
@@ -324,7 +324,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                     [App, Node])
                     end;
                 [{started, Started}, {supervisor, Name}] ->
-                    case lager_app:get_env(lager, suppress_supervisor_start_stop, false) of
+                    case application:get_env(lager, suppress_supervisor_start_stop, false) of
                         true ->
                             ok;
                         _ ->

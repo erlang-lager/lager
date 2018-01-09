@@ -45,7 +45,7 @@ init([]) ->
         {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
             permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
 
-    CrashLog = decide_crash_log(lager_app:get_env(lager, crash_log, false)),
+    CrashLog = decide_crash_log(application:get_env(lager, crash_log, false)),
 
     {ok, {{one_for_one, 10, 60},
           Children ++ CrashLog
