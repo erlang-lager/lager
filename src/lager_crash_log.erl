@@ -46,7 +46,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
         code_change/3]).
 
--export([start_link/5, start/5]).
+-export([start_link/6, start/6]).
 
 -record(state, {
         name :: string(),
@@ -56,32 +56,34 @@
         size :: integer(),
         date :: undefined | string(),
         count :: integer(),
-        flap=false :: boolean()
+        flap=false :: boolean(),
+        rotator :: atom()
 }).
 
 %% @private
-start_link(Filename, MaxBytes, Size, Date, Count) ->
+start_link(Filename, MaxBytes, Size, Date, Count, Rotator) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Filename, MaxBytes,
-            Size, Date, Count], []).
+            Size, Date, Count, Rotator], []).
 
 %% @private
-start(Filename, MaxBytes, Size, Date, Count) ->
+start(Filename, MaxBytes, Size, Date, Count, Rotator) ->
     gen_server:start({local, ?MODULE}, ?MODULE, [Filename, MaxBytes, Size,
-            Date, Count], []).
+            Date, Count, Rotator], []).
 
 %% @private
-init([RelFilename, MaxBytes, Size, Date, Count]) ->
+init([RelFilename, MaxBytes, Size, Date, Count, Rotator]) ->
     Filename = lager_util:expand_path(RelFilename),
-    case lager_util:open_logfile(Filename, false) of
+    case Rotator:open_logfile(Filename, false) of
         {ok, {FD, Inode, _}} ->
             schedule_rotation(Date),
             {ok, #state{name=Filename, fd=FD, inode=Inode,
-                    fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date}};
+                    fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date,
+                    rotator=Rotator}};
         {error, Reason} ->
             ?INT_LOG(error, "Failed to open crash log file ~s with error: ~s",
                 [Filename, file:format_error(Reason)]),
             {ok, #state{name=Filename, fmtmaxbytes=MaxBytes, flap=true,
-                    size=Size, count=Count, date=Date}}
+                    size=Size, count=Count, date=Date, rotator=Rotator}}
     end.
 
 %% @private
@@ -99,8 +101,8 @@ handle_cast(_Request, State) ->
     {noreply, State}.
 
 %% @private
-handle_info(rotate, #state{name=Name, count=Count, date=Date} = State) ->
-    _ = lager_util:rotate_logfile(Name, Count),
+handle_info(rotate, #state{name=Name, count=Count, date=Date, rotator=Rotator} = State) ->
+    _ = Rotator:rotate_logfile(Name, Count),
     schedule_rotation(Date),
     {noreply, State};
 handle_info(_Info, State) ->
@@ -187,7 +189,7 @@ sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     lager_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
 do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
-        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count} = State) ->
+        fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count, rotator=Rotator} = State) ->
     %% borrowed from riak_err
     {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
         {error, _GL, {Pid1, Fmt, Args}} ->
@@ -202,9 +204,9 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
     if ReportStr == ignore ->
             {ok, State};
         true ->
-            case lager_util:ensure_logfile(Name, FD, Inode, false) of
+            case Rotator:ensure_logfile(Name, FD, Inode, false) of
                 {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
-                    _ = lager_util:rotate_logfile(Name, Count),
+                    _ = Rotator:rotate_logfile(Name, Count),
                     handle_cast({log, Event}, State);
                 {ok, {NewFD, NewInode, _Size}} ->
                     {Date, TS} = lager_util:format_time(
@@ -268,7 +270,7 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"under normal circumstances, file should be opened",
             fun() ->
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0),
+                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 _ = gen_event:which_handlers(error_logger),
                 sync_error_logger:error_msg("Test message\n"),
                 {ok, Bin} = file:read_file(CrashLog),
@@ -280,7 +282,7 @@ filesystem_test_() ->
             fun() ->
                 {ok, FInfo} = file:read_file_info(CrashLog),
                 file:write_file_info(CrashLog, FInfo#file_info{mode = 0}),
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0),
+                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 ?assertEqual(1, lager_test_backend:count()),
                 {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
                 ?assertEqual(
@@ -291,7 +293,7 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"file that becomes unavailable at runtime should trigger an error message",
             fun() ->
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0),
+                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 ?assertEqual(0, lager_test_backend:count()),
                 sync_error_logger:error_msg("Test message\n"),
                 _ = gen_event:which_handlers(error_logger),
@@ -316,7 +318,7 @@ filesystem_test_() ->
                 {ok, FInfo} = file:read_file_info(CrashLog),
                 OldPerms = FInfo#file_info.mode,
                 file:write_file_info(CrashLog, FInfo#file_info{mode = 0}),
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0),
+                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 ?assertEqual(1, lager_test_backend:count()),
                 {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
                 ?assertEqual(
@@ -332,7 +334,7 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"external logfile rotation/deletion should be handled",
             fun() ->
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0),
+                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 ?assertEqual(0, lager_test_backend:count()),
                 sync_error_logger:error_msg("Test message~n"),
                 _ = gen_event:which_handlers(error_logger),

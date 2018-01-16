@@ -69,6 +69,11 @@ determine_rotation_date({ok, Val3}) ->
 determine_rotation_date(_) ->
     undefined.
 
+determine_rotator_mod({ok, Mod}, _Default) when is_atom(Mod) ->
+    Mod;
+determine_rotator_mod(_, Default) ->
+    Default.
+
 decide_crash_log(undefined) ->
     [];
 decide_crash_log(false) ->
@@ -79,8 +84,9 @@ decide_crash_log(File) ->
     RotationCount = validate_positive(application:get_env(lager, crash_log_count), 0),
 
     RotationDate = determine_rotation_date(application:get_env(lager, crash_log_date)),
+    RotationMod = determine_rotator_mod(application:get_env(lager, crash_log_rotator), lager_rotator_default),
 
 
     [{lager_crash_log, {lager_crash_log, start_link, [File, MaxBytes,
-                                                      RotationSize, RotationDate, RotationCount]},
+                                                      RotationSize, RotationDate, RotationCount, RotationMod]},
       permanent, 5000, worker, [lager_crash_log]}].
