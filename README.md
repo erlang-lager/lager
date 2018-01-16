@@ -581,11 +581,14 @@ Lager syslog output is provided as a separate application:
 separate application so lager itself doesn't have an indirect dependency on a
 port driver. Please see the `lager_syslog` README for configuration information.
 
-Older Backends
+Other Backends
 --------------
-Lager 2.0 changed the backend API, there are various 3rd party backends for
-lager available, but they may not have been updated to the new API. As they
-are updated, links to them can be re-added here.
+There are lots of them! Some connect log messages to AMQP, various logging
+analytic services ([bunyan](https://github.com/Vagabond/lager_bunyan_formatter),
+[loggly](https://github.com/kivra/lager_loggly), etc), and more. [Looking on
+hex](https://hex.pm/packages?_utf8=✓&search=lager&sort=recent_downloads) or
+using "lager BACKEND" where "BACKEND" is your preferred log solution
+on your favorite search engine is a good starting point.
 
 Exception Pretty Printing
 ----------------------
@@ -1051,6 +1054,22 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.0 - 16 January 2018
+
+    * Feature: Support logging with macros per level (#419)
+    * Feature: Support custom file rotation handler; support hourly file
+               rotation (#420)
+    * Feature: Optionally reverse pretty stacktraces (so errors are
+               at the top and the failed function call is at the bottom.)
+               (#424)
+    * Bugfix:  Handle OTP 20 gen_server failure where client pid
+               is dead. (#426)
+    * Feature: Optionally don't flush notify messages at
+               high water mark. (#427)
+    * Bugfix:  Handle another stacktrace format (#429)
+    * Bugfix:  Fix test failure using macros on OTP 18 (#430)
+    * Policy:  Remove all code which supports R15 (#432)
+
 3.5.2 - 19 October 2017
 
     * Bugfix: Properly check for unicode characters in potentially deep
