@@ -72,7 +72,7 @@ set_high_water(N) ->
 
 -spec init(any()) -> {ok, #state{}}.
 init([HighWaterMark, GlStrategy]) ->
-    Flush = application:get_env(lager, error_logger_flush_queue, false),
+    Flush = application:get_env(lager, error_logger_flush_queue, true),
     FlushThr = application:get_env(lager, error_logger_flush_threshold, 0),
     Shaper = #lager_shaper{hwm=HighWaterMark, flush_queue = Flush, flush_threshold = FlushThr, filter=shaper_fun(), id=?MODULE},
     Raw = application:get_env(lager, error_logger_format_raw, false),

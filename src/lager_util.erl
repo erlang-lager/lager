@@ -515,7 +515,7 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
                            true ->
                                discard_messages(Now, Shaper#lager_shaper.filter, 0);
                            false ->
-                               1
+                               0
                        end,
             Timer = case erlang:read_timer(Shaper#lager_shaper.timer) of
                         false ->
@@ -534,7 +534,9 @@ should_flush(#lager_shaper{flush_queue = true, flush_threshold = 0}) ->
     true;
 should_flush(#lager_shaper{flush_queue = true, flush_threshold = T}) ->
     {_, L} = process_info(self(), message_queue_len),
-    L > T.
+    L > T;
+should_flush(_) ->
+    false.
 
 discard_messages(Second, Filter, Count) ->
     {M, S, _} = os:timestamp(),
