@@ -126,9 +126,14 @@ handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
     end.
 
 handle_info({shaper_expired, ?MODULE}, #state{sink=Sink, shaper=Shaper} = State) ->
-    ?LOGFMT(Sink, warning, self(),
-            "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
-            [Shaper#lager_shaper.dropped, Shaper#lager_shaper.hwm]),
+    case Shaper#lager_shaper.dropped of
+        0 ->
+            ok;
+        Dropped ->
+            ?LOGFMT(Sink, warning, self(),
+                    "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
+                    [Dropped, Shaper#lager_shaper.hwm])
+    end,
     {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=1, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.
