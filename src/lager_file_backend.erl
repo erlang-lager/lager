@@ -419,6 +419,20 @@ validate_logfile_proplist([{formatter_config, FmtCfg}|Tail], Acc) ->
         false ->
             throw({bad_config, "Invalid formatter config", FmtCfg})
     end;
+validate_logfile_proplist([{flush_queue, FlushCfg}|Tail], Acc) ->
+    case is_boolean(FlushCfg) of
+        true ->
+            validate_logfile_proplist(Tail, [{flush_queue, FlushCfg}|Acc]);
+        false ->
+            throw({bad_config, "Invalid queue flush flag", FlushCfg})
+    end;
+validate_logfile_proplist([{flush_queue_threshold, Thr}|Tail], Acc) ->
+    case Thr of
+        _ when is_integer(Thr), Thr >= 0 ->
+            validate_logfile_proplist(Tail, [{flush_queue_threshold, Thr}|Acc]);
+        _ ->
+            throw({bad_config, "Invalid queue flush threshold", Thr})
+    end;
 validate_logfile_proplist([Other|_Tail], _Acc) ->
     throw({bad_config, "Invalid option", Other}).
 
