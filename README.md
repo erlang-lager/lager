@@ -1054,6 +1054,12 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.1 - 1 February 2018
+
+    * Bugfix: Make a few corrections to the recent mailbox flushing changes (#436)
+    * Bugfix: add flush options to proplist validation (#439)
+    * Bugfix: Don't log when we dropped 0 messages (#440)
+
 3.6.0 - 16 January 2018
 
     * Feature: Support logging with macros per level (#419)
