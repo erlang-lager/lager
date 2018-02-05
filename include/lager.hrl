@@ -37,7 +37,7 @@
                    ?DEFAULT_TRUNCATION, Safety)).
 
 -define(lager_log(Sink, Severity, Metadata, Format, Args, Size, Safety),
-        lager:dispatch_log(Sink, Severity, Metadata, Format, Args, Size, Safety)).
+        _ = lager:dispatch_log(Sink, Severity, Metadata, Format, Args, Size, Safety)).
 
 -define(lager_debug(Format, Args), ?lager_log(debug, Format, Args, safe)).
 -define(lager_debug(Metadata, Format, Args), ?lager_log(debug, Metadata, Format, Args, safe)).
