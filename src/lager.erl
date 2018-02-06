@@ -538,13 +538,15 @@ unsafe_format(Fmt, Args) ->
         _:_ -> io_lib:format("FORMAT ERROR: ~p ~p", [Fmt, Args])
     end.
 
-%% @doc Print a record lager found during parse transform
+%% @doc Print a record or a list of records lager found during parse transform
 pr(Record, Module) when is_tuple(Record), is_atom(element(1, Record)) ->
     pr(Record, Module, []);
+pr(List, Module) when is_list(List) ->
+    pr(List, Module, []);
 pr(Record, _) ->
     Record.
 
-%% @doc Print a record lager found during parse transform
+%% @doc Print a record or a list of records lager found during parse transform
 pr(Record, Module, Options) when is_tuple(Record), is_atom(element(1, Record)), is_list(Options) ->
     try 
         case is_record_known(Record, Module) of
@@ -558,9 +560,14 @@ pr(Record, Module, Options) when is_tuple(Record), is_atom(element(1, Record)), 
         error:undef ->
             Record
     end;
+pr(List, Module, Options) when is_list(List), is_list(Options) ->
+    [pr(Element, Module, Options) || Element <- List];
 pr(Record, _, _) ->
     Record.
 
+zip([FieldName|RecordFields], [FieldValue|Record], Module, Options, ToReturn) when is_list(FieldValue) ->
+    zip(RecordFields, Record, Module, Options,
+        [{FieldName, pr(FieldValue, Module, Options)}|ToReturn]);
 zip([FieldName|RecordFields], [FieldValue|Record], Module, Options, ToReturn) ->
     Compress = lists:member(compress, Options),
     case   is_tuple(FieldValue) andalso
