@@ -169,7 +169,7 @@ start_error_logger_handler(true, HWM, WhiteList) ->
 
     Handlers = case application:get_env(lager, handlers) of
         undefined ->
-            [{lager_console_backend, info},
+            [{lager_console_backend, [{level, info}]},
              {lager_file_backend, [{file, "log/error.log"},   {level, error}, {size, 10485760}, {date, "$D0"}, {count, 5}]},
              {lager_file_backend, [{file, "log/console.log"}, {level, info}, {size, 10485760}, {date, "$D0"}, {count, 5}]}];
         {ok, Val} ->
@@ -304,11 +304,11 @@ application_config_mangling_test_() ->
     [
         {"Explode the file backend handlers",
             ?_assertMatch(
-                [{lager_console_backend, info},
+                [{lager_console_backend, [{level, info}]},
                     {{lager_file_backend,"error.log"},{"error.log",error,10485760, "$D0",5}},
                     {{lager_file_backend,"console.log"},{"console.log",info,10485760, "$D0",5}}
                 ],
-                expand_handlers([{lager_console_backend, info},
+                expand_handlers([{lager_console_backend, [{level, info}]},
                         {lager_file_backend, [
                                 {"error.log", error, 10485760, "$D0", 5},
                                 {"console.log", info, 10485760, "$D0", 5}
@@ -317,11 +317,11 @@ application_config_mangling_test_() ->
         },
         {"Explode the short form of backend file handlers",
             ?_assertMatch(
-                [{lager_console_backend, info},
+                [{lager_console_backend, [{level, info}]},
                     {{lager_file_backend,"error.log"},{"error.log",error}},
                     {{lager_file_backend,"console.log"},{"console.log",info}}
                 ],
-                expand_handlers([{lager_console_backend, info},
+                expand_handlers([{lager_console_backend, [{level, info}]},
                         {lager_file_backend, [
                                 {"error.log", error},
                                 {"console.log", info}
@@ -367,7 +367,7 @@ application_config_mangling_test_() ->
 
 check_handler_config_test_() ->
     Good = expand_handlers(?DEFAULT_HANDLER_CONF),
-    Bad  = expand_handlers([{lager_console_backend, info},
+    Bad  = expand_handlers([{lager_console_backend, [{level, info}]},
             {lager_file_backend, [{file, "same_file.log"}]},
             {lager_file_backend, [{file, "same_file.log"}, {level, info}]}]),
     AlsoBad = [{lager_logstash_backend,
@@ -376,7 +376,7 @@ check_handler_config_test_() ->
                                     {format, json},
                                     {json_encoder, jiffy}}],
     BadToo = [{fail, {fail}}],
-    OldSchoolLagerGood = expand_handlers([{lager_console_backend,info},
+    OldSchoolLagerGood = expand_handlers([{lager_console_backend, [{level, info}]},
                                           {lager_file_backend, [
                                               {"./log/error.log",error,10485760,"$D0",5},
                                               {"./log/console.log",info,10485760,"$D0",5},
