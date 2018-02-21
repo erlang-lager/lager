@@ -981,10 +981,10 @@ This approach will benefit from the fact that most elixir libs and frameworks
 are likely to use the elixir Logger and as such logging will all flow via the
 same logging mechanism.
 
-In [elixir 2.0 support for parse transforms will be deprecated](https://github.com/elixir-lang/elixir/issues/5762).
+In [elixir 1.5 support for parse transforms was deprecated](https://github.com/elixir-lang/elixir/issues/5762).
 Taking the "Lager as a Logger Backend" approach is likely bypass any related 
 regression issues that would be introduced into a project which is using lager 
-directly when updating to elixir 2.0.
+directly when updating to elixir 1.5.
 
 There are open source elixir Logger backends for Lager available:
 - [LagerLogger](https://github.com/PSPDFKit-labs/lager_logger)
@@ -992,10 +992,10 @@ There are open source elixir Logger backends for Lager available:
 
 ### Directly
 
-It is fully possible prior to elixir 2.0 to use lager and all its features
+It is fully possible prior to elixir 1.5 to use lager and all its features
 directly.
 
-After elixir 2.0 there will be no support for parse transforms, and it would be
+After elixir 1.5 there is no support for parse transforms, and it is
 recommended to use an elixir wrapper for the lager api that provides compile time
 log level exclusion via elixir macros when opting for direct use of lager.
 
