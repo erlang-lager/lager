@@ -90,6 +90,8 @@ output(severity_upper, Msg) ->
     uppercase_severity(lager_msg:severity(Msg));
 output(blank,_Msg) ->
     output({blank," "},_Msg);
+output(node, _Msg) ->
+    output({node, atom_to_list(node())},_Msg);
 output({blank,Fill},_Msg) ->
     Fill;
 output(sev,Msg) ->
@@ -138,6 +140,8 @@ output(severity, Msg, Width) ->
 output(sev,Msg, _Width) ->
     %% Write brief acronym for the severity level (e.g. debug -> $D)
     [lager_util:level_to_chr(lager_msg:severity(Msg))];
+output(node, Msg, _Width) ->
+    output({node, atom_to_list(node())}, Msg, _Width);
 output(blank,_Msg, _Width) ->
     output({blank, " "},_Msg, _Width);
 output({blank, Fill},_Msg, _Width) ->
@@ -477,6 +481,18 @@ basic_test_() ->
                             [{pid, self()}],
                             []),
                         [severity_upper, " Simplist Format"])))
+        },
+        {"node formatting basic",
+            begin
+                [N, F] = format(lager_msg:new("Message",
+                                               Now,
+                                               info,
+                                               [{pid, self()}],
+                                               []),
+                                 [node, "foo"]),
+                ?_assertEqual("foo", F),
+                ?_assertNotEqual(nomatch, re:run(N, <<"@">>))
+            end
         }
     ].
 
