@@ -83,6 +83,8 @@
                   {size, non_neg_integer()} | {date, string()} |
                   {count, non_neg_integer()} | {rotator, atom()} |
                   {high_water_mark, non_neg_integer()} |
+                  {flush_queue, boolean()} |
+                  {flush_threshold, non_neg_integer()} |
                   {sync_interval, non_neg_integer()} |
                   {sync_size, non_neg_integer()} | {sync_on, lager:log_level()} |
                   {check_interval, non_neg_integer()} | {formatter, atom()} |
@@ -431,10 +433,10 @@ validate_logfile_proplist([{flush_queue, FlushCfg}|Tail], Acc) ->
         false ->
             throw({bad_config, "Invalid queue flush flag", FlushCfg})
     end;
-validate_logfile_proplist([{flush_queue_threshold, Thr}|Tail], Acc) ->
+validate_logfile_proplist([{flush_threshold, Thr}|Tail], Acc) ->
     case Thr of
         _ when is_integer(Thr), Thr >= 0 ->
-            validate_logfile_proplist(Tail, [{flush_queue_threshold, Thr}|Acc]);
+            validate_logfile_proplist(Tail, [{flush_threshold, Thr}|Acc]);
         _ ->
             throw({bad_config, "Invalid queue flush threshold", Thr})
     end;
