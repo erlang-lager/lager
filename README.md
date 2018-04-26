@@ -1054,6 +1054,15 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.2 - 26 April 2018
+
+    * Bugfix: flush_threshold not working (#449)
+    * Feature: Add `node` as a formatting option (#447)
+    * Documentation: Update Elixir section with information about parse_transform (#446)
+    * Bugfix: Correct default console configuation to use "[{level,info}]" instead (#445)
+    * Feature: Pretty print lists of records at top level and field values with lager:pr (#442)
+    * Bugfix: Ignore return value of lager:dispatch_log in lager.hrl (#441)
+
 3.6.1 - 1 February 2018
 
     * Bugfix: Make a few corrections to the recent mailbox flushing changes (#436)
