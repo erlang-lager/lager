@@ -205,12 +205,27 @@ get_env(Application, Key, Default) ->
     application:get_env(Application, Key, Default).
 
 start(_StartType, _StartArgs) ->
+    otp_21_plus_workaround(),
     {ok, Pid} = lager_sup:start_link(),
     SavedHandlers = boot(),
     _ = boot('__all_extra'),
     _ = boot('__traces'),
     clean_up_config_checks(),
     {ok, Pid, SavedHandlers}.
+
+-ifdef(new_logging_api).
+
+otp_21_plus_workaround() ->
+    %% OTP 21 doesn't start it by default
+    error_logger:start(),
+    logger:add_handler(error_logger, error_logger, #{level=>info,filter_default=>log}).
+
+-else.
+
+otp_21_plus_workaround() ->
+    no_workaround_needed.
+
+-endif.
 
 boot() ->
     %% Handle the default sink.
