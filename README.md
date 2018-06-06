@@ -1054,6 +1054,10 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.3 - 6 June 2018
+
+    * OTP 21 support
+
 3.6.2 - 26 April 2018
 
     * Bugfix: flush_threshold not working (#449)
