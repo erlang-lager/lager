@@ -48,6 +48,7 @@ start(Sink, Module, Config) ->
     gen_server:start(?MODULE, [Sink, Module, Config], []).
 
 init([Sink, Module, Config]) ->
+    process_flag(trap_exit, true),
     install_handler(Sink, Module, Config),
     {ok, #state{sink=Sink, module=Module, config=Config}}.
 
@@ -62,7 +63,7 @@ handle_info({gen_event_EXIT, Module, normal}, #state{module=Module} = State) ->
 handle_info({gen_event_EXIT, Module, shutdown}, #state{module=Module} = State) ->
     {stop, normal, State};
 handle_info({gen_event_EXIT, Module, {'EXIT', {kill_me, [_KillerHWM, KillerReinstallAfter]}}},
-        #state{module=Module, sink=Sink} = State) ->
+        #state{module=Module, sink=Sink, config = Config} = State) ->
     %% Brutally kill the manager but stay alive to restore settings.
     %%
     %% SinkPid here means the gen_event process. Handlers *all* live inside the
@@ -70,9 +71,11 @@ handle_info({gen_event_EXIT, Module, {'EXIT', {kill_me, [_KillerHWM, KillerReins
     %% pending log messages in its mailbox will die too.
     SinkPid = whereis(Sink),
     unlink(SinkPid),
+    {message_queue_len, Len} = process_info(SinkPid, message_queue_len),
+    error_logger:error_msg("Killing sink ~p, current message_queue_len:~p~n", [Sink, Len]),
     exit(SinkPid, kill),
-    erlang:send_after(KillerReinstallAfter, self(), {reboot, Sink}),
-    {noreply, State};
+    timer:apply_after(KillerReinstallAfter, lager_app, start_handler, [Sink, Module, Config]),
+    {stop, normal, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         config=Config, sink=Sink} = State) ->
     case lager:log(error, self(), "Lager event handler ~p exited with reason ~s",
@@ -91,6 +94,10 @@ handle_info({reboot, Sink}, State) ->
     _ = lager_app:boot(Sink),
     {noreply, State};
 handle_info(stop, State) ->
+    {stop, normal, State};
+handle_info({'EXIT', _Pid, killed}, #state{module=Module, config=Config, sink=Sink} = State) ->
+    Tmr = application:get_env(lager, killer_reinstall_after, 5000),
+    timer:apply_after(Tmr, lager_app, start_handler, [Sink, Module, Config]),
     {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -188,6 +195,33 @@ reinstall_on_runtime_failure_test_() ->
                        application:stop(goldrush),
                        error_logger:tty(true)
                    end
+            end
+        ]
+    }.
+
+reinstall_handlers_after_killer_hwm_test_() ->
+    {timeout, 60000,
+        [
+            fun() ->
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_manager_killer, [1000, 5000]}]),
+                application:set_env(lager, error_logger_redirect, false),
+                application:set_env(lager, killer_reinstall_after, 5000),
+                application:unset_env(lager, crash_log),
+                lager:start(),
+                lager:trace_file("foo", [{foo, "bar"}], error),
+                L = length(gen_event:which_handlers(lager_event)),
+                try
+                    lager_manager_killer:kill_me(),
+                    timer:sleep(6000),
+                    ?assertEqual(L, length(gen_event:which_handlers(lager_event))),
+                    file:delete("foo")
+                after
+                    application:stop(lager),
+                    application:stop(goldrush),
+                    error_logger:tty(true)
+                end
             end
         ]
     }.
