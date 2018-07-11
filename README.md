@@ -1073,6 +1073,12 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.4 - 11 July 2018
+
+    * Bugfix: Reinstall handlers after a sink is killed #459
+    * Bugfix: Fix platform_define matching not to break on OSX Mojave #461
+    * Feature: Add support for installing a sys trace function #462
+
 3.6.3 - 6 June 2018
 
     * OTP 21 support
