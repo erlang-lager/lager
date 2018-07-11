@@ -31,6 +31,7 @@
         md/0, md/1,
         rotate_handler/1, rotate_handler/2, rotate_sink/1, rotate_all/0,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
+        install_trace/2, remove_trace/1, trace_func/3,
         list_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
@@ -43,6 +44,16 @@
 -export_type([log_level/0, log_level_number/0]).
 
 %% API
+
+%% @doc installs a lager trace handler into the target process (using sys:install) at the specified level.
+-spec install_trace(pid(), log_level()) -> ok.
+install_trace(Pid, Level) ->
+    sys:install(Pid, {fun ?MODULE:trace_func/3, {Pid, Level}}).
+
+%% @doc remove a previously installed lager trace handler from the target process.
+-spec remove_trace(pid()) -> ok.
+remove_trace(Pid) ->
+    sys:remove(Pid, fun ?MODULE:trace_func/3).
 
 %% @doc Start the application. Mainly useful for using `-s lager' as a command
 %% line switch to the VM to make lager start on boot.
@@ -658,3 +669,8 @@ rotate_handler(Handler) ->
 
 rotate_handler(Handler, Sink) ->
     gen_event:call(Sink, Handler, rotate, ?ROTATE_TIMEOUT).
+
+%% @private
+trace_func({Pid, Level}=FuncState, Event, ProcState) ->
+    lager:log(Level, Pid, "TRACE ~p ~p", [Event, ProcState]),
+    FuncState.
