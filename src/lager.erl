@@ -45,13 +45,13 @@
 
 %% API
 
-trace_func({Pid, Level}=FuncState, Event, ProcState) ->
-    lager:log(Level, Pid, "TRACE ~p ~p", [Event, ProcState]),
-    FuncState.
-
+%% @doc installs a lager trace handler into the target process (using sys:install) at the specified level.
+-spec install_trace(pid(), log_level()) -> ok.
 install_trace(Pid, Level) ->
     sys:install(Pid, {fun ?MODULE:trace_func/3, {Pid, Level}}).
 
+%% @doc remove a previously installed lager trace handler from the target process.
+-spec remove_trace(pid()) -> ok.
 remove_trace(Pid) ->
     sys:remove(Pid, fun ?MODULE:trace_func/3).
 
@@ -669,3 +669,8 @@ rotate_handler(Handler) ->
 
 rotate_handler(Handler, Sink) ->
     gen_event:call(Sink, Handler, rotate, ?ROTATE_TIMEOUT).
+
+%% @private
+trace_func({Pid, Level}=FuncState, Event, ProcState) ->
+    lager:log(Level, Pid, "TRACE ~p ~p", [Event, ProcState]),
+    FuncState.
