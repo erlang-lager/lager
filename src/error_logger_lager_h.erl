@@ -121,8 +121,8 @@ handle_event(Event, #state{sink=Sink, shaper=Shaper} = State) ->
                 "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
                 [Drop, Hwm]),
             eval_gl(Event, State#state{shaper=NewShaper});
-        {false, _, NewShaper} ->
-            {ok, State#state{shaper=NewShaper}}
+        {false, _, #lager_shaper{dropped=D} = NewShaper} ->
+            {ok, State#state{shaper=NewShaper#lager_shaper{dropped=D+1}}}
     end.
 
 handle_info({shaper_expired, ?MODULE}, #state{sink=Sink, shaper=Shaper} = State) ->

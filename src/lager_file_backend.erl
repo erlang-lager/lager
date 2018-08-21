@@ -179,8 +179,8 @@ handle_event({log, Message},
                     {ok,write(NewState#state{shaper=NewShaper},
                         lager_msg:timestamp(Message), lager_msg:severity_as_int(Message),
                         Formatter:format(Message,FormatConfig))};
-                {false, _, NewShaper} ->
-                    {ok, State#state{shaper=NewShaper}}
+                {false, _, #lager_shaper{dropped=D} = NewShaper} ->
+                    {ok, State#state{shaper=NewShaper#lager_shaper{dropped=D+1}}}
             end;
         false ->
             {ok, State}
