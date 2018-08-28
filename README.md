@@ -360,9 +360,9 @@ It is probably best to keep this number small.
 
 When the high-water mark is exceeded, lager can be configured to flush all
 event notifications in the message queue. This can have unintended consequences
-for other handlers in the same event manager (in e.g. the `error_logger'), as
+for other handlers in the same event manager (in e.g. the `error_logger`), as
 events they rely on may be wrongly discarded. By default, this behavior is enabled,
-but can be controlled, for the `error_logger' via:
+but can be controlled, for the `error_logger` via:
 
 ```erlang
 {error_logger_flush_queue, true | false}
