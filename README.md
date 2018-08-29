@@ -372,6 +372,7 @@ or for a specific sink, using the option:
 
 ```erlang
 {flush_queue, true | false}
+```
 
 If `flush_queue` is true, a message queue length threshold can be set, at which
 messages will start being discarded. The default threshold is `0`, meaning that
