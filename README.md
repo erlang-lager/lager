@@ -981,6 +981,32 @@ You can remove the trace when you're done by doing:
 lager:remove_trace(Pid).
 ```
 
+Console output to another group leader process
+----------------------------------------------
+
+If you want to send your console output to another group_leader (typically on
+another node) you can provide a `{group_leader, Pid}` argument to the console
+backend. This can be combined with another console config option, `id` and
+gen_event's `{Module, ID}` to allow remote tracing of a node to standard out via
+nodetool:
+
+```erlang
+    GL = erlang:group_leader(),
+    Node = node(GL),
+    lager_app:start_handler(lager_event, {lager_console_backend, Node},
+         [{group_leader, GL}, {level, none}, {id, {lager_console_backend, Node}}]),
+    case lager:trace({lager_console_backend, Node}, Filter, Level) of
+         ...
+```
+
+In the above example, the code is assumed to be running via a `nodetool rpc`
+invocation so that the code is executing on the Erlang node, but the
+group_leader is that of the reltool node (eg. appname_maint_12345@127.0.0.1).
+
+If you intend to use tracing with this feature, make sure the second parameter
+to start_handler and the `id` parameter match. Thus when the custom gen_leader
+process exits, lager will remove any associated traces for that handler.
+
 Elixir Support
 --------------
 

@@ -107,8 +107,7 @@ init(Options) when is_list(Options) ->
                           case GroupLeader of
                               false -> user;
                               GLPid when is_pid(GLPid) ->
-                                  ?INT_LOG(notice, "logging to remote process ~p on ~p", [GLPid, node(GLPid)]),
-                                  erlang:monitor_node(node(GLPid), true),
+                                  erlang:monitor(process, GLPid),
                                   GLPid
                           end;
                      true -> standard_error
@@ -186,15 +185,8 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
-handle_info({nodedown, Node}, State=#state{out=Out}) when is_pid(Out) ->
-    ?INT_LOG(notice, "Remote node ~p is down ~p", [Node, node(Out)]),
-    case node(Out) of
-        Node ->
-            ?INT_LOG(notice, "Removing handler", []),
-            remove_handler;
-        _ ->
-            {ok, State}
-    end;
+handle_info({'DOWN', _, process, Out, _}, #state{out=Out}) ->
+    remove_handler;
 handle_info(_Info, State) ->
     {ok, State}.
 
@@ -477,6 +469,89 @@ console_log_test_() ->
                         receive
                             {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
                                 From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
+            },
+            {"console backend with custom group leader",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}, {group_leader, Pid}]),
+                        lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
+                        lager:info("Test message"),
+                        ?assertNotEqual({group_leader, Pid}, erlang:process_info(whereis(lager_event), group_leader)),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                TestMsg = "Test message" ++ eol(),
+                                ?assertMatch([_, "[info]", TestMsg], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            1000 ->
+                                ?assert(false)
+                        end,
+                        %% killing the pid should prevent any new log messages (to prove we haven't accidentally redirected
+                        %% the group leader some other way
+                        exit(Pid, kill),
+                        timer:sleep(100),
+                        %% additionally, check the lager backend has been removed (because the group leader process died)
+                        ?assertNot(lists:member(lager_console_backend, gen_event:which_handlers(lager_event))),
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
+                                From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
+            },
+            {"console backend with custom group leader using a trace and an ID",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        ID = {?MODULE, trace_test},
+                        Handlers = lager_config:global_get(handlers, []),
+                        HandlerInfo = lager_app:start_handler(lager_event, ID,
+                                                              [{level, none}, {group_leader, Pid},
+                                                               {id, ID}]),
+                        lager_config:global_set(handlers, [HandlerInfo|Handlers]),
+                        lager:info("Test message"),
+                        ?assertNotEqual({group_leader, Pid}, erlang:process_info(whereis(lager_event), group_leader)),
+                        receive
+                            {io_request, From, ReplyAs, {put_chars, unicode, _Msg}} ->
+                                From ! {io_reply, ReplyAs, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end,
+                        lager:trace(ID, [{module, ?MODULE}], debug),
+                        lager:info("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                TestMsg = "Test message" ++ eol(),
+                                ?assertMatch([_, "[info]", TestMsg], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            500 ->
+                                ?assert(false)
+                        end,
+                        ?assertNotEqual({0, []}, lager_config:get({lager_event, loglevel})),
+                        %% killing the pid should prevent any new log messages (to prove we haven't accidentally redirected
+                        %% the group leader some other way
+                        exit(Pid, kill),
+                        timer:sleep(100),
+                        %% additionally, check the lager backend has been removed (because the group leader process died)
+                        ?assertNot(lists:member(lager_console_backend, gen_event:which_handlers(lager_event))),
+                        %% finally, check the trace has been removed
+                        ?assertEqual({0, []}, lager_config:get({lager_event, loglevel})),
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From3, ReplyAs3, {put_chars, unicode, _Msg3}} ->
+                                From3 ! {io_reply, ReplyAs3, ok},
                                 ?assert(false)
                         after
                             500 ->
