@@ -34,7 +34,8 @@
         code_change/3]).
 
 -record(state, {level :: {'mask', integer()},
-                out = user :: user | standard_error,
+                out = user :: user | standard_error | pid(),
+                id :: atom() | {atom(), any()},
                 formatter :: atom(),
                 format_config :: any(),
                 colors=[] :: list()}).
@@ -93,17 +94,27 @@ init(Options) when is_list(Options) ->
             ?INT_LOG(warning, Msg, []),
             {error, {fatal, old_shell}};
         {true, L} ->
-            [UseErr, Formatter, Config] = [ get_option(K, Options, Default) || {K, Default} <- [
+            [UseErr, GroupLeader, ID, Formatter, Config] = [ get_option(K, Options, Default) || {K, Default} <- [
                                                                                    {use_stderr, false},
+                                                                                   {group_leader, false},
+                                                                                   {id, ?MODULE},
                                                                                    {formatter, lager_default_formatter},
                                                                                    {formatter_config, ?DEFAULT_FORMAT_CONFIG}
                                                                                                ]
                                           ],
             Out = case UseErr of
-                     false -> user;
+                     false ->
+                          case GroupLeader of
+                              false -> user;
+                              GLPid when is_pid(GLPid) ->
+                                  ?INT_LOG(notice, "logging to remote process ~p on ~p", [GLPid, node(GLPid)]),
+                                  erlang:monitor_node(node(GLPid), true),
+                                  GLPid
+                          end;
                      true -> standard_error
                   end,
             {ok, #state{level=L,
+                    id=ID,
                     out=Out,
                     formatter=Formatter,
                     format_config=Config,
@@ -134,6 +145,10 @@ validate_options([{formatter, M}|T]) when is_atom(M) ->
     validate_options(T);
 validate_options([{formatter_config, C}|T]) when is_list(C) ->
     validate_options(T);
+validate_options([{group_leader, L}|T]) when is_pid(L) ->
+    validate_options(T);
+validate_options([{id, {?MODULE, _}}|T]) ->
+    validate_options(T);
 validate_options([H|_]) ->
     throw({error, {fatal, {bad_console_config, H}}}).
 
@@ -159,8 +174,8 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Message},
-    #state{level=L,out=Out,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
-    case lager_util:is_loggable(Message, L, ?MODULE) of
+    #state{level=L,out=Out,formatter=Formatter,format_config=FormatConfig,colors=Colors,id=ID} = State) ->
+    case lager_util:is_loggable(Message, L, ID) of
         true ->
             io:put_chars(Out, Formatter:format(Message,FormatConfig,Colors)),
             {ok, State};
@@ -171,10 +186,23 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
+handle_info({nodedown, Node}, State=#state{out=Out}) when is_pid(Out) ->
+    ?INT_LOG(notice, "Remote node ~p is down ~p", [Node, node(Out)]),
+    case node(Out) of
+        Node ->
+            ?INT_LOG(notice, "Removing handler", []),
+            remove_handler;
+        _ ->
+            {ok, State}
+    end;
 handle_info(_Info, State) ->
     {ok, State}.
 
 %% @private
+terminate(remove_handler, _State=#state{id=ID}) ->
+    %% have to do this asynchronously because we're in the event handlr
+    spawn(fun() -> lager:clear_trace_by_destination(ID) end),
+    ok;
 terminate(_Reason, _State) ->
     ok.
 
