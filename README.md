@@ -1005,7 +1005,7 @@ invocation so that the code is executing on the Erlang node, but the
 group_leader is that of the reltool node (eg. appname_maint_12345@127.0.0.1).
 
 If you intend to use tracing with this feature, make sure the second parameter
-to start_handler and the `id` parameter match. Thus when the custom gen_leader
+to start_handler and the `id` parameter match. Thus when the custom group_leader
 process exits, lager will remove any associated traces for that handler.
 
 Elixir Support
