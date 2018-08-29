@@ -32,7 +32,7 @@
         rotate_handler/1, rotate_handler/2, rotate_sink/1, rotate_all/0,
         trace/2, trace/3, trace_file/2, trace_file/3, trace_file/4, trace_console/1, trace_console/2,
         install_trace/2, remove_trace/1, trace_func/3,
-        list_all_sinks/0, clear_all_traces/0, stop_trace/1, stop_trace/3, status/0,
+        list_all_sinks/0, clear_all_traces/0, clear_trace_by_destination/1, stop_trace/1, stop_trace/3, status/0,
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
         safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
@@ -335,6 +335,12 @@ clear_traces_by_sink(Sinks) ->
                                            {Level, []})
                   end,
                   Sinks).
+
+clear_trace_by_destination(ID) ->
+    Sinks = lists:sort(list_all_sinks()),
+    Traces = find_traces(Sinks),
+    [ stop_trace_int({Filter, Level, Destination}, Sink) || {Sink, {Filter, Level, Destination}} <- Traces, Destination == ID].
+
 
 clear_all_traces() ->
     Handlers = lager_config:global_get(handlers, []),

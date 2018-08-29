@@ -34,7 +34,8 @@
         code_change/3]).
 
 -record(state, {level :: {'mask', integer()},
-                out = user :: user | standard_error,
+                out = user :: user | standard_error | pid(),
+                id :: atom() | {atom(), any()},
                 formatter :: atom(),
                 format_config :: any(),
                 colors=[] :: list()}).
@@ -93,17 +94,26 @@ init(Options) when is_list(Options) ->
             ?INT_LOG(warning, Msg, []),
             {error, {fatal, old_shell}};
         {true, L} ->
-            [UseErr, Formatter, Config] = [ get_option(K, Options, Default) || {K, Default} <- [
+            [UseErr, GroupLeader, ID, Formatter, Config] = [ get_option(K, Options, Default) || {K, Default} <- [
                                                                                    {use_stderr, false},
+                                                                                   {group_leader, false},
+                                                                                   {id, ?MODULE},
                                                                                    {formatter, lager_default_formatter},
                                                                                    {formatter_config, ?DEFAULT_FORMAT_CONFIG}
                                                                                                ]
                                           ],
             Out = case UseErr of
-                     false -> user;
+                     false ->
+                          case GroupLeader of
+                              false -> user;
+                              GLPid when is_pid(GLPid) ->
+                                  erlang:monitor(process, GLPid),
+                                  GLPid
+                          end;
                      true -> standard_error
                   end,
             {ok, #state{level=L,
+                    id=ID,
                     out=Out,
                     formatter=Formatter,
                     format_config=Config,
@@ -134,6 +144,10 @@ validate_options([{formatter, M}|T]) when is_atom(M) ->
     validate_options(T);
 validate_options([{formatter_config, C}|T]) when is_list(C) ->
     validate_options(T);
+validate_options([{group_leader, L}|T]) when is_pid(L) ->
+    validate_options(T);
+validate_options([{id, {?MODULE, _}}|T]) ->
+    validate_options(T);
 validate_options([H|_]) ->
     throw({error, {fatal, {bad_console_config, H}}}).
 
@@ -159,8 +173,8 @@ handle_call(_Request, State) ->
 
 %% @private
 handle_event({log, Message},
-    #state{level=L,out=Out,formatter=Formatter,format_config=FormatConfig,colors=Colors} = State) ->
-    case lager_util:is_loggable(Message, L, ?MODULE) of
+    #state{level=L,out=Out,formatter=Formatter,format_config=FormatConfig,colors=Colors,id=ID} = State) ->
+    case lager_util:is_loggable(Message, L, ID) of
         true ->
             io:put_chars(Out, Formatter:format(Message,FormatConfig,Colors)),
             {ok, State};
@@ -171,10 +185,16 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
+handle_info({'DOWN', _, process, Out, _}, #state{out=Out}) ->
+    remove_handler;
 handle_info(_Info, State) ->
     {ok, State}.
 
 %% @private
+terminate(remove_handler, _State=#state{id=ID}) ->
+    %% have to do this asynchronously because we're in the event handlr
+    spawn(fun() -> lager:clear_trace_by_destination(ID) end),
+    ok;
 terminate(_Reason, _State) ->
     ok.
 
@@ -449,6 +469,89 @@ console_log_test_() ->
                         receive
                             {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
                                 From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
+            },
+            {"console backend with custom group leader",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        gen_event:add_handler(lager_event, lager_console_backend, [{level, info}, {group_leader, Pid}]),
+                        lager_config:set({lager_event, loglevel}, {element(2, lager_util:config_to_mask(info)), []}),
+                        lager:info("Test message"),
+                        ?assertNotEqual({group_leader, Pid}, erlang:process_info(whereis(lager_event), group_leader)),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                TestMsg = "Test message" ++ eol(),
+                                ?assertMatch([_, "[info]", TestMsg], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            1000 ->
+                                ?assert(false)
+                        end,
+                        %% killing the pid should prevent any new log messages (to prove we haven't accidentally redirected
+                        %% the group leader some other way
+                        exit(Pid, kill),
+                        timer:sleep(100),
+                        %% additionally, check the lager backend has been removed (because the group leader process died)
+                        ?assertNot(lists:member(lager_console_backend, gen_event:which_handlers(lager_event))),
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From2, ReplyAs2, {put_chars, unicode, _Msg2}} ->
+                                From2 ! {io_reply, ReplyAs2, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end
+                end
+            },
+            {"console backend with custom group leader using a trace and an ID",
+                fun() ->
+                        Pid = spawn(F(self())),
+                        ID = {?MODULE, trace_test},
+                        Handlers = lager_config:global_get(handlers, []),
+                        HandlerInfo = lager_app:start_handler(lager_event, ID,
+                                                              [{level, none}, {group_leader, Pid},
+                                                               {id, ID}]),
+                        lager_config:global_set(handlers, [HandlerInfo|Handlers]),
+                        lager:info("Test message"),
+                        ?assertNotEqual({group_leader, Pid}, erlang:process_info(whereis(lager_event), group_leader)),
+                        receive
+                            {io_request, From, ReplyAs, {put_chars, unicode, _Msg}} ->
+                                From ! {io_reply, ReplyAs, ok},
+                                ?assert(false)
+                        after
+                            500 ->
+                                ?assert(true)
+                        end,
+                        lager:trace(ID, [{module, ?MODULE}], debug),
+                        lager:info("Test message"),
+                        receive
+                            {io_request, From1, ReplyAs1, {put_chars, unicode, Msg1}} ->
+                                From1 ! {io_reply, ReplyAs1, ok},
+                                TestMsg = "Test message" ++ eol(),
+                                ?assertMatch([_, "[info]", TestMsg], re:split(Msg1, " ", [{return, list}, {parts, 3}]))
+                        after
+                            500 ->
+                                ?assert(false)
+                        end,
+                        ?assertNotEqual({0, []}, lager_config:get({lager_event, loglevel})),
+                        %% killing the pid should prevent any new log messages (to prove we haven't accidentally redirected
+                        %% the group leader some other way
+                        exit(Pid, kill),
+                        timer:sleep(100),
+                        %% additionally, check the lager backend has been removed (because the group leader process died)
+                        ?assertNot(lists:member(lager_console_backend, gen_event:which_handlers(lager_event))),
+                        %% finally, check the trace has been removed
+                        ?assertEqual({0, []}, lager_config:get({lager_event, loglevel})),
+                        lager:error("Test message"),
+                        receive
+                            {io_request, From3, ReplyAs3, {put_chars, unicode, _Msg3}} ->
+                                From3 ! {io_reply, ReplyAs3, ok},
                                 ?assert(false)
                         after
                             500 ->
