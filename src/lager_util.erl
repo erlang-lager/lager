@@ -444,7 +444,9 @@ is_loggable(Msg, {mask, Mask}, MyName) ->
     %?debugFmt("comparing masks ~.2B and ~.2B -> ~p~n", [S, Mask, S band Mask]),
     (lager_msg:severity_as_int(Msg) band Mask) /= 0 orelse
     lists:member(MyName, lager_msg:destinations(Msg));
-is_loggable(Msg ,SeverityThreshold,MyName) ->
+is_loggable(Msg, SeverityThreshold, MyName) when is_atom(SeverityThreshold) ->
+    is_loggable(Msg, level_to_num(SeverityThreshold), MyName);
+is_loggable(Msg, SeverityThreshold, MyName) when is_integer(SeverityThreshold) ->
     lager_msg:severity_as_int(Msg) =< SeverityThreshold orelse
     lists:member(MyName, lager_msg:destinations(Msg)).
 
