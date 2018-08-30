@@ -596,3 +596,37 @@ get_value(Key, List, Default) ->
 
 supervisor_name({local, Name}) -> Name;
 supervisor_name(Name) -> Name.
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+no_silent_hwm_drops_test_() ->
+    {timeout, 10000,
+        [
+            fun() ->
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, warning}]),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, error_logger_hwm, 5),
+                application:set_env(lager, error_logger_flush_queue, false),
+                application:unset_env(lager, crash_log),
+                lager:start(),
+                try
+                    {_, _, MS} = os:timestamp(),
+                    timer:sleep((1000000 - MS) div 1000 + 1),
+                    %start close to the beginning of a new second
+                    [error_logger:error_msg("Foo ~p~n", [K]) || K <- lists:seq(1, 15)],
+                    timer:sleep(1000),
+                    lager_handler_watcher:pop_until("lager_error_logger_h dropped 10 messages in the last second that exceeded the limit of 5 messages/sec",
+                        fun lists:flatten/1)
+                after
+                    application:stop(lager),
+                    application:stop(goldrush),
+                    error_logger:tty(true)
+                end
+            end
+        ]
+    }.
+
+-endif.
