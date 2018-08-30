@@ -504,7 +504,7 @@ check_hwm(Shaper = #lager_shaper{hwm = undefined}) ->
     {true, 0, Shaper};
 check_hwm(Shaper = #lager_shaper{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
     %% haven't hit high water mark yet, just log it
-    {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+    {true, 0, Shaper#lager_shaper{mps=Mps+1, lasttime = os:timestamp()}};
 check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
     %% are we still in the same second?
     {M, S, _} = Now = os:timestamp(),
