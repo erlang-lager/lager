@@ -179,8 +179,8 @@ handle_event({log, Message},
                     {ok,write(NewState#state{shaper=NewShaper},
                         lager_msg:timestamp(Message), lager_msg:severity_as_int(Message),
                         Formatter:format(Message,FormatConfig))};
-                {false, _, NewShaper} ->
-                    {ok, State#state{shaper=NewShaper}}
+                {false, _, #lager_shaper{dropped=D} = NewShaper} ->
+                    {ok, State#state{shaper=NewShaper#lager_shaper{dropped=D+1}}}
             end;
         false ->
             {ok, State}
@@ -956,6 +956,23 @@ filesystem_test_() ->
             timer:sleep(10),
             ?assert(filelib:is_regular(TestLog0)),
 
+            lager_util:delete_test_dir(TestDir)
+        end},
+        {"no silent hwm drops",
+        fun() ->
+            TestDir = lager_util:create_test_dir(),
+            TestLog = filename:join(TestDir, "test.log"),
+            gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog}, {level, info},
+                {high_water_mark, 5}, {flush_queue, false}, {sync_on, "=warning"}]),
+            {_, _, MS} = os:timestamp(),
+            timer:sleep((1000000 - MS) div 1000 + 1),
+            %start close to the beginning of a new second
+            [lager:log(info, self(), "Foo ~p", [K]) || K <- lists:seq(1, 15)],
+            timer:sleep(1000),
+            {ok, Bin} = file:read_file(TestLog),
+            Last = lists:last(re:split(Bin, "\n", [{return, list}, trim])),
+            ?assertMatch([_, _, _, _, "lager_file_backend dropped 10 messages in the last second that exceeded the limit of 5 messages/sec"],
+                re:split(Last, " ", [{return, list}, {parts, 5}])),
             lager_util:delete_test_dir(TestDir)
         end}
     ]}.
