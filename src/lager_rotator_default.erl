@@ -75,7 +75,6 @@ rotate_logfile(File, 0) ->
     % opeing the file in write mode to clear the contents
     case file:open(File, [write]) of
         {ok, Fd} ->
-                file:open(File, [write]),
                 file:close(Fd);
         Error ->
                 Error
