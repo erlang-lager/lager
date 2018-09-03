@@ -207,6 +207,9 @@ log_event(Event, #state{sink=Sink} = State) ->
                         [TName, _Msg, TStateName, _StateData, TReason] ->
                             {gen_fsm, TName, TStateName, TReason};
                         [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _FsmType, Stacktrace] ->
+                            {gen_statem, TName, TStateName, {TReason, Stacktrace}};
+                        [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _FsmType, Stacktrace] ->
+                            %% sometimes gen_statem wraps its statename/data in a list for some reason???
                             {gen_statem, TName, TStateName, {TReason, Stacktrace}}
                     end,
                     {Md, Formatted} = format_reason_md(Reason),

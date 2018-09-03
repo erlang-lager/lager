@@ -6,6 +6,8 @@
 -export([
          start/0,
          crash/0,
+         stop/1,
+         timeout/0,
          handle_event/4
 ]).
 
@@ -17,6 +19,12 @@ start() ->
 crash() ->
     gen_statem:call(?MODULE, boom).
 
+stop(Reason) ->
+    gen_statem:call(?MODULE, {stop, Reason}).
+
+timeout() ->
+    gen_statem:call(?MODULE, timeout).
+
 %% Mandatory callback functions
 terminate(_Reason, _State, _Data) -> ok.
 code_change(_Vsn, State, Data, _Extra) -> {ok,State,Data}.
@@ -26,12 +34,17 @@ init([]) ->
         "8.0" -> {callback_mode(),state1,undefined};
         _ -> {ok, state1, undefined}
     end.
+
 callback_mode() -> handle_event_function.
 
 %%% state callback(s)
 
-handle_event({call, _From}, state1, _Arg, Data) ->
-    {next_state, state1, Data}.
+handle_event(state_timeout, timeout, state1, _) ->
+    {stop, timeout};
+handle_event({call, _From}, timeout, _Arg, Data) ->
+    {keep_state_and_data, [{state_timeout, 0, timeout}]};
+handle_event({call, _From}, {stop, Reason}, state1, Data) ->
+    {stop, Reason}.
 
 -else.
 -export([start/0, crash/0]).

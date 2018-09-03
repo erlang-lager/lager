@@ -996,14 +996,14 @@ kill_crasher(RegName) ->
         Pid -> exit(Pid, kill)
     end.
 
-spawn_fsm_crash(Module) ->
-    spawn(fun() -> Module:crash() end),
+spawn_fsm_crash(Module, Function, Args) ->
+    spawn(fun() -> erlang:apply(Module, Function, Args) end),
     timer:sleep(100),
     _ = gen_event:which_handlers(error_logger),
     ok.
 
 crash_fsm_test_() ->
-    TestBody = fun(Name, FsmModule, Expected) ->
+    TestBody = fun(Name, FsmModule, FSMFunc, FSMArgs, Expected) ->
                    fun(Sink) ->
                       {Name,
                        fun() ->
@@ -1011,7 +1011,7 @@ crash_fsm_test_() ->
                                 {true, true} -> ok;
                                 _ ->
                                     Pid = whereis(FsmModule),
-                                    spawn_fsm_crash(FsmModule),
+                                    spawn_fsm_crash(FsmModule, FSMFunc, FSMArgs),
                                     {Level, _, Msg, Metadata} = pop(Sink),
                                     test_body(Expected, lists:flatten(Msg)),
                                     ?assertEqual(Pid, proplists:get_value(pid, Metadata)),
@@ -1031,8 +1031,10 @@ crash_fsm_test_() ->
             }
         end,
 
-        TestBody("gen_fsm crash", crash_fsm, "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/"),
-        TestBody("gen_statem crash", crash_statem, "gen_statem crash_statem in state state1 terminated with reason: no function clause matching crash_statem:handle")
+        TestBody("gen_fsm crash", crash_fsm, crash, [], "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/"),
+        TestBody("gen_statem crash", crash_statem, crash, [], "gen_statem crash_statem in state state1 terminated with reason: no function clause matching crash_statem:handle"),
+        TestBody("gen_statem stop", crash_statem, stop, [explode], "gen_statem crash_statem in state state1 terminated with reason: explode"),
+        TestBody("gen_statem timeout", crash_statem, timeout, [], "gen_statem crash_statem in state state1 terminated with reason: timeout")
     ],
 
     {"FSM crash output tests", [
