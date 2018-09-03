@@ -121,7 +121,6 @@ rotate_file_fail_test() ->
     file:write_file(TestLog, "hello"),
     %% hose up the permissions
     os:cmd("chmod -R u-w " ++ TestDir),
-    rotate_logfile(TestLog, 10),
     ?assertMatch({error, _}, rotate_logfile(TestLog, 10)),
     ?assert(filelib:is_regular(TestLog)),
     %% fix the permissions
