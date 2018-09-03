@@ -1100,6 +1100,16 @@ Example Usage:
 
 3.x Changelog
 -------------
+
+3.6.5 - 3 September 2018
+
+    * Feature: Allow the console backend to redirect output to a remote node #469
+    * Feature: is_loggble - support for severity as atom #472
+    * Bugfix: Prevent silent dropping of messages when hwm is exceeded #467
+    * Bugfix: rotation - default log file not deleted #474
+    * Bugfix: Handle strange crash report from gen_statem #473
+    * Documentation: Various markup fixes: #468 #470
+
 3.6.4 - 11 July 2018
 
     * Bugfix: Reinstall handlers after a sink is killed #459
