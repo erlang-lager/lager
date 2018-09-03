@@ -72,13 +72,19 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
 
 %% renames failing are OK
 rotate_logfile(File, 0) ->
-    file:delete(File);
+    %% open the file in write-only mode to truncate/create it
+    case file:open(File, [write]) of
+        {ok, _FD} ->
+            ok;
+        Error ->
+            Error
+    end;
 rotate_logfile(File, 1) ->
     case file:rename(File, File++".0") of
         ok ->
-            ok;
-        _ ->
-            rotate_logfile(File, 0)
+            rotate_logfile(File, 0);
+        Error ->
+            Error
     end;
 rotate_logfile(File, Count) ->
     _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
@@ -110,6 +116,23 @@ rotate_file_test() ->
     lists:foreach(Outer, lists:seq(0, (RotCount * 2))),
     lager_util:delete_test_dir(TestDir).
 
+rotate_file_zero_count_test() ->
+    %% Test that a rotation count of 0 simply truncates the file
+    TestDir = lager_util:create_test_dir(),
+    TestLog = filename:join(TestDir, "rotation.log"),
+    ?assertMatch(ok, rotate_logfile(TestLog, 0)),
+    ?assertNot(filelib:is_regular(TestLog ++ ".0")),
+    ?assertEqual(true, filelib:is_regular(TestLog)),
+    ?assertEqual(1, length(filelib:wildcard(TestLog++"*"))),
+    %% assert the new file is 0 size:
+    case file:read_file_info(TestLog) of
+        {ok, FInfo} ->
+            ?assertEqual(0, FInfo#file_info.size);
+        _ ->
+            ?assert(false)
+    end,
+    lager_util:delete_test_dir(TestDir).
+
 rotate_file_fail_test() ->
     TestDir = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
@@ -118,14 +141,26 @@ rotate_file_fail_test() ->
     %% write a file
     file:write_file(TestLog, "hello"),
     %% hose up the permissions
-    os:cmd("chmod u-w " ++ TestDir),
+    os:cmd("chmod -R u-w " ++ TestDir),
     ?assertMatch({error, _}, rotate_logfile(TestLog, 10)),
+    %% check we still only have one file, rotation.log
+    ?assertEqual([TestLog], filelib:wildcard(TestLog++"*")),
     ?assert(filelib:is_regular(TestLog)),
     %% fix the permissions
-    os:cmd("chmod u+w " ++ TestDir),
+    os:cmd("chmod -R u+w " ++ TestDir),
     ?assertMatch(ok, rotate_logfile(TestLog, 10)),
     ?assert(filelib:is_regular(TestLog ++ ".0")),
-    ?assertEqual(false, filelib:is_regular(TestLog)),
+    ?assertEqual(true, filelib:is_regular(TestLog)),
+    ?assertEqual(2, length(filelib:wildcard(TestLog++"*"))),
+    %% assert the new file is 0 size:
+    case file:read_file_info(TestLog) of
+        {ok, FInfo} ->
+            ?assertEqual(0, FInfo#file_info.size);
+        _ ->
+            ?assert(false)
+    end,
+    %% check that the .0 file now has the contents "hello"
+    ?assertEqual({ok, <<"hello">>}, file:read_file(TestLog++".0")),
     lager_util:delete_test_dir(TestDir).
 
 -endif.
