@@ -74,18 +74,15 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
 rotate_logfile(File, 0) ->
     %% open the file in write-only mode to truncate/create it
     case file:open(File, [write]) of
-        {ok, _FD} ->
+        {ok, FD} ->
+            file:close(FD),
             ok;
         Error ->
             Error
     end;
 rotate_logfile(File, 1) ->
-    case file:rename(File, File++".0") of
-        ok ->
-            rotate_logfile(File, 0);
-        Error ->
-            Error
-    end;
+    _ = file:rename(File, File++".0"),
+    rotate_logfile(File, 0);
 rotate_logfile(File, Count) ->
     _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
     rotate_logfile(File, Count - 1).
