@@ -72,14 +72,16 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
 
 %% renames failing are OK
 rotate_logfile(File, 0) ->
-    file:delete(File);
-rotate_logfile(File, 1) ->
-    case file:rename(File, File++".0") of
-        ok ->
-            ok;
-        _ ->
-            rotate_logfile(File, 0)
+    % opeing the file in write mode to clear the contents
+    case file:open(File, [write]) of
+        {ok, Fd} ->
+                file:close(Fd);
+        Error ->
+                Error
     end;
+rotate_logfile(File, 1) ->
+    _ = file:rename(File, File++".0"),
+    rotate_logfile(File, 0);
 rotate_logfile(File, Count) ->
     _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
     rotate_logfile(File, Count - 1).
@@ -118,14 +120,14 @@ rotate_file_fail_test() ->
     %% write a file
     file:write_file(TestLog, "hello"),
     %% hose up the permissions
-    os:cmd("chmod u-w " ++ TestDir),
+    os:cmd("chmod -R u-w " ++ TestDir),
     ?assertMatch({error, _}, rotate_logfile(TestLog, 10)),
     ?assert(filelib:is_regular(TestLog)),
     %% fix the permissions
-    os:cmd("chmod u+w " ++ TestDir),
+    os:cmd("chmod -R u+w " ++ TestDir),
     ?assertMatch(ok, rotate_logfile(TestLog, 10)),
     ?assert(filelib:is_regular(TestLog ++ ".0")),
-    ?assertEqual(false, filelib:is_regular(TestLog)),
+    ?assertEqual(true, filelib:is_regular(TestLog)),
     lager_util:delete_test_dir(TestDir).
 
 -endif.
