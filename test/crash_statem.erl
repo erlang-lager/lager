@@ -41,9 +41,9 @@ callback_mode() -> handle_event_function.
 
 handle_event(state_timeout, timeout, state1, _) ->
     {stop, timeout};
-handle_event({call, _From}, timeout, _Arg, Data) ->
+handle_event({call, _From}, timeout, _Arg, _Data) ->
     {keep_state_and_data, [{state_timeout, 0, timeout}]};
-handle_event({call, _From}, {stop, Reason}, state1, Data) ->
+handle_event({call, _From}, {stop, Reason}, state1, _Data) ->
     {stop, Reason}.
 
 -else.

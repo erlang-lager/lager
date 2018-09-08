@@ -871,7 +871,9 @@ setup() ->
     %% This race condition was first exposed during the work on
     %% 4b5260c4524688b545cc12da6baa2dfa4f2afec9 which introduced the lager
     %% manager killer PR.
-    timer:sleep(5),
+    application:set_env(lager, suppress_supervisor_start_stop, true),
+    application:set_env(lager, suppress_application_start_stop, true),
+    timer:sleep(1000),
     gen_event:call(lager_event, ?MODULE, flush).
 
 cleanup(_) ->
@@ -1113,9 +1115,11 @@ error_logger_redirect_setup() ->
     application:load(lager),
     application:set_env(lager, error_logger_redirect, true),
     application:set_env(lager, handlers, [{?MODULE, info}]),
+    application:set_env(lager, suppress_supervisor_start_stop, false),
+    application:set_env(lager, suppress_application_start_stop, false),
     lager:start(),
     lager:log(error, self(), "flush flush"),
-    timer:sleep(100),
+    timer:sleep(1000),
     gen_event:call(lager_event, ?MODULE, flush),
     lager_event.
 
@@ -1127,9 +1131,11 @@ error_logger_redirect_setup_sink() ->
     application:set_env(lager, extra_sinks, [
         {error_logger_lager_event, [
             {handlers, [{?MODULE, info}]}]}]),
+    application:set_env(lager, suppress_supervisor_start_stop, false),
+    application:set_env(lager, suppress_application_start_stop, false),
     lager:start(),
     lager:log(error_logger_lager_event, error, self(), "flush flush", []),
-    timer:sleep(100),
+    timer:sleep(1000),
     gen_event:call(error_logger_lager_event, ?MODULE, flush),
     error_logger_lager_event.
 
