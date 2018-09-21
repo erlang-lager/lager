@@ -38,3 +38,10 @@ list_of_records_test() ->
     ?assertEqual([{'$lager_record', a, [{field1, 1},{field2, a2}]},
                   {'$lager_record', a, [{field1, 2},{field2, a2}]}],
                  Pr_As).
+
+improper_list_test() ->
+    A = #a{field1 = [1|2], field2 = a2},
+    Pr_A = lager:pr(A, ?MODULE),
+    ?assertEqual({'$lager_record',a,
+                  [{field1,[1|2]},{field2,a2}]},
+                 Pr_A).

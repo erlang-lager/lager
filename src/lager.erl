@@ -577,8 +577,8 @@ pr(Record, Module, Options) when is_tuple(Record), is_atom(element(1, Record)), 
         error:undef ->
             Record
     end;
-pr(List, Module, Options) when is_list(List), is_list(Options) ->
-    [pr(Element, Module, Options) || Element <- List];
+pr([Head|Tail], Module, Options) when is_list(Options) ->
+    [pr(Head, Module, Options)|pr(Tail, Module, Options)];
 pr(Record, _, _) ->
     Record.
 
