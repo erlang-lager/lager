@@ -69,6 +69,7 @@ rotate_test_() ->
             application:set_env(lager, error_logger_redirect, false),
             application:set_env(lager, async_threshold, undefined),
             lager:start(),
+            timer:sleep(1000),
             State
         end,
         fun(#state{dir = Dir}) ->

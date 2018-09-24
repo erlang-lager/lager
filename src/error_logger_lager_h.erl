@@ -134,7 +134,7 @@ handle_info({shaper_expired, ?MODULE}, #state{sink=Sink, shaper=Shaper} = State)
                     "lager_error_logger_h dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
                     [Dropped, Shaper#lager_shaper.hwm])
     end,
-    {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=1, lasttime=os:timestamp()}}};
+    {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=0, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.
 
@@ -613,6 +613,8 @@ no_silent_hwm_drops_test_() ->
                 application:set_env(lager, error_logger_redirect, true),
                 application:set_env(lager, error_logger_hwm, 5),
                 application:set_env(lager, error_logger_flush_queue, false),
+                application:set_env(lager, suppress_supervisor_start_stop, true),
+                application:set_env(lager, suppress_application_start_stop, true),
                 application:unset_env(lager, crash_log),
                 lager:start(),
                 try

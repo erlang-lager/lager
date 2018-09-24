@@ -1,5 +1,6 @@
 -module(crash_fsm).
 -behaviour(gen_fsm).
+-compile([{nowarn_deprecated_function, [{gen_fsm, start, 4}, {gen_fsm, sync_send_event, 2}]}]).
 
 -export([start/0, crash/0, state1/2]).
 

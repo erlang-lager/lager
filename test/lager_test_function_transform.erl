@@ -22,6 +22,8 @@
 
 -include("lager.hrl").
 
+-compile([{nowarn_deprecated_function, [{erlang, now, 0}]}]).
+
 -lager_function_transforms([
   {returns_static_emit, on_emit, {lager_test_function_transform, transform_static}},
   {returns_dynamic_emit, on_emit, {lager_test_function_transform, transform_dynamic}},
