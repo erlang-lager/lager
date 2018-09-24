@@ -1100,6 +1100,11 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.6 - 24 September 2018
+
+    * Bugfix: When printing records, handle an improper list correctly. #478
+    * Bugfix: Fix various tests and make some rotation code more explicit. #476
+    * Bugfix: Make sure not to miscount messages during high-water mark check. #475
 
 3.6.5 - 3 September 2018
 
