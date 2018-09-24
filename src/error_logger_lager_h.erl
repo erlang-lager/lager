@@ -628,7 +628,7 @@ no_silent_hwm_drops_test_() ->
                     %and once again
                     [error_logger:error_msg("Foo1 ~p~n", [K]) || K <- lists:seq(1, 20)],
                     timer:sleep(1000),
-                    lager_handler_watcher:pop_until("lager_error_logger_h dropped 16 messages in the last second that exceeded the limit of 5 messages/sec",
+                    lager_handler_watcher:pop_until("lager_error_logger_h dropped 15 messages in the last second that exceeded the limit of 5 messages/sec",
                         fun lists:flatten/1)
                 after
                     application:stop(lager),
