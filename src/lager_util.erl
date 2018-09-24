@@ -501,9 +501,15 @@ check_hwm(Shaper = #lager_shaper{filter = Filter}, Event) ->
 
 check_hwm(Shaper = #lager_shaper{hwm = undefined}) ->
     {true, 0, Shaper};
-check_hwm(Shaper = #lager_shaper{mps = Mps, hwm = Hwm}) when Mps < Hwm ->
-    %% haven't hit high water mark yet, just log it
-    {true, 0, Shaper#lager_shaper{mps=Mps+1, lasttime = os:timestamp()}};
+check_hwm(Shaper = #lager_shaper{mps = Mps, hwm = Hwm, lasttime = Last}) when Mps < Hwm ->
+    {M, S, _} = Now = os:timestamp(),
+    case Last of
+        {M, S, _} ->
+            {true, 0, Shaper#lager_shaper{mps=Mps+1}};
+        _ ->
+            %different second - reset mps
+            {true, 0, Shaper#lager_shaper{mps=1, lasttime = Now}}
+    end;
 check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
     %% are we still in the same second?
     {M, S, _} = Now = os:timestamp(),
