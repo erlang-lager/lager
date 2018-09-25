@@ -973,6 +973,18 @@ function in a target process by doing
 lager:install_trace(Pid, notice).
 ```
 
+You can also customize the tracing somewhat:
+
+```erlang
+lager:install_trace(Pid, notice, [{count, 100}, {timeout, 5000}, {format_string, "my trace event ~p ~p"]}).
+```
+
+The trace options are currently:
+
+* timeout - how long the trace stays installed: `infinity` (the default) or a millisecond timeout
+* count - how many trace events to log: `infinity` (default) or a positive number
+* format_string - the format string to log the event with. *Must* have 2 format specifiers for the 2 parameters supplied.
+
 This will, on every 'system event' for an OTP process (usually inbound messages, replies
 and state changes) generate a lager message at the specified log level.
 
@@ -981,6 +993,14 @@ You can remove the trace when you're done by doing:
 ```erlang
 lager:remove_trace(Pid).
 ```
+
+If you want to start an OTP process with tracing enabled from the very beginning, you can do something like this:
+
+```erlang
+gen_server:start_link(mymodule, [], [{debug, [{install, {fun lager:trace_func/3, lager:trace_state(undefined, notice, [])}}]}]).
+```
+
+The third argument to the trace_state function is the Option list documented above.
 
 Console output to another group leader process
 ----------------------------------------------
