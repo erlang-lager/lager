@@ -1120,6 +1120,9 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.7 - 14 October 2018
+    * Bugfix: fix tracing to work with OTP21 #480
+
 3.6.6 - 24 September 2018
 
     * Bugfix: When printing records, handle an improper list correctly. #478
