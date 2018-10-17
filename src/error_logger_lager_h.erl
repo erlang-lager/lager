@@ -244,6 +244,13 @@ log_event(Event, #state{sink=Sink} = State) ->
                     %% Ranch errors
                     ?CRASH_LOG(Event),
                     case Args of
+                        %% Error logged by cowboy, which starts as ranch error
+                        [Ref, ConnectionPid, StreamID, RequestPid, Reason, StackTrace] ->
+                            {Md, Formatted} = format_reason_md({Reason, StackTrace}),
+                            ?LOGFMT(Sink, error, [{pid, RequestPid} | Md],
+                                "Cowboy stream ~p with ranch listener ~p and connection process ~p "
+                                "had its request process exit with reason: ~s",
+                                [StreamID, Ref, ConnectionPid, Formatted]);
                         [Ref, _Protocol, Worker, {[{reason, Reason}, {mfa, {Module, Function, Arity}}, {stacktrace, StackTrace} | _], _}] ->
                             {Md, Formatted} = format_reason_md({Reason, StackTrace}),
                             ?LOGFMT(Sink, error, [{pid, Worker} | Md],
