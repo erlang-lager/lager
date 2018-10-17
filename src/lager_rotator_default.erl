@@ -41,7 +41,7 @@ ensure_logfile(Name, FD, Inode, Buffer) ->
     case file:read_file_info(Name) of
         {ok, FInfo} ->
             Inode2 = FInfo#file_info.inode,
-            case Inode == Inode2 of
+            case Inode == Inode2 andalso FD /= undefined of
                 true ->
                     {ok, {FD, Inode, FInfo#file_info.size}};
                 false ->
