@@ -1648,6 +1648,26 @@ error_logger_redirect_test_() ->
                         ?assertEqual("Cowboy handler my_handler terminated with reason: call to undefined function my_handler:to_json/2", lists:flatten(Msg))
                 end
             },
+            {"Cowboy error reports, 6 arg version",
+             fun(Sink) ->
+                        Stack = [{app_http, init, 2, [{file, "app_http.erl"}, {line,9}]},
+                                 {cowboy_handler, execute, 2, [{file, "cowboy_handler.erl"}, {line, 41}]}],
+                        ConnectionPid = list_to_pid("<0.82.0>"),
+                        sync_error_logger:error_msg(
+                            "Ranch listener ~p, connection process ~p, stream ~p "
+                            "had its request process ~p exit with reason "
+                            "~999999p and stacktrace ~999999p~n",
+                            [my_listner, ConnectionPid, 1, self(), {badmatch, 2}, Stack]),
+                        _ = gen_event:which_handlers(error_logger),
+                        {Level, _, Msg, Metadata} = pop(Sink),
+                        ?assertEqual(lager_util:level_to_num(error), Level),
+                        ?assertEqual(self(), proplists:get_value(pid, Metadata)),
+                        ?assertEqual("Cowboy stream 1 with ranch listener my_listner and "
+                                     "connection process <0.82.0> had its request process exit "
+                                     "with reason: no match of right hand value 2 "
+                                     "in app_http:init/2 line 9", lists:flatten(Msg))
+                end
+            },
             {"messages should not be generated if they don't satisfy the threshold",
                 fun(Sink) ->
                         lager:set_loglevel(Sink, ?MODULE, undefined, error),
