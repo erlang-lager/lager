@@ -279,14 +279,12 @@ print(List, Max, Options) when is_list(List) ->
             {[$[, R, $]], Len + 2}
     end;
 
-print(Map, Max, Options) ->
-    case erlang:is_builtin(erlang, is_map, 1) andalso erlang:is_map(Map) of
-        true ->
-            {MapBody, Len} = map_body(Map, Max - 3, dec_depth(Options)),
-            {[$#, ${, MapBody, $}], Len + 3};
-        false ->
-            error(badarg, [Map, Max, Options])
-    end.
+print(Map, Max, Options) when is_map(Map) ->
+    {MapBody, Len} = map_body(Map, Max - 3, dec_depth(Options)),
+    {[$#, ${, MapBody, $}], Len + 3};
+
+print(Term, Max, Options) ->
+    error(badarg, [Term, Max, Options]).
 
 %% Returns {List, Length}
 tuple_contents(Tuple, Max, Options) ->
@@ -743,44 +741,39 @@ tuple_printing_test() ->
     ok.
 
 map_printing_test() ->
-    case erlang:is_builtin(erlang, is_map, 1) of
-        true ->
-            ?assertEqual("#{}", lists:flatten(format("~p", [maps:new()], 50))),
-            ?assertEqual("#{}", lists:flatten(format("~p", [maps:new()], 3))),
-            ?assertEqual("#{}", lists:flatten(format("~w", [maps:new()], 50))),
-            ?assertError(badarg, lists:flatten(format("~s", [maps:new()], 50))),
-            ?assertEqual("#{...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 1))),
-            ?assertEqual("#{...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 6))),
-            ?assertEqual("#{bar => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 7))),
-            ?assertEqual("#{bar => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 9))),
-            ?assertEqual("#{bar => foo}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 10))),
-            ?assertEqual("#{bar => ...,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 9))),
-            ?assertEqual("#{bar => foo,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 10))),
-            ?assertEqual("#{bar => foo,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 17))),
-            ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 18))),
-            ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 19))),
-            ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 20))),
-            ?assertEqual("#{bar => foo,foo => bar}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 21))),
-            ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
-                         lists:flatten(format("~w", [
-                                                     maps:from_list([{22835963083295358096932575511191922182123945984,
-                                                       22835963083295358096932575511191922182123945984}])], 10))),
-            ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
-                         lists:flatten(format("~w", [
-                                                     maps:from_list([{22835963083295358096932575511191922182123945984,
-                                                       bar}])], 10))),
-            ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
-                         lists:flatten(format("~w", [
-                                                     maps:from_list([{22835963083295358096932575511191922182123945984,
-                                                       bar}])], 53))),
-            ?assertEqual("#{22835963083295358096932575511191922182123945984 => bar}",
-                         lists:flatten(format("~w", [
-                                                     maps:from_list([{22835963083295358096932575511191922182123945984,
-                                                       bar}])], 54))),
-            ok;
-        false ->
-            ok
-    end.
+    ?assertEqual("#{}", lists:flatten(format("~p", [maps:new()], 50))),
+    ?assertEqual("#{}", lists:flatten(format("~p", [maps:new()], 3))),
+    ?assertEqual("#{}", lists:flatten(format("~w", [maps:new()], 50))),
+    ?assertError(badarg, lists:flatten(format("~s", [maps:new()], 50))),
+    ?assertEqual("#{...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 1))),
+    ?assertEqual("#{...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 6))),
+    ?assertEqual("#{bar => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 7))),
+    ?assertEqual("#{bar => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 9))),
+    ?assertEqual("#{bar => foo}", lists:flatten(format("~p", [maps:from_list([{bar, foo}])], 10))),
+    ?assertEqual("#{bar => ...,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 9))),
+    ?assertEqual("#{bar => foo,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 10))),
+    ?assertEqual("#{bar => foo,...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 17))),
+    ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 18))),
+    ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 19))),
+    ?assertEqual("#{bar => foo,foo => ...}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 20))),
+    ?assertEqual("#{bar => foo,foo => bar}", lists:flatten(format("~p", [maps:from_list([{bar, foo}, {foo, bar}])], 21))),
+    ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
+                 lists:flatten(format("~w", [
+                                             maps:from_list([{22835963083295358096932575511191922182123945984,
+                                               22835963083295358096932575511191922182123945984}])], 10))),
+    ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
+                 lists:flatten(format("~w", [
+                                             maps:from_list([{22835963083295358096932575511191922182123945984,
+                                               bar}])], 10))),
+    ?assertEqual("#{22835963083295358096932575511191922182123945984 => ...}",
+                 lists:flatten(format("~w", [
+                                             maps:from_list([{22835963083295358096932575511191922182123945984,
+                                               bar}])], 53))),
+    ?assertEqual("#{22835963083295358096932575511191922182123945984 => bar}",
+                 lists:flatten(format("~w", [
+                                             maps:from_list([{22835963083295358096932575511191922182123945984,
+                                               bar}])], 54))),
+    ok.
 
 unicode_test() ->
     ?assertEqual([231,167,129], lists:flatten(format("~s", [<<231,167,129>>], 50))),
@@ -805,28 +798,21 @@ depth_limit_test() ->
     ?assertEqual("{a,{b,{c,{...}}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 7], 50))),
     ?assertEqual("{a,{b,{c,{d}}}}", lists:flatten(format("~P", [{a, {b, {c, {d}}}}, 8], 50))),
 
-    case erlang:is_builtin(erlang, is_map, 1) of
-        true ->
-            ?assertEqual("#{a => #{...}}",
-                         lists:flatten(format("~P",
-                                              [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 2], 50))),
-            ?assertEqual("#{a => #{b => #{...}}}",
-                         lists:flatten(format("~P",
-                                              [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 3], 50))),
-            ?assertEqual("#{a => #{b => #{c => d}}}",
-                         lists:flatten(format("~P",
-                                              [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 4], 50))),
+    ?assertEqual("#{a => #{...}}",
+                 lists:flatten(format("~P",
+                                      [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 2], 50))),
+    ?assertEqual("#{a => #{b => #{...}}}",
+                 lists:flatten(format("~P",
+                                      [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 3], 50))),
+    ?assertEqual("#{a => #{b => #{c => d}}}",
+                 lists:flatten(format("~P",
+                                      [maps:from_list([{a, maps:from_list([{b, maps:from_list([{c, d}])}])}]), 4], 50))),
 
-            ?assertEqual("#{}", lists:flatten(format("~P", [maps:new(), 1], 50))),
-            ?assertEqual("#{...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 1], 50))),
-            ?assertEqual("#{1 => 1,...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 2], 50))),
-            ?assertEqual("#{1 => 1,2 => 2,...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 3], 50))),
-            ?assertEqual("#{1 => 1,2 => 2,3 => 3}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 4], 50))),
-
-            ok;
-        false ->
-            ok
-    end,
+    ?assertEqual("#{}", lists:flatten(format("~P", [maps:new(), 1], 50))),
+    ?assertEqual("#{...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 1], 50))),
+    ?assertEqual("#{1 => 1,...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 2], 50))),
+    ?assertEqual("#{1 => 1,2 => 2,...}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 3], 50))),
+    ?assertEqual("#{1 => 1,2 => 2,3 => 3}", lists:flatten(format("~P", [maps:from_list([{1,1}, {2,2}, {3,3}]), 4], 50))),
 
     ?assertEqual("{\"a\",[...]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 3], 50))),
     ?assertEqual("{\"a\",[\"b\",[[...]|...]]}", lists:flatten(format("~P", [{"a", ["b", ["c", ["d"]]]}, 6], 50))),
