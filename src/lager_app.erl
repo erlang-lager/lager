@@ -168,7 +168,8 @@ start_error_logger_handler(true, HWM, WhiteList) ->
             %% Longer term we should be installing a logger handler instead, but this will bridge the gap
             %% for now.
             error_logger:start(),
-            _ = logger:add_handler(error_logger,error_logger,#{level=>info,filter_default=>log});
+            _ = logger:add_handler(error_logger,error_logger,#{level=>info,filter_default=>log}),
+            ok = maybe_remove_logger_handler();
         _ ->
             ok
     end,
@@ -182,6 +183,19 @@ start_error_logger_handler(true, HWM, WhiteList) ->
             []
     end,
     OldHandlers.
+
+%% On OTP 21.1 and higher we need to remove the `default' handler.
+%% But it might not exist, so we will wrap this in a try-catch
+%% block
+maybe_remove_logger_handler() ->
+    try
+        ok = logger:remove_handler(default)
+    catch
+        error:undef -> ok;
+        Err:Reason ->
+            error_logger:error_msg("calling logger:remove_handler(default) failed: ~p ~p",
+                                   [Err, Reason])
+    end.
 
 configure_sink(Sink, SinkDef) ->
     lager_config:new_sink(Sink),
