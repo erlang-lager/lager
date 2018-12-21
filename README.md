@@ -1140,6 +1140,14 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.6.8 - 21 December 2018
+
+    * Documentation: Document the error_logger_whitelist environment variable. (#489)
+    * Bugfix: Remove the built in handler inside of OTP 21 `logger` system. (#488)
+    * Bugfix: Cleanup unneeded check for is_map (#486)
+    * Bugfix: Cleanup ranch errors treated as cowboy errors (#485)
+    * Testing: Remove OTP 18 from TravisCI testing matrix
+
 3.6.7 - 14 October 2018
 
     * Bugfix: fix tracing to work with OTP21 #480
