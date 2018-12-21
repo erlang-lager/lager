@@ -54,8 +54,8 @@ We review PRs and issues at least once a month as described below.
 OTP Support Policy
 ------------------
 The lager maintainers intend to support the past three OTP releases from
-current on the main 3.x branch of the project. As of July 2017 that includes 
-20, 19, and 18. 
+current on the main 3.x branch of the project. As of December 2018 that includes
+21, 20, 19.
 
 Lager may or may not run on older OTP releases but it will only be guaranteed
 tested on the previous three OTP releases. If you need a version of lager
@@ -293,6 +293,14 @@ lager itself to be treated like a regular lager log call. To disable this, set
 the lager application variable `error_logger_redirect` to `false`.
 You can also disable reformatting for OTP and Cowboy messages by setting variable
 `error_logger_format_raw` to `true`.
+
+If you installed your own handler(s) into `error_logger`, you can tell
+lager to leave it alone by using the `error_logger_whitelist` environment
+variable with a list of handlers to allow.
+
+```
+{error_logger_whitelist, [my_handler]}
+```
 
 The `error_logger` handler will also log more complete error messages (protected
 with use of `trunc_io`) to a "crash log" which can be referred to for further
@@ -593,6 +601,7 @@ on your favorite search engine is a good starting point.
 
 Exception Pretty Printing
 ----------------------
+Up to OTP 20:
 
 ```erlang
 try
@@ -602,6 +611,19 @@ catch
         lager:error(
             "~nStacktrace:~s",
             [lager:pr_stacktrace(erlang:get_stacktrace(), {Class, Reason})])
+end.
+```
+
+On OTP 21+:
+
+```erlang
+try
+    foo()
+catch
+    Class:Reason:Stacktrace ->
+        lager:error(
+            "~nStacktrace:~s",
+            [lager:pr_stacktrace(Stacktrace), {Class, Reason}])
 end.
 ```
 
@@ -935,8 +957,6 @@ will be impacted by what the functions you call do and how much latency they
 may introduce. This impact will even greater with `on_log` since the calls
 are injected at the point a message is logged.
 
-
-
 Setting the truncation limit at compile-time
 --------------------------------------------
 Lager defaults to truncating messages at 4096 bytes, you can alter this by
@@ -1121,6 +1141,7 @@ Example Usage:
 3.x Changelog
 -------------
 3.6.7 - 14 October 2018
+
     * Bugfix: fix tracing to work with OTP21 #480
 
 3.6.6 - 24 September 2018
