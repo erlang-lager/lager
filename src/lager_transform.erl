@@ -196,11 +196,11 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                 {atom, _, none} ->
                     %% logger:log(Level, Format, Args, Metadata)
                     {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
-                     [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
+                     [{atom,Line,Severity}, Message, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
                 _ ->
                     %% logger:log(Level, String, Metadata)
                     {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
-                     [{atom,Line,Severity}, Message, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]}
+                     [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]}
             end;
         false ->
             SeverityAsInt=lager_util:level_to_num(Severity),
