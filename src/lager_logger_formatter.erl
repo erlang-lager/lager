@@ -44,8 +44,8 @@ format(#{level := Level, msg := {report, #{label := {supervisor, progress}, repo
                   end
           end,
     do_format(Level, Msg, Metadata, Config);
-format(#{level := Level, msg := {report, _Report}, meta := Metadata}, Config) ->
-    do_format(Level, erlang:error(wtf), Metadata, Config);
+format(#{level := Level, msg := {report, Report}, meta := Metadata}, Config) ->
+    do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
     do_format(Level, String, Metadata, Config);
 format(#{level := Level, msg := {FmtStr, FmtArgs}, meta := Metadata}, Config) ->
