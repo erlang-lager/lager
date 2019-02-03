@@ -4,6 +4,46 @@
 
 -export([format/2]).%, check_config/1]).
 
+format(#{level := Level, msg := {report, #{label := {gen_server, terminate}, name := Name, reason := Reason}}, meta := Metadata}, Config) ->
+    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Msg = lager_format:format("gen_server ~w terminated with reason: ~s", [Name, Formatted], maps:get(max_size, Config, 1024)),
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {gen_fsm, terminate}, name := Name, state_name := StateName, reason := Reason}}, meta := Metadata}, Config) ->
+    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Msg = lager_format:format("gen_fsm ~w in state ~w terminated with reason: ~s", [Name, StateName, Formatted], maps:get(max_size, Config, 1024)),
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {gen_event, terminate}, name := Name, handler := Handler, reason := Reason}}, meta := Metadata}, Config) ->
+    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Msg = lager_format:format("gen_event ~w installed in ~w terminated with reason: ~s", [Handler, Name, Formatted], maps:get(max_size, Config, 1024)),
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {gen_statem, terminate}, name := Name, reason := Reason}}, meta := Metadata}, Config) ->
+    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    %% XXX I can't find the FSM statename in the error report, maybe it should be added
+    Msg = lager_format:format("gen_statem ~w terminated with reason: ~s", [Name, Formatted], maps:get(max_size, Config, 1024)),
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {Behaviour, no_handle_info}, mod := Mod, msg := Msg}}, meta := Metadata}, Config) ->
+    Msg = lager_format:format("undefined handle_info for ~p in ~s ~p", [Msg, Behaviour, Mod], maps:get(max_size, Config, 1024)),
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {supervisor, progress}, report := Report}}, meta := Metadata}, Config) ->
+    {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
+    {started, Started} = lists:keyfind(started, 1, Report),
+    Msg = case lists:keyfind(id, 1, Started) of
+              false ->
+                  %% supervisor itself starting
+                  {mfa, {Module, Function, Args}} = lists:keyfind(mfa, 1, Started),
+                  {pid, Pid} = lists:keyfind(pid, 1, Started),
+                  lager_format:format("Supervisor ~w started as ~p at pid ~w", [Name, error_logger_lager_h:format_mfa(Module, Function, Args), Pid], maps:get(max_size, Config, 1024));
+              {id, ChildID} ->
+                  case lists:keyfind(pid, 1, Started) of
+                      {pid, Pid} ->
+                          lager_format:format("Supervisor ~w started child ~s at pid ~w", [Name, ChildID, Pid], maps:get(max_size, Config, 1024));
+                      false ->
+                          %% children is a list of pids for some reason? and we only get the count
+                          {nb_children, ChildCount} = lists:keyfind(nb_children, 1, Started),
+                          lager_format:format("Supervisor ~w started ~b children ~s", [Name, ChildCount, ChildID], maps:get(max_size, Config, 1024))
+                  end
+          end,
+    do_format(Level, Msg, Metadata, Config);
 format(#{level := Level, msg := {report, _Report}, meta := Metadata}, Config) ->
     do_format(Level, erlang:error(wtf), Metadata, Config);
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
