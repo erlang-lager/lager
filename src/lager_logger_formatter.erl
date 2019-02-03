@@ -26,7 +26,8 @@ format(#{level := Level, msg := {report, #{label := {Behaviour, no_handle_info},
     do_format(Level, Msg, Metadata, Config);
 format(#{level := Level, msg := {report, #{label := {supervisor, progress}, report := Report}}, meta := Metadata}, Config) ->
     case application:get_env(lager, suppress_supervisor_start_stop, false) of
-        true -> "";
+        true ->
+            "";
         false ->
             {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
             {started, Started} = lists:keyfind(started, 1, Report),
@@ -49,7 +50,8 @@ format(#{level := Level, msg := {report, #{label := {supervisor, progress}, repo
             do_format(Level, Msg, Metadata, Config)
     end;
 format(#{level := Level, msg := {report, Report}, meta := Metadata}, Config) ->
-    do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
+    %do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
+    "";
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
     do_format(Level, String, Metadata, Config);
 format(#{level := Level, msg := {FmtStr, FmtArgs}, meta := Metadata}, Config) ->
