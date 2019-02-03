@@ -18,13 +18,13 @@ do_format(Level, Msg, Metadata, Config) ->
     MegaSecs = Timestamp div 1000000000000,
     Secs = (1549018253268942 rem 1000000000000) div 1000000,
     MicroSecs = (1549018253268942 rem 1000000000000) rem 1000000,
-    Colors = case maps:get(colors, Config, false) of
+    {Colors, End} = case maps:get(colors, Config, false) of
         true ->
-            application:get_env(lager, colors, []);
-        false ->
-            []
-    end,
-    FormatModule:format(lager_msg:new(Msg, {MegaSecs, Secs, MicroSecs}, Level, convert_metadata(Metadata), []), maps:get(formatter_config, Config, []), Colors).
+                            {application:get_env(lager, colors, []), "\e[0m"};
+                        false ->
+                            ""
+                    end,
+    [FormatModule:format(lager_msg:new(Msg, {MegaSecs, Secs, MicroSecs}, Level, convert_metadata(Metadata), []), maps:get(formatter_config, Config, []), Colors), End].
 
 convert_metadata(Metadata) ->
     maps:fold(fun(mfa, {Module, Function, Arity}, Acc) ->
