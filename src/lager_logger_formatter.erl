@@ -22,7 +22,7 @@ do_format(Level, Msg, Metadata, Config) ->
         true ->
                             {application:get_env(lager, colors, []), "\e[0m"};
                         false ->
-                            ""
+                            {[], ""}
                     end,
     [FormatModule:format(lager_msg:new(Msg, {MegaSecs, Secs, MicroSecs}, Level, convert_metadata(Metadata), []), maps:get(formatter_config, Config, []), Colors), End].
 
