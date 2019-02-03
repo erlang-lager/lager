@@ -25,25 +25,29 @@ format(#{level := Level, msg := {report, #{label := {Behaviour, no_handle_info},
     Msg = lager_format:format("undefined handle_info for ~p in ~s ~p", [Msg, Behaviour, Mod], maps:get(max_size, Config, 1024)),
     do_format(Level, Msg, Metadata, Config);
 format(#{level := Level, msg := {report, #{label := {supervisor, progress}, report := Report}}, meta := Metadata}, Config) ->
-    {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
-    {started, Started} = lists:keyfind(started, 1, Report),
-    Msg = case lists:keyfind(id, 1, Started) of
-              false ->
-                  %% supervisor itself starting
-                  {mfa, {Module, Function, Args}} = lists:keyfind(mfa, 1, Started),
-                  {pid, Pid} = lists:keyfind(pid, 1, Started),
-                  lager_format:format("Supervisor ~w started as ~p at pid ~w", [Name, error_logger_lager_h:format_mfa(Module, Function, Args), Pid], maps:get(max_size, Config, 1024));
-              {id, ChildID} ->
-                  case lists:keyfind(pid, 1, Started) of
-                      {pid, Pid} ->
-                          lager_format:format("Supervisor ~w started child ~p at pid ~w", [Name, ChildID, Pid], maps:get(max_size, Config, 1024));
+    case application:get_env(lager, suppress_supervisor_start_stop, false) of
+        true -> "";
+        false ->
+            {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
+            {started, Started} = lists:keyfind(started, 1, Report),
+            Msg = case lists:keyfind(id, 1, Started) of
                       false ->
-                          %% children is a list of pids for some reason? and we only get the count
-                          {nb_children, ChildCount} = lists:keyfind(nb_children, 1, Started),
-                          lager_format:format("Supervisor ~w started ~b children ~p", [Name, ChildCount, ChildID], maps:get(max_size, Config, 1024))
-                  end
-          end,
-    do_format(Level, Msg, Metadata, Config);
+                          %% supervisor itself starting
+                          {mfa, {Module, Function, Args}} = lists:keyfind(mfa, 1, Started),
+                          {pid, Pid} = lists:keyfind(pid, 1, Started),
+                          lager_format:format("Supervisor ~w started as ~p at pid ~w", [Name, error_logger_lager_h:format_mfa(Module, Function, Args), Pid], maps:get(max_size, Config, 1024));
+                      {id, ChildID} ->
+                          case lists:keyfind(pid, 1, Started) of
+                              {pid, Pid} ->
+                                  lager_format:format("Supervisor ~w started child ~p at pid ~w", [Name, ChildID, Pid], maps:get(max_size, Config, 1024));
+                              false ->
+                                  %% children is a list of pids for some reason? and we only get the count
+                                  {nb_children, ChildCount} = lists:keyfind(nb_children, 1, Started),
+                                  lager_format:format("Supervisor ~w started ~b children ~p", [Name, ChildCount, ChildID], maps:get(max_size, Config, 1024))
+                          end
+                  end,
+            do_format(Level, Msg, Metadata, Config)
+    end;
 format(#{level := Level, msg := {report, Report}, meta := Metadata}, Config) ->
     do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
