@@ -36,11 +36,11 @@ format(#{level := Level, msg := {report, #{label := {supervisor, progress}, repo
               {id, ChildID} ->
                   case lists:keyfind(pid, 1, Started) of
                       {pid, Pid} ->
-                          lager_format:format("Supervisor ~w started child ~s at pid ~w", [Name, ChildID, Pid], maps:get(max_size, Config, 1024));
+                          lager_format:format("Supervisor ~w started child ~p at pid ~w", [Name, ChildID, Pid], maps:get(max_size, Config, 1024));
                       false ->
                           %% children is a list of pids for some reason? and we only get the count
                           {nb_children, ChildCount} = lists:keyfind(nb_children, 1, Started),
-                          lager_format:format("Supervisor ~w started ~b children ~s", [Name, ChildCount, ChildID], maps:get(max_size, Config, 1024))
+                          lager_format:format("Supervisor ~w started ~b children ~p", [Name, ChildCount, ChildID], maps:get(max_size, Config, 1024))
                   end
           end,
     do_format(Level, Msg, Metadata, Config);
