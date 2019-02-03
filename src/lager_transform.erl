@@ -150,7 +150,7 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                              {cons, Line, {tuple, Line, [
                                                          {atom, Line, gl}, {call, Line, {atom, Line, group_leader}, []}]},
                               {cons, Line, {tuple, Line, [
-                                                          {atom, Line, time}, {call, {remote, Line, {atom, Line, erlang}, {atom, Line, system_time}}, [{atom, Line, microsecond}]}]},
+                                                          {atom, Line, time}, {call, Line, {remote, Line, {atom, Line, erlang}, {atom, Line, system_time}}, [{atom, Line, microsecond}]}]},
                                {cons, Line, {tuple, Line, [
                                                            {atom, Line, mfa}, {tuple, Line, [{atom, Line, get(module)}, {atom, Line, get(function)}, {atom, Line, get(arity)}]}]},
                                 {cons, Line, {tuple, Line, [
@@ -193,7 +193,7 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
     case get(use_logger) of
         true ->
             {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
-             [{atom,Line,Severity}, Message, Arguments, Meta]};
+             [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
         false ->
             SeverityAsInt=lager_util:level_to_num(Severity),
             %% Generate some unique variable names so we don't accidentally export from case clauses.
