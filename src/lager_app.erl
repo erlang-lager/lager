@@ -226,11 +226,16 @@ get_env(Application, Key, Default) ->
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
-    SavedHandlers = boot(),
-    _ = boot('__all_extra'),
-    _ = boot('__traces'),
-    clean_up_config_checks(),
-    {ok, Pid, SavedHandlers}.
+    case application:get_env(lager, lager_use_logger, false) of
+        false ->
+            SavedHandlers = boot(),
+            _ = boot('__all_extra'),
+            _ = boot('__traces'),
+            clean_up_config_checks(),
+            {ok, Pid, SavedHandlers};
+        true ->
+            {ok, Pid}
+    end.
 
 boot() ->
     %% Handle the default sink.
