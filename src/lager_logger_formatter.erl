@@ -79,6 +79,18 @@ format(#{level := Level, msg := {report, #{label := {application_controller, pro
             Msg = lager_format:format("Application ~w started on node ~w", [Name, Node], maps:get(max_size, Config, 1024)),
             do_format(Level, Msg, Metadata, Config)
     end;
+format(#{level := Level, msg := {report, #{label := {application_controller, exit}, report := Report}}, meta := Metadata}, Config) ->
+    {exited, Reason} = lists:keyfind(exited, 1, Report),
+    case application:get_env(lager, suppress_application_start_stop) of
+        {ok, true} when Reason == stopped ->
+            ok;
+        _ ->
+            {application, Name} = lists:keyfind(application, 1, Report),
+            {_Md, Formatted} = format_reason_md(Reason),
+            Msg = lager_format:format("Application ~w exited with reason: ~s", [Name, Formatted], maps:get(max_size, Config, 1024)),
+            do_format(Level, Msg, Metadata, Config)
+    end;
+%% TODO handle proc_lib crash
 format(#{level := _Level, msg := {report, Report}, meta := _Metadata}, _Config) ->
     %do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
     io_lib:format("REPORT ~p~n", [Report]);
