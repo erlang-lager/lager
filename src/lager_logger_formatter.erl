@@ -74,8 +74,8 @@ format(#{level := Level, msg := {report, #{label := {application_controller, pro
     case application:get_env(lager, suppress_application_start_stop, false) of
         true -> "";
         false ->
-            {name, Name} = lists:keyfind(name, 1, Report),
-            {node, Node} = lists:keyfind(node, 1, Report),
+            {application, Name} = lists:keyfind(application, 1, Report),
+            {started_at, Node} = lists:keyfind(started_at, 1, Report),
             Msg = lager_format:format("Application ~w started on node ~w", [Name, Node], maps:get(max_size, Config, 1024)),
             do_format(Level, Msg, Metadata, Config)
     end;
