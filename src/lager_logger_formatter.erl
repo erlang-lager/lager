@@ -70,6 +70,15 @@ format(#{level := Level, msg := {report, #{label := {supervisor, _Error}, report
                   end
           end,
     do_format(Level, Msg, Metadata, Config);
+format(#{level := Level, msg := {report, #{label := {application_controller, progress}, report := Report}}, meta := Metadata}, Config) ->
+    case application:get_env(lager, suppress_application_start_stop, false) of
+        true -> "";
+        false ->
+            {name, Name} = lists:keyfind(name, 1, Report),
+            {node, Node} = lists:keyfind(node, 1, Report),
+            Msg = lager_format:format("Application ~w started on node ~w", [Name, Node], maps:get(max_size, Config, 1024)),
+            do_format(Level, Msg, Metadata, Config)
+    end;
 format(#{level := _Level, msg := {report, Report}, meta := _Metadata}, _Config) ->
     %do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
     io_lib:format("REPORT ~p~n", [Report]);
