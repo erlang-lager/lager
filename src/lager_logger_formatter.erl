@@ -36,6 +36,7 @@ format(#{level := Level, msg := {report, #{label := {supervisor, progress}, repo
                           %% supervisor itself starting
                           {mfa, {Module, Function, Args}} = lists:keyfind(mfa, 1, Started),
                           {pid, Pid} = lists:keyfind(pid, 1, Started),
+                          io:format("~p ~p ~p", [Name, {Module, Function, Args}, Pid]),
                           lager_format:format("Supervisor ~w started as ~p at pid ~w", [Name, error_logger_lager_h:format_mfa(Module, Function, Args), Pid], maps:get(max_size, Config, 1024));
                       {id, ChildID} ->
                           case lists:keyfind(pid, 1, Started) of
