@@ -83,9 +83,13 @@ report_cb(#{label := {application_controller, exit}, report := Report}) ->
     end.
 %% TODO handle proc_lib crash
 
-format(#{level := _Level, msg := {report, Report}, meta := _Metadata}, _Config) ->
-    %do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
-    io_lib:format("REPORT ~p~n", [Report]);
+format(#{msg := {report, _Report}, meta := Metadata} = Event, #{report_cb := Fun} = Config) when is_function(Fun, 1); is_function(Fun, 2) ->
+    format(Event#{meta => Metadata#{report_cb => Fun}}, maps:remove(report_cb, Config));
+format(#{level := _Level, msg := {report, Report}, meta := #{report_cb := Fun}} = Event, Config) when is_function(Fun, 1) ->
+    case Fun(Report) of
+        {Format, Args} when is_list(Format), is_list(Args) ->
+            format(Event#{msg => {Format, Args}}, Config)
+    end;
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
     do_format(Level, String, Metadata, Config);
 format(#{level := Level, msg := {FmtStr, FmtArgs}, meta := Metadata}, Config) ->
