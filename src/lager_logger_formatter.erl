@@ -49,9 +49,30 @@ format(#{level := Level, msg := {report, #{label := {supervisor, progress}, repo
                   end,
             do_format(Level, Msg, Metadata, Config)
     end;
-format(#{level := Level, msg := {report, Report}, meta := Metadata}, Config) ->
+format(#{level := Level, msg := {report, #{label := {supervisor, _Error}, report := Report}}, meta := Metadata}, Config) ->
+    {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
+    {reason, Reason} = lists:keyfind(reason, 1, Report),
+    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    {errorContext, ErrorContext} = lists:keyfind(errorContext, 1, Report),
+    {offender, Offender} = lists:keyfind(offender, 1, Report),
+    Msg = case lists:keyfind(mod, 1, Offender) of
+              {mod, _Mod} ->
+                  {pid, Pid} = lists:keyfind(pid, 1, Offender),
+                  %% this comes from supervisor_bridge
+                  lager_format:format("Supervisor ~w had ~p ~p with reason ~s", [Name, Pid, ErrorContext, Formatted], maps:get(max_size, Config, 1024));
+              false ->
+                  {id, ChildID} = lists:keyfind(id, 1, Offender),
+                  case lists:keyfind(pid, 1, Offender) of
+                      {pid, Pid} ->
+                          lager_format:format("Supervisor ~w had ~p ~p ~p with reason ~s", [Name, ChildID, Pid, ErrorContext, Formatted], maps:get(max_size, Config, 1024));
+                      false ->
+                          lager_format:format("Supervisor ~w had ~p ~p with reason ~s", [Name, ChildID, ErrorContext, Formatted], maps:get(max_size, Config, 1024))
+                  end
+          end,
+    do_format(Level, Msg, Metadata, Config);
+format(#{level := _Level, msg := {report, Report}, meta := _Metadata}, _Config) ->
     %do_format(Level, (maps:get(report_cb, Metadata))(Report), Metadata, Config);
-    "";
+    io_lib:format("REPORT ~p~n", [Report]);
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
     do_format(Level, String, Metadata, Config);
 format(#{level := Level, msg := {FmtStr, FmtArgs}, meta := Metadata}, Config) ->
