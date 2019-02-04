@@ -4,22 +4,22 @@
 
 -export([report_cb/1, format/2]).%, check_config/1]).
 
-report_cb(#{msg := {report, #{label := {gen_server, terminate}, name := Name, reason := Reason}}}) ->
+report_cb(#{label := {gen_server, terminate}, name := Name, reason := Reason}) ->
     {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
     {"gen_server ~w terminated with reason: ~s", [Name, Formatted]};
-report_cb(#{msg := {report, #{label := {gen_fsm, terminate}, name := Name, state_name := StateName, reason := Reason}}}) ->
+report_cb(#{label := {gen_fsm, terminate}, name := Name, state_name := StateName, reason := Reason}) ->
     {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
     {"gen_fsm ~w in state ~w terminated with reason: ~s", [Name, StateName, Formatted]};
-report_cb(#{msg := {report, #{label := {gen_event, terminate}, name := Name, handler := Handler, reason := Reason}}}) ->
+report_cb(#{label := {gen_event, terminate}, name := Name, handler := Handler, reason := Reason}) ->
     {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
     {"gen_event ~w installed in ~w terminated with reason: ~s", [Handler, Name, Formatted]};
-report_cb(#{msg := {report, #{label := {gen_statem, terminate}, name := Name, reason := Reason}}}) ->
+report_cb(#{label := {gen_statem, terminate}, name := Name, reason := Reason}) ->
     {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
     %% XXX I can't find the FSM statename in the error report, maybe it should be added
     {"gen_statem ~w terminated with reason: ~s", [Name, Formatted]};
 report_cb(#{msg := {report, #{label := {Behaviour, no_handle_info}, mod := Mod, msg := Msg}}}) ->
     {"undefined handle_info for ~p in ~s ~p", [Msg, Behaviour, Mod]};
-report_cb(#{msg := {report, #{label := {supervisor, progress}, report := Report}}}) ->
+report_cb(#{label := {supervisor, progress}, report := Report}) ->
     case application:get_env(lager, suppress_supervisor_start_stop, false) of
         true ->
             {"", []};
@@ -43,7 +43,7 @@ report_cb(#{msg := {report, #{label := {supervisor, progress}, report := Report}
                     end
             end
     end;
-report_cb(#{msg := {report, #{label := {supervisor, _Error}, report := Report}}}) ->
+report_cb(#{label := {supervisor, _Error}, report := Report}) ->
     {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
     {reason, Reason} = lists:keyfind(reason, 1, Report),
     {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
@@ -63,7 +63,7 @@ report_cb(#{msg := {report, #{label := {supervisor, _Error}, report := Report}}}
                     {"Supervisor ~w had ~p ~p with reason ~s", [Name, ChildID, ErrorContext, Formatted]}
             end
     end;
-report_cb(#{msg := {report, #{label := {application_controller, progress}, report := Report}}}) ->
+report_cb(#{label := {application_controller, progress}, report := Report}) ->
     case application:get_env(lager, suppress_application_start_stop, false) of
         true -> {"", []};
         false ->
@@ -71,7 +71,7 @@ report_cb(#{msg := {report, #{label := {application_controller, progress}, repor
             {started_at, Node} = lists:keyfind(started_at, 1, Report),
             {"Application ~w started on node ~w", [Name, Node]}
     end;
-report_cb(#{msg := {report, #{label := {application_controller, exit}, report := Report}}}) ->
+report_cb(#{label := {application_controller, exit}, report := Report}) ->
     {exited, Reason} = lists:keyfind(exited, 1, Report),
     case application:get_env(lager, suppress_application_start_stop) of
         {ok, true} when Reason == stopped ->
