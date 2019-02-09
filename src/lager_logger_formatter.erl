@@ -22,7 +22,7 @@ report_cb(#{msg := {report, #{label := {Behaviour, no_handle_info}, mod := Mod, 
 report_cb(#{label := {supervisor, progress}, report := Report}) ->
     case application:get_env(lager, suppress_supervisor_start_stop, false) of
         true ->
-            {"", []};
+            "";
         false ->
             {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
             {started, Started} = lists:keyfind(started, 1, Report),
@@ -65,7 +65,7 @@ report_cb(#{label := {supervisor, _Error}, report := Report}) ->
     end;
 report_cb(#{label := {application_controller, progress}, report := Report}) ->
     case application:get_env(lager, suppress_application_start_stop, false) of
-        true -> {"", []};
+        true -> "";
         false ->
             {application, Name} = lists:keyfind(application, 1, Report),
             {started_at, Node} = lists:keyfind(started_at, 1, Report),
@@ -75,7 +75,7 @@ report_cb(#{label := {application_controller, exit}, report := Report}) ->
     {exited, Reason} = lists:keyfind(exited, 1, Report),
     case application:get_env(lager, suppress_application_start_stop) of
         {ok, true} when Reason == stopped ->
-            {"", []};
+            "";
         _ ->
             {application, Name} = lists:keyfind(application, 1, Report),
             {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
