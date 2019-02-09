@@ -90,7 +90,7 @@ format(#{level := _Level, msg := {report, Report}, meta := #{report_cb := Fun}} 
         {Format, Args} when is_list(Format), is_list(Args) ->
             format(Event#{msg => {Format, Args}}, Config);
         String ->
-            format(Event#{msg => String}, Config)
+            format(Event#{msg => {string, String}}, Config)
     end;
 format(#{level := Level, msg := {string, String}, meta := Metadata}, Config) ->
     do_format(Level, String, Metadata, Config);
