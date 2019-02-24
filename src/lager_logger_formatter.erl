@@ -5,16 +5,16 @@
 -export([report_cb/1, format/2]).%, check_config/1]).
 
 report_cb(#{label := {gen_server, terminate}, name := Name, reason := Reason}) ->
-    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Formatted = error_logger_lager_h:format_reason(Reason),
     {"gen_server ~w terminated with reason: ~s", [Name, Formatted]};
 report_cb(#{label := {gen_fsm, terminate}, name := Name, state_name := StateName, reason := Reason}) ->
-    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Formatted = error_logger_lager_h:format_reason(Reason),
     {"gen_fsm ~w in state ~w terminated with reason: ~s", [Name, StateName, Formatted]};
 report_cb(#{label := {gen_event, terminate}, name := Name, handler := Handler, reason := Reason}) ->
-    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Formatted = error_logger_lager_h:format_reason(Reason),
     {"gen_event ~w installed in ~w terminated with reason: ~s", [Handler, Name, Formatted]};
 report_cb(#{label := {gen_statem, terminate}, name := Name, reason := Reason}) ->
-    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Formatted = error_logger_lager_h:format_reason(Reason),
     %% XXX I can't find the FSM statename in the error report, maybe it should be added
     {"gen_statem ~w terminated with reason: ~s", [Name, Formatted]};
 report_cb(#{msg := {report, #{label := {Behaviour, no_handle_info}, mod := Mod, msg := Msg}}}) ->
@@ -46,7 +46,7 @@ report_cb(#{label := {supervisor, progress}, report := Report}) ->
 report_cb(#{label := {supervisor, _Error}, report := Report}) ->
     {supervisor, Name} = lists:keyfind(supervisor, 1, Report),
     {reason, Reason} = lists:keyfind(reason, 1, Report),
-    {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+    Formatted = error_logger_lager_h:format_reason(Reason),
     {errorContext, ErrorContext} = lists:keyfind(errorContext, 1, Report),
     {offender, Offender} = lists:keyfind(offender, 1, Report),
     case lists:keyfind(mod, 1, Offender) of
@@ -78,7 +78,7 @@ report_cb(#{label := {application_controller, exit}, report := Report}) ->
             {"", []};
         _ ->
             {application, Name} = lists:keyfind(application, 1, Report),
-            {_Md, Formatted} = error_logger_lager_h:format_reason_md(Reason),
+            Formatted = error_logger_lager_h:format_reason(Reason),
             {"Application ~w exited with reason: ~s", [Name, Formatted]}
     end.
 %% TODO handle proc_lib crash
