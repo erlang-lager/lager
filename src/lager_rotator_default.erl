@@ -37,6 +37,8 @@ open_logfile(Name, Buffer) ->
         Z -> Z
     end.
 
+ensure_logfile(Name, undefined, _Inode, Buffer) ->
+    open_logfile(Name, Buffer);
 ensure_logfile(Name, FD, Inode, Buffer) ->
     case file:read_file_info(Name) of
         {ok, FInfo} ->
@@ -80,12 +82,15 @@ rotate_logfile(File, 0) ->
         Error ->
             Error
     end;
-rotate_logfile(File, 1) ->
-    _ = file:rename(File, File++".0"),
-    rotate_logfile(File, 0);
-rotate_logfile(File, Count) ->
-    _ = file:rename(File ++ "." ++ integer_to_list(Count - 2), File ++ "." ++ integer_to_list(Count - 1)),
-    rotate_logfile(File, Count - 1).
+rotate_logfile(File0, 1) ->
+    File1 = File0 ++ ".0",
+    _ = file:rename(File0, File1),
+    rotate_logfile(File0, 0);
+rotate_logfile(File0, Count) ->
+    File1 = File0 ++ "." ++ integer_to_list(Count - 2),
+    File2 = File0 ++ "." ++ integer_to_list(Count - 1),
+    _ = file:rename(File1, File2),
+    rotate_logfile(File0, Count - 1).
 
 -ifdef(TEST).
 

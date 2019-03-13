@@ -190,8 +190,8 @@ handle_event(_Event, State) ->
 
 %% @private
 handle_info({rotate, File}, #state{name=File,count=Count,date=Date,rotator=Rotator} = State) ->
-    _ = Rotator:rotate_logfile(File, Count),
     State1 = close_file(State),
+    _ = Rotator:rotate_logfile(File, Count),
     schedule_rotation(File, Date),
     {ok, State1};
 handle_info({shaper_expired, Name}, #state{shaper=Shaper, name=Name, formatter=Formatter, formatter_config=FormatConfig} = State) ->
