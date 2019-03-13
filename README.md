@@ -1140,6 +1140,11 @@ Example Usage:
 
 3.x Changelog
 -------------
+
+3.6.9 - 13 March 2019
+
+    * Bugfix: Fix file rotation on windows (#493)
+
 3.6.8 - 21 December 2018
 
     * Documentation: Document the error_logger_whitelist environment variable. (#489)
