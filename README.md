@@ -623,7 +623,7 @@ catch
     Class:Reason:Stacktrace ->
         lager:error(
             "~nStacktrace:~s",
-            [lager:pr_stacktrace(Stacktrace), {Class, Reason}])
+            [lager:pr_stacktrace(Stacktrace, {Class, Reason})])
 end.
 ```
 
