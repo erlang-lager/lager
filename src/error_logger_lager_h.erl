@@ -45,16 +45,16 @@
     case ?SHOULD_LOG(Sink, Level) of
         true ->
             _ =lager:log(Sink, Level, Pid, Msg, []),
-            ok;
-        _ -> ok
+            logged;
+        _ -> no_log
     end).
 
 -define(LOGFMT(Sink, Level, Pid, Fmt, Args),
     case ?SHOULD_LOG(Sink, Level) of
         true ->
             _ = lager:log(Sink, Level, Pid, Fmt, Args),
-            ok;
-        _ -> ok
+            logged;
+        _ -> no_log
     end).
 
 -ifdef(TEST).
@@ -179,7 +179,7 @@ eval_gl(Event, State) ->
     log_event(Event, State).
 
 log_event(Event, #state{sink=Sink} = State) ->
-    case Event of
+    DidLog = case Event of
         {error, _GL, {Pid, Fmt, Args}} ->
             FormatRaw = State#state.raw,
             case {FormatRaw, Fmt} of
@@ -316,7 +316,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
                     case application:get_env(lager, suppress_application_start_stop) of
                         {ok, true} when Reason == stopped ->
-                            ok;
+                            no_log;
                         _ ->
                             {Md, Formatted} = format_reason_md(Reason),
                             ?LOGFMT(Sink, info, [{pid, Pid} | Md], "Application ~w exited with reason: ~s",
@@ -333,7 +333,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                 [{application, App}, {started_at, Node}] ->
                     case application:get_env(lager, suppress_application_start_stop) of
                         {ok, true} ->
-                            ok;
+                            no_log;
                         _ ->
                             ?LOGFMT(Sink, info, P, "Application ~w started on node ~w",
                                     [App, Node])
@@ -341,7 +341,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                 [{started, Started}, {supervisor, Name}] ->
                     case application:get_env(lager, suppress_supervisor_start_stop, false) of
                         true ->
-                            ok;
+                            no_log;
                         _ ->
                             MFA = format_mfa(get_value(mfargs, Started)),
                             Pid = get_value(pid, Started),
@@ -354,7 +354,20 @@ log_event(Event, #state{sink=Sink} = State) ->
         _ ->
             ?LOGFMT(Sink, warning, self(), "Unexpected error_logger event ~w", [Event])
     end,
-    {ok, State}.
+    case DidLog of
+        logged ->
+            {ok, State};
+        no_log ->
+            Shaper = State#state.shaper,
+            {ok, State#state{
+                shaper = Shaper#lager_shaper{
+                    mps = Shaper#lager_shaper.mps - 1
+                }
+            }};
+        Invalid ->
+            ?LOGFMT(Sink, error, self(), "Unexpeted log result: ~p", [Invalid]),
+            {ok, State}
+    end.
 
 format_crash_report(Report, Neighbours) ->
     Name = case get_value(registered_name, Report, []) of
@@ -646,4 +659,98 @@ no_silent_hwm_drops_test_() ->
         ]
     }.
 
+shaper_does_not_forward_sup_progress_messages_to_info_level_backend_test_() ->
+    {timeout, 10000,
+        [fun() ->
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, info}]),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, error_logger_hwm, 5),
+                application:set_env(lager, suppress_supervisor_start_stop, false),
+                application:set_env(lager, suppress_application_start_stop, false),
+                application:unset_env(lager, crash_log),
+                lager:start(),
+                try
+                    PidPlaceholder = self(),
+                    SupervisorMsg =
+                     [{supervisor, {PidPlaceholder,rabbit_connection_sup}},
+                      {started,
+                          [{pid, PidPlaceholder},
+                           {name,helper_sup},
+                           {mfargs,
+                               {rabbit_connection_helper_sup,start_link,[]}},
+                           {restart_type,intrinsic},
+                           {shutdown,infinity},
+                           {child_type,supervisor}]}],
+                    ApplicationExit =
+                        [{application, error_logger_lager_h_test},
+                         {exited, stopped},
+                         {type, permanent}],
+
+                    error_logger:info_report("This is not a progress message"),
+                    error_logger:info_report(ApplicationExit),
+                    [error_logger:info_report(progress, SupervisorMsg) || _K <- lists:seq(0, 100)],
+                    error_logger:info_report("This is not a progress message 2"),
+
+                    timer:sleep(1000),
+
+                    3 = lager_test_backend:count(),
+                    0 = lager_test_backend:count_ignored() % it's not forwarded at all
+                after
+                    application:stop(lager),
+                    application:stop(goldrush),
+                    error_logger:tty(true)
+                end
+            end
+        ]
+    }.
+
+supressed_messages_are_not_counted_for_hwm_test_() ->
+    {timeout, 10000,
+        [fun() ->
+                error_logger:tty(false),
+                application:load(lager),
+                application:set_env(lager, handlers, [{lager_test_backend, debug}]),
+                application:set_env(lager, error_logger_redirect, true),
+                application:set_env(lager, error_logger_hwm, 5),
+                application:set_env(lager, suppress_supervisor_start_stop, true),
+                application:set_env(lager, suppress_application_start_stop, true),
+                application:unset_env(lager, crash_log),
+                lager:start(),
+                try
+                    PidPlaceholder = self(),
+                    SupervisorMsg =
+                     [{supervisor, {PidPlaceholder,rabbit_connection_sup}},
+                      {started,
+                          [{pid, PidPlaceholder},
+                           {name,helper_sup},
+                           {mfargs,
+                               {rabbit_connection_helper_sup,start_link,[]}},
+                           {restart_type,intrinsic},
+                           {shutdown,infinity},
+                           {child_type,supervisor}]}],
+                    ApplicationExit =
+                        [{application, error_logger_lager_h_test},
+                         {exited, stopped},
+                         {type, permanent}],
+
+                    lager_test_backend:flush(),
+                    error_logger:info_report("This is not a progress message"),
+                    [error_logger:info_report(ApplicationExit) || _K <- lists:seq(0, 100)],
+                    [error_logger:info_report(progress, SupervisorMsg) || _K <- lists:seq(0, 100)],
+                    error_logger:info_report("This is not a progress message 2"),
+
+                    timer:sleep(1000),
+
+                    2 = lager_test_backend:count(),
+                    0 = lager_test_backend:count_ignored()
+                after
+                    application:stop(lager),
+                    application:stop(goldrush),
+                    error_logger:tty(true)
+                end
+            end
+        ]
+    }.
 -endif.
