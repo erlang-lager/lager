@@ -50,7 +50,9 @@
     flush/0,
     message_stuffer/3,
     pop/0,
-    print_state/0
+    pop_ignored/0,
+    print_state/0,
+    get_buffer/0
 ]).
 -endif.
 
@@ -70,6 +72,15 @@ handle_call(pop, #state{buffer=Buffer} = State) ->
         [H|T] ->
             {ok, H, State#state{buffer=T}}
     end;
+handle_call(pop_ignored, #state{ignored=Ignored} = State) ->
+    case Ignored of
+        [] ->
+            {ok, undefined, State};
+        [H|T] ->
+            {ok, H, State#state{ignored=T}}
+    end;
+handle_call(get_buffer, #state{buffer=Buffer} = State) ->
+    {ok, Buffer, State};
 handle_call(get_loglevel, #state{level=Level} = State) ->
     {ok, Level, State};
 handle_call({set_loglevel, Level}, State) ->
@@ -94,7 +105,7 @@ handle_event({log, Msg},
                                lager_msg:datetime(Msg),
                                lager_msg:message(Msg), lager_msg:metadata(Msg)}]}};
         _ ->
-            {ok, State#state{ignored=Ignored ++ [ignored]}}
+            {ok, State#state{ignored=Ignored ++ [Msg]}}
     end;
 handle_event(_Event, State) ->
     {ok, State}.
@@ -113,6 +124,12 @@ code_change(_OldVsn, State, _Extra) ->
 pop() ->
     pop(lager_event).
 
+pop_ignored() ->
+    pop_ignored(lager_event).
+
+get_buffer() ->
+    get_buffer(lager_event).
+
 count() ->
     count(lager_event).
 
@@ -130,6 +147,12 @@ print_bad_state() ->
 
 pop(Sink) ->
     gen_event:call(Sink, ?MODULE, pop).
+
+pop_ignored(Sink) ->
+    gen_event:call(Sink, ?MODULE, pop_ignored).
+
+get_buffer(Sink) ->
+    gen_event:call(Sink, ?MODULE, get_buffer).
 
 count(Sink) ->
     gen_event:call(Sink, ?MODULE, count).

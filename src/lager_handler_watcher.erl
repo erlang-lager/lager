@@ -27,6 +27,7 @@
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-export([pop_until/2]).
 -endif.
 
 %% callbacks
