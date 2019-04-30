@@ -314,8 +314,8 @@ log_event(Event, #state{sink=Sink} = State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {exited, Reason}, {type, _Type}] ->
-                    case application:get_env(lager, suppress_application_start_stop) of
-                        {ok, true} when Reason == stopped ->
+                    case application:get_env(lager, suppress_application_start_stop, false) of
+                        true when Reason == stopped ->
                             no_log;
                         _ ->
                             {Md, Formatted} = format_reason_md(Reason),
@@ -331,8 +331,8 @@ log_event(Event, #state{sink=Sink} = State) ->
             Details = lists:sort(D),
             case Details of
                 [{application, App}, {started_at, Node}] ->
-                    case application:get_env(lager, suppress_application_start_stop) of
-                        {ok, true} ->
+                    case application:get_env(lager, suppress_application_start_stop, false) of
+                        true ->
                             no_log;
                         _ ->
                             ?LOGFMT(Sink, info, P, "Application ~w started on node ~w",
@@ -640,16 +640,12 @@ no_silent_hwm_drops_test_() ->
                 try
                     {_, _, MS} = os:timestamp(),
                     timer:sleep((1000000 - MS) div 1000 + 1),
-                    %start close to the beginning of a new second
+                    % start close to the beginning of a new second
                     [error_logger:error_msg("Foo ~p~n", [K]) || K <- lists:seq(1, 15)],
-                    timer:sleep(1000),
-                    lager_handler_watcher:pop_until("lager_error_logger_h dropped 10 messages in the last second that exceeded the limit of 5 messages/sec",
-                        fun lists:flatten/1),
-                    %and once again
+                    wait_for_message("lager_error_logger_h dropped 10 messages in the last second that exceeded the limit of 5 messages/sec", 100, 50),
+                    % and once again
                     [error_logger:error_msg("Foo1 ~p~n", [K]) || K <- lists:seq(1, 20)],
-                    timer:sleep(1000),
-                    lager_handler_watcher:pop_until("lager_error_logger_h dropped 15 messages in the last second that exceeded the limit of 5 messages/sec",
-                        fun lists:flatten/1)
+                    wait_for_message("lager_error_logger_h dropped 15 messages in the last second that exceeded the limit of 5 messages/sec", 100, 50)
                 after
                     application:stop(lager),
                     application:stop(goldrush),
@@ -693,10 +689,12 @@ shaper_does_not_forward_sup_progress_messages_to_info_level_backend_test_() ->
                     [error_logger:info_report(progress, SupervisorMsg) || _K <- lists:seq(0, 100)],
                     error_logger:info_report("This is not a progress message 2"),
 
-                    timer:sleep(1000),
-
-                    3 = lager_test_backend:count(),
-                    0 = lager_test_backend:count_ignored() % it's not forwarded at all
+                    % Note: this gets logged in slow environments:
+                    % Application lager started on node nonode@nohost
+                    wait_for_count(fun lager_test_backend:count/0, [3, 4], 100, 50),
+                    % Note: this debug msg gets ignored in slow environments:
+                    % Lager installed handler lager_test_backend into lager_event
+                    wait_for_count(fun lager_test_backend:count_ignored/0, [0, 1], 100, 50)
                 after
                     application:stop(lager),
                     application:stop(goldrush),
@@ -741,10 +739,8 @@ supressed_messages_are_not_counted_for_hwm_test_() ->
                     [error_logger:info_report(progress, SupervisorMsg) || _K <- lists:seq(0, 100)],
                     error_logger:info_report("This is not a progress message 2"),
 
-                    timer:sleep(1000),
-
-                    2 = lager_test_backend:count(),
-                    0 = lager_test_backend:count_ignored()
+                    wait_for_count(fun lager_test_backend:count/0, 2, 100, 50),
+                    wait_for_count(fun lager_test_backend:count_ignored/0, 0, 100, 50)
                 after
                     application:stop(lager),
                     application:stop(goldrush),
@@ -753,4 +749,42 @@ supressed_messages_are_not_counted_for_hwm_test_() ->
             end
         ]
     }.
+
+wait_for_message(Expected, Tries, Sleep) ->
+    maybe_find_expected_message(lager_test_backend:get_buffer(), Expected, Tries, Sleep).
+
+maybe_find_expected_message(_Buffer, Expected, 0, _Sleep) ->
+    throw({not_found, Expected});
+maybe_find_expected_message([], Expected, Tries, Sleep) ->
+    timer:sleep(Sleep),
+    maybe_find_expected_message(lager_test_backend:get_buffer(), Expected, Tries - 1, Sleep);
+maybe_find_expected_message([{_Severity, _Date, Msg, _Metadata}|T], Expected, Tries, Sleep) ->
+    case lists:flatten(Msg) of
+        Expected ->
+            ok;
+        _ ->
+            maybe_find_expected_message(T, Expected, Tries, Sleep)
+    end.
+
+wait_for_count(Fun, _Expected, 0, _Sleep) ->
+    Actual = Fun(),
+    Msg = io_lib:format("wait_for_count: fun ~p final value: ~p~n", [Fun, Actual]),
+    throw({failed, Msg});
+wait_for_count(Fun, Expected, Tries, Sleep) when is_list(Expected) ->
+    Actual = Fun(),
+    case lists:member(Actual, Expected) of
+        true ->
+            ok;
+        false ->
+            timer:sleep(Sleep),
+            wait_for_count(Fun, Expected, Tries - 1, Sleep)
+    end;
+wait_for_count(Fun, Expected, Tries, Sleep) ->
+    case Fun() of
+        Expected ->
+            ok;
+        _ ->
+            timer:sleep(Sleep),
+            wait_for_count(Fun, Expected, Tries - 1, Sleep)
+    end.
 -endif.
