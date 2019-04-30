@@ -1141,6 +1141,11 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.6.10 - 30 April 2019
+
+    * Documentation: Fix pr_stacktrace invocation example (#494)
+    * Bugfix: Do not count suppressed messages for message drop counts (#499)
+
 3.6.9 - 13 March 2019
 
     * Bugfix: Fix file rotation on windows (#493)
