@@ -167,7 +167,7 @@ start_error_logger_handler(true, HWM, WhiteList) ->
             %%
             %% Longer term we should be installing a logger handler instead, but this will bridge the gap
             %% for now.
-            error_logger:start(),
+            _ = error_logger:start(),
             _ = logger:add_handler(error_logger,error_logger,#{level=>info,filter_default=>log}),
             ok = maybe_remove_logger_handler();
         _ ->

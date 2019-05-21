@@ -530,7 +530,7 @@ check_hwm(Shaper = #lager_shaper{lasttime = Last, dropped = Drop}) ->
                     end,
             {false, 0, Shaper#lager_shaper{dropped=Drop+NewDrops, timer=Timer}};
         _ ->
-            erlang:cancel_timer(Shaper#lager_shaper.timer),
+            _ = erlang:cancel_timer(Shaper#lager_shaper.timer),
             %% different second, reset all counters and allow it
             {true, Drop, Shaper#lager_shaper{dropped = 0, mps=0, lasttime = Now}}
     end.

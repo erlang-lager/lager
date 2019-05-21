@@ -77,7 +77,7 @@ rotate_logfile(File, 0) ->
     %% open the file in write-only mode to truncate/create it
     case file:open(File, [write]) of
         {ok, FD} ->
-            file:close(FD),
+            _ = file:close(FD),
             ok;
         Error ->
             Error
