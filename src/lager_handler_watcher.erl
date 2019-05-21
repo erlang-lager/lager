@@ -75,7 +75,7 @@ handle_info({gen_event_EXIT, Module, {'EXIT', {kill_me, [_KillerHWM, KillerReins
     {message_queue_len, Len} = process_info(SinkPid, message_queue_len),
     error_logger:error_msg("Killing sink ~p, current message_queue_len:~p~n", [Sink, Len]),
     exit(SinkPid, kill),
-    timer:apply_after(KillerReinstallAfter, lager_app, start_handler, [Sink, Module, Config]),
+    _ = timer:apply_after(KillerReinstallAfter, lager_app, start_handler, [Sink, Module, Config]),
     {stop, normal, State};
 handle_info({gen_event_EXIT, Module, Reason}, #state{module=Module,
         config=Config, sink=Sink} = State) ->
@@ -98,7 +98,7 @@ handle_info(stop, State) ->
     {stop, normal, State};
 handle_info({'EXIT', _Pid, killed}, #state{module=Module, config=Config, sink=Sink} = State) ->
     Tmr = application:get_env(lager, killer_reinstall_after, 5000),
-    timer:apply_after(Tmr, lager_app, start_handler, [Sink, Module, Config]),
+    _ = timer:apply_after(Tmr, lager_app, start_handler, [Sink, Module, Config]),
     {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.

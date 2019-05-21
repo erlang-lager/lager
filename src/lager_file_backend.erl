@@ -195,17 +195,17 @@ handle_info({rotate, File}, #state{name=File,count=Count,date=Date,rotator=Rotat
     schedule_rotation(File, Date),
     {ok, State1};
 handle_info({shaper_expired, Name}, #state{shaper=Shaper, name=Name, formatter=Formatter, formatter_config=FormatConfig} = State) ->
-    case Shaper#lager_shaper.dropped of
-        0 ->
-            ok;
-        Dropped ->
-            Report = io_lib:format(
-                       "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
-                       [Dropped, Shaper#lager_shaper.hwm]),
-            ReportMsg = lager_msg:new(Report, warning, [], []),
-            write(State, lager_msg:timestamp(ReportMsg),
-                  lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig))
-    end,
+    _ = case Shaper#lager_shaper.dropped of
+            0 ->
+                ok;
+            Dropped ->
+                Report = io_lib:format(
+                           "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
+                           [Dropped, Shaper#lager_shaper.hwm]),
+                ReportMsg = lager_msg:new(Report, warning, [], []),
+                write(State, lager_msg:timestamp(ReportMsg),
+                      lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig))
+        end,
     {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=0, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.

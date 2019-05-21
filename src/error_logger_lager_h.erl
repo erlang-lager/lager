@@ -360,13 +360,11 @@ log_event(Event, #state{sink=Sink} = State) ->
         no_log ->
             Shaper = State#state.shaper,
             {ok, State#state{
-                shaper = Shaper#lager_shaper{
-                    mps = Shaper#lager_shaper.mps - 1
-                }
-            }};
-        Invalid ->
-            ?LOGFMT(Sink, error, self(), "Unexpeted log result: ~p", [Invalid]),
-            {ok, State}
+                   shaper = Shaper#lager_shaper{
+                              mps = Shaper#lager_shaper.mps - 1
+                             }
+                  }
+            }
     end.
 
 format_crash_report(Report, Neighbours) ->

@@ -691,7 +691,7 @@ rotate_handler(Handler, Sink) ->
 
 %% @private
 trace_func(#trace_func_state_v1{pid=Pid, level=Level, format_string=Fmt}=FuncState, Event, ProcState) ->
-    lager:log(Level, Pid, Fmt, [Event, ProcState]),
+    _ = lager:log(Level, Pid, Fmt, [Event, ProcState]),
     check_timeout(decrement_count(FuncState)).
 
 %% @private
