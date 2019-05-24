@@ -206,9 +206,13 @@ log_event(Event, #state{sink=Sink} = State) ->
                     {Type, Name, StateName, Reason} = case Args of
                         [TName, _Msg, TStateName, _StateData, TReason] ->
                             {gen_fsm, TName, TStateName, TReason};
-                        [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _FsmType, Stacktrace] ->
+                        %% Handle changed logging in gen_fsm stdlib-3.9 (TPid, ClientArgs)
+                        [TName, _Msg, TPid, TStateName, _StateData, TReason | _ClientArgs] when is_pid(TPid), is_atom(TStateName) ->
+                            {gen_fsm, TName, TStateName, TReason};
+                        %% Handle changed logging in gen_statem stdlib-3.9 (ClientArgs)
+                        [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _CallbackMode, Stacktrace | _ClientArgs] ->
                             {gen_statem, TName, TStateName, {TReason, Stacktrace}};
-                        [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _FsmType, Stacktrace] ->
+                        [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _CallbackMode, Stacktrace | _ClientArgs] ->
                             %% sometimes gen_statem wraps its statename/data in a list for some reason???
                             {gen_statem, TName, TStateName, {TReason, Stacktrace}}
                     end,
