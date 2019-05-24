@@ -1141,6 +1141,12 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.7.0 - 24 May 2019
+
+    * Policy: Officially ending support for OTP 19 (Support OTP 20, 21, 22)
+    * Cleanup: Fix all dialyzer errors
+    * Bugfix: Minor changes to FSM/statem exits in OTP 22.
+
 3.6.10 - 30 April 2019
 
     * Documentation: Fix pr_stacktrace invocation example (#494)
