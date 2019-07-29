@@ -20,8 +20,6 @@
 
 -module(lager_rotate).
 
--compile(export_all).
-
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
