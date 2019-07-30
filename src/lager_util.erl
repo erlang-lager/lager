@@ -32,7 +32,8 @@
 
 -ifdef(TEST).
 -export([create_test_dir/0,
-         delete_test_dir/1,
+         get_test_dir/0,
+         delete_test_dir/0,
          set_dir_permissions/2]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -828,23 +829,48 @@ sink_name_test_() ->
     ].
 
 create_test_dir() ->
-    Dir = filename:join(["/tmp", "lager_test",
+    {ok, Tmp} = get_temp_dir(),
+    Dir = filename:join([Tmp, "lager_test",
         erlang:integer_to_list(erlang:phash2(os:timestamp()))]),
     ?assertEqual(ok, filelib:ensure_dir(Dir)),
-    case file:make_dir(Dir) of
-        ok ->
-            Dir;
-        Err ->
-            ?assertEqual({error, eexist}, Err),
-            create_test_dir()
-    end.
+    TestDir = case file:make_dir(Dir) of
+                  ok ->
+                      Dir;
+                  Err ->
+                      ?assertEqual({error, eexist}, Err),
+                      create_test_dir()
+                  end,
+    ok = application:set_env(lager, test_dir, TestDir).
 
-delete_test_dir(Dir) ->
-    case otp_version() of
-        15 ->
-            os:cmd("rm -rf " ++ Dir);
-        _ ->
-            do_delete_test_dir(Dir)
+get_test_dir() ->
+    {ok, TestDir} = application:get_env(lager, test_dir),
+    TestDir.
+
+get_temp_dir() ->
+    Tmp = case os:getenv("TEMP") of
+              false ->
+                  case os:getenv("TMP") of
+                      false -> "/tmp";
+                      Dir1 -> Dir1
+                  end;
+               Dir0 -> Dir0
+          end,
+    ?assertEqual(true, filelib:is_dir(Tmp)),
+    {ok, Tmp}.
+
+delete_test_dir() ->
+    delete_test_dir(get_test_dir()).
+
+delete_test_dir(TestDir) ->
+    {OsType, _} = os:type(),
+    case {OsType, otp_version()} of
+        {win32, _} ->
+            application:stop(lager),
+            do_delete_test_dir(TestDir);
+        {unix, 15} ->
+            os:cmd("rm -rf " ++ TestDir);
+        {unix, _} ->
+            do_delete_test_dir(TestDir)
     end.
 
 do_delete_test_dir(Dir) ->
@@ -862,6 +888,16 @@ do_delete_test_dir(Dir) ->
             end
         end, Entries),
     ?assertEqual(ok, file:del_dir(Dir)).
+
+do_delete_file(_FsElem, 0) ->
+    ?assert(false);
+do_delete_file(FsElem, Attempts) ->
+    case file:delete(FsElem) of
+        ok -> ok;
+        Error ->
+            io:format(standard_error, "@@@@@@@@ DELETE FILE ~p ERROR ~p~n", [FsElem, Error]),
+            do_delete_file(FsElem, Attempts - 1)
+    end.
 
 set_dir_permissions(Perms, Dir) ->
     do_set_dir_permissions(os:type(), Perms, Dir).
