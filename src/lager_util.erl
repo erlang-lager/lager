@@ -31,7 +31,9 @@
 ]).
 
 -ifdef(TEST).
--export([create_test_dir/0, delete_test_dir/1]).
+-export([create_test_dir/0,
+         delete_test_dir/1,
+         set_dir_permissions/2]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
@@ -860,5 +862,14 @@ do_delete_test_dir(Dir) ->
             end
         end, Entries),
     ?assertEqual(ok, file:del_dir(Dir)).
+
+set_dir_permissions(Perms, Dir) ->
+    do_set_dir_permissions(os:type(), Perms, Dir).
+
+do_set_dir_permissions({win32, _}, _Perms, _Dir) ->
+    ok;
+do_set_dir_permissions({unix, _}, Perms, Dir) ->
+    os:cmd("chmod -R " ++ Perms ++ " " ++ Dir),
+    ok.
 
 -endif.

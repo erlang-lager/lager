@@ -138,22 +138,33 @@ rotate_file_zero_count_test() ->
 rotate_file_fail_test() ->
     TestDir = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
+
     %% set known permissions on it
-    os:cmd("chmod -R u+rwx " ++ TestDir),
+    ok = lager_util:set_dir_permissions("u+rwx", TestDir),
+
     %% write a file
     file:write_file(TestLog, "hello"),
-    %% hose up the permissions
-    os:cmd("chmod -R u-w " ++ TestDir),
-    ?assertMatch({error, _}, rotate_logfile(TestLog, 10)),
+
+    case os:type() of
+        {win32, _} -> ok;
+        _ ->
+            %% hose up the permissions
+            ok = lager_util:set_dir_permissions("u-w", TestDir),
+            ?assertMatch({error, _}, rotate_logfile(TestLog, 10))
+    end,
+
     %% check we still only have one file, rotation.log
     ?assertEqual([TestLog], filelib:wildcard(TestLog++"*")),
     ?assert(filelib:is_regular(TestLog)),
+
     %% fix the permissions
-    os:cmd("chmod -R u+w " ++ TestDir),
+    ok = lager_util:set_dir_permissions("u+w", TestDir),
+
     ?assertMatch(ok, rotate_logfile(TestLog, 10)),
     ?assert(filelib:is_regular(TestLog ++ ".0")),
     ?assertEqual(true, filelib:is_regular(TestLog)),
     ?assertEqual(2, length(filelib:wildcard(TestLog++"*"))),
+
     %% assert the new file is 0 size:
     case file:read_file_info(TestLog) of
         {ok, FInfo} ->
@@ -161,6 +172,7 @@ rotate_file_fail_test() ->
         _ ->
             ?assert(false)
     end,
+
     %% check that the .0 file now has the contents "hello"
     ?assertEqual({ok, <<"hello">>}, file:read_file(TestLog++".0")),
     lager_util:delete_test_dir(TestDir).
