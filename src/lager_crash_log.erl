@@ -52,6 +52,7 @@
         name :: string(),
         fd :: pid() | undefined,
         inode :: integer() | undefined,
+        ctime :: file:date_time() | undefined,
         fmtmaxbytes :: integer(),
         size :: integer(),
         date :: undefined | string(),
@@ -74,9 +75,9 @@ start(Filename, MaxBytes, Size, Date, Count, Rotator) ->
 init([RelFilename, MaxBytes, Size, Date, Count, Rotator]) ->
     Filename = lager_util:expand_path(RelFilename),
     case Rotator:open_logfile(Filename, false) of
-        {ok, {FD, Inode, _}} ->
+        {ok, {FD, Inode, Ctime, _Size}} ->
             schedule_rotation(Date),
-            {ok, #state{name=Filename, fd=FD, inode=Inode,
+            {ok, #state{name=Filename, fd=FD, inode=Inode, ctime=Ctime,
                     fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date,
                     rotator=Rotator}};
         {error, Reason} ->
@@ -188,7 +189,7 @@ sasl_limited_str(progress, Report, FmtMaxBytes) ->
 sasl_limited_str(crash_report, Report, FmtMaxBytes) ->
     lager_stdlib:proc_lib_format(Report, FmtMaxBytes).
 
-do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
+do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, ctime=Ctime, flap=Flap,
         fmtmaxbytes=FmtMaxBytes, size=RotSize, count=Count, rotator=Rotator} = State) ->
     %% borrowed from riak_err
     {ReportStr, Pid, MsgStr, _ErrorP} = case Event of
@@ -204,11 +205,11 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
     if ReportStr == ignore ->
             {ok, State};
         true ->
-            case Rotator:ensure_logfile(Name, FD, Inode, false) of
-                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+            case Rotator:ensure_logfile(Name, FD, Inode, Ctime, false) of
+                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize /= 0, Size > RotSize ->
                     _ = Rotator:rotate_logfile(Name, Count),
                     handle_cast({log, Event}, State);
-                {ok, {NewFD, NewInode, _Size}} ->
+                {ok, {NewFD, NewInode, NewCtime, _Size}} ->
                     {Date, TS} = lager_util:format_time(
                         lager_stdlib:maybe_utc(erlang:localtime())),
                     Time = [Date, " ", TS," =", ReportStr, "====\n"],
@@ -218,11 +219,11 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, flap=Flap,
                         {error, Reason} when Flap == false ->
                             ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
                                 [Name, file:format_error(Reason)]),
-                            {ok, State#state{fd=NewFD, inode=NewInode, flap=true}};
+                            {ok, State#state{fd=NewFD, inode=NewInode, ctime=NewCtime, flap=true}};
                         ok ->
-                            {ok, State#state{fd=NewFD, inode=NewInode, flap=false}};
+                            {ok, State#state{fd=NewFD, inode=NewInode, ctime=NewCtime, flap=false}};
                         _ ->
-                            {ok, State#state{fd=NewFD, inode=NewInode}}
+                            {ok, State#state{fd=NewFD, inode=NewInode, ctime=NewCtime}}
                     end;
                 {error, Reason} ->
                     case Flap of

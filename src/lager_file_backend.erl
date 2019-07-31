@@ -63,8 +63,9 @@
         name :: string(),
         level :: {'mask', integer()},
         fd :: file:io_device() | undefined,
-        inode :: integer() | undefined,
-        flap=false :: boolean(),
+        inode = undefined :: integer() | undefined,
+        ctime = undefined :: file:date_time() | undefined,
+        flap = false :: boolean(),
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
@@ -123,8 +124,8 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
                 shaper=Shaper, formatter=Formatter, formatter_config=FormatterConfig,
                 sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize, check_interval=CheckInterval},
             State = case Rotator:create_logfile(Name, {SyncSize, SyncInterval}) of
-                {ok, {FD, Inode, _}} ->
-                    State0#state{fd=FD, inode=Inode};
+                {ok, {FD, Inode, Ctime, _Size}} ->
+                    State0#state{fd=FD, inode=Inode, ctime=Ctime};
                 {error, Reason} ->
                     ?INT_LOG(error, "Failed to open log file ~s with error ~s", [Name, file:format_error(Reason)]),
                     State0#state{flap=true}
@@ -244,8 +245,10 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
     case LastCheck >= State#state.check_interval orelse FD == undefined of
         true ->
             %% need to check for rotation
-            case Rotator:ensure_logfile(Name, FD, Inode, {State#state.sync_size, State#state.sync_interval}) of
-                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+            Ctime = State#state.ctime,
+            Buffer = {State#state.sync_size, State#state.sync_interval},
+            case Rotator:ensure_logfile(Name, FD, Inode, Ctime, Buffer) of
+                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize /= 0, Size > RotSize ->
                     case Rotator:rotate_logfile(Name, Count) of
                         ok ->
                             %% go around the loop again, we'll do another rotation check and hit the next clause of ensure_logfile
@@ -259,9 +262,9 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
                                     State#state{flap=true}
                             end
                     end;
-                {ok, {NewFD, NewInode, _}} ->
+                {ok, {NewFD, NewInode, NewCtime, _Size}} ->
                     %% update our last check and try again
-                    do_write(State#state{last_check=Timestamp, fd=NewFD, inode=NewInode}, Level, Msg);
+                    do_write(State#state{last_check=Timestamp, fd=NewFD, inode=NewInode, ctime=NewCtime}, Level, Msg);
                 {error, Reason} ->
                     case Flap of
                         true ->
@@ -464,10 +467,10 @@ close_file(#state{fd=FD} = State) ->
 
 get_loglevel_test() ->
     {ok, Level, _} = handle_call(get_loglevel,
-        #state{name="bar", level=lager_util:config_to_mask(info), fd=0, inode=0}),
+        #state{name="bar", level=lager_util:config_to_mask(info), fd=0, inode=0, ctime=undefined}),
     ?assertEqual(Level, lager_util:config_to_mask(info)),
     {ok, Level2, _} = handle_call(get_loglevel,
-        #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0}),
+        #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0, ctime=undefined}),
     ?assertEqual(Level2, lager_util:config_to_mask(warning)).
 
 rotation_test_() ->
@@ -490,20 +493,21 @@ rotation_test_() ->
         fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
             {"External rotation should work",
             fun() ->
-                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
-                State0 = DefaultState#state{fd=FD, inode=Inode},
-                ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode},
-                             write(State0, os:timestamp(), ?DEBUG, "hello world")),
+                {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                State0 = DefaultState#state{fd=FD, inode=Inode, ctime=Ctime},
+                State1 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime}, State1),
                 ?assertEqual(ok, file:delete(TestLog)),
-                Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                State2 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
                 %% assert file has changed
-                ?assert(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode} =/= Result),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, Result),
+                ExpState1 = #state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime},
+                ?assertNotEqual(ExpState1, State2),
+                ?assertMatch(#state{name=TestLog, level=?DEBUG}, State2),
                 ?assertEqual(ok, file:rename(TestLog, TestLog ++ ".1")),
-                Result2 = write(Result, os:timestamp(), ?DEBUG, "hello world"),
+                State3 = write(State2, os:timestamp(), ?DEBUG, "hello world"),
                 %% assert file has changed
-                ?assert(Result =/= Result2),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, Result2),
+                ?assertNotEqual(State3, State2),
+                ?assertMatch(#state{name=TestLog, level=?DEBUG}, State3),
                 ok
             end}
         end,
@@ -515,7 +519,7 @@ rotation_test_() ->
                 RotationSize = 15,
                 PreviousCheck = os:timestamp(),
 
-                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                {ok, {FD, Inode, _Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{
                     fd=FD, inode=Inode, size=RotationSize,
                     check_interval=CheckInterval, last_check=PreviousCheck},
@@ -660,8 +664,7 @@ filesystem_test_() ->
         {"file that becomes unavailable at runtime should trigger an error message",
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
-            TestFileName = "test_" ++ erlang:integer_to_list(erlang:phash2(os:timestamp())) ++ ".log",
-            TestLog = filename:join(TestDir, TestFileName),
+            TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend,
                 [{file, TestLog}, {level, info}, {check_interval, 0}]),
@@ -721,14 +724,14 @@ filesystem_test_() ->
             ?assertEqual(0, lager_test_backend:count()),
             lager:log(error, self(), "Test message1"),
             ?assertEqual(1, lager_test_backend:count()),
-            file:delete(TestLog),
-            file:write_file(TestLog, ""),
+            ?assertEqual(ok, file:delete(TestLog)),
+            ?assertEqual(ok, file:write_file(TestLog, "")),
             lager:log(error, self(), "Test message2"),
             {ok, Bin} = file:read_file(TestLog),
             Pid = pid_to_list(self()),
             ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
                 re:split(Bin, " ", [{return, list}, {parts, 5}])),
-            file:rename(TestLog, TestLog0),
+            ?assertEqual(ok, file:rename(TestLog, TestLog0)),
             lager:log(error, self(), "Test message3"),
             {ok, Bin2} = file:read_file(TestLog),
             ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],

@@ -5,7 +5,7 @@
 -behaviour(lager_rotator_behaviour).
 
 -export([
-    create_logfile/2, open_logfile/2, ensure_logfile/4, rotate_logfile/2
+    create_logfile/2, open_logfile/2, ensure_logfile/5, rotate_logfile/2
 ]).
 
 -ifdef(TEST).
@@ -20,8 +20,8 @@ open_logfile(Name, Buffer) ->
         ok ->
             Options = [append, raw] ++
             case Buffer of
-                {Size, Interval} when is_integer(Interval), Interval >= 0, is_integer(Size), Size >= 0 ->
-                    [{delayed_write, Size, Interval}];
+                {Size0, Interval} when is_integer(Interval), Interval >= 0, is_integer(Size0), Size0 >= 0 ->
+                    [{delayed_write, Size0, Interval}];
                 _ -> []
             end,
             case file:open(Name, Options) of
@@ -29,7 +29,9 @@ open_logfile(Name, Buffer) ->
                     case file:read_file_info(Name) of
                         {ok, FInfo} ->
                             Inode = FInfo#file_info.inode,
-                            {ok, {FD, Inode, FInfo#file_info.size}};
+                            Ctime = FInfo#file_info.ctime,
+                            Size1 = FInfo#file_info.size,
+                            {ok, {FD, Inode, Ctime, Size1}};
                         X -> X
                     end;
                 Y -> Y
@@ -37,39 +39,42 @@ open_logfile(Name, Buffer) ->
         Z -> Z
     end.
 
-ensure_logfile(Name, undefined, _Inode, Buffer) ->
+ensure_logfile(Name, undefined, _Inode, _Ctime, Buffer) ->
     open_logfile(Name, Buffer);
-ensure_logfile(Name, FD, Inode, Buffer) ->
+ensure_logfile(Name, FD, Inode0, Ctime0, Buffer) ->
     case file:read_file_info(Name) of
         {ok, FInfo} ->
-            Inode2 = FInfo#file_info.inode,
-            case Inode == Inode2 of
-                true ->
-                    {ok, {FD, Inode, FInfo#file_info.size}};
-                false ->
-                    %% delayed write can cause file:close not to do a close
-                    _ = file:close(FD),
-                    _ = file:close(FD),
-                    case open_logfile(Name, Buffer) of
-                        {ok, {FD2, Inode3, Size}} ->
-                            %% inode changed, file was probably moved and
-                            %% recreated
-                            {ok, {FD2, Inode3, Size}};
-                        Error ->
-                            Error
-                    end
+            {OsType, _} = os:type(),
+            Inode1 = FInfo#file_info.inode,
+            Ctime1 = FInfo#file_info.ctime,
+            case {OsType, Inode0 =:= Inode1, Ctime0 =:= Ctime1} of
+                % Note: on win32, Inode is always zero
+                % So check the file's ctime to see if it
+                % needs to be re-opened
+                {win32, _, false} ->
+                    reopen_logfile(Name, FD, Buffer);
+                {win32, _, true} ->
+                    {ok, {FD, Inode0, Ctime0, FInfo#file_info.size}};
+                {unix, true, _} ->
+                    {ok, {FD, Inode0, Ctime0, FInfo#file_info.size}};
+                {unix, false, _} ->
+                    reopen_logfile(Name, FD, Buffer)
             end;
         _ ->
-            %% delayed write can cause file:close not to do a close
-            _ = file:close(FD),
-            _ = file:close(FD),
-            case open_logfile(Name, Buffer) of
-                {ok, {FD2, Inode3, Size}} ->
-                    %% file was removed
-                    {ok, {FD2, Inode3, Size}};
-                Error ->
-                    Error
-            end
+            reopen_logfile(Name, FD, Buffer)
+    end.
+
+reopen_logfile(Name, FD0, Buffer) ->
+    %% delayed write can cause file:close not to do a close
+    _ = file:close(FD0),
+    _ = file:close(FD0),
+    case open_logfile(Name, Buffer) of
+        {ok, {_FD1, _Inode, _Size, _Ctime}=FileInfo} ->
+            %% inode changed, file was probably moved and
+            %% recreated
+            {ok, FileInfo};
+        Error ->
+            Error
     end.
 
 %% renames failing are OK
