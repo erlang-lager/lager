@@ -891,7 +891,12 @@ do_delete_test_dir(Dir) ->
                 true ->
                     delete_test_dir(FsElem);
                 _ ->
-                    ?assertEqual(ok, file:delete(FsElem))
+                    case file:delete(FsElem) of
+                        ok -> ok;
+                        Error ->
+                            io:format(standard_error, "[ERROR]: error deleting file ~p~n", [FsElem]),
+                            ?assertEqual(ok, Error)
+                    end
             end
         end, Entries),
     ?assertEqual(ok, file:del_dir(Dir)).

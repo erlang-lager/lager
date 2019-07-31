@@ -453,8 +453,9 @@ close_file(#state{fd=undefined} = State) ->
     State;
 close_file(#state{fd=FD} = State) ->
     %% Flush and close any file handles.
-    _ = file:datasync(FD),
-    _ = file:close(FD),
+    %% TODO LRB don't match, but preserve errors
+    ok = file:datasync(FD),
+    ok = file:close(FD),
     State#state{fd=undefined}.
 
 -ifdef(TEST).
@@ -564,7 +565,7 @@ filesystem_test_() ->
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = application:set_env(lager, async_threshold, undefined),
             ok = lager_util:create_test_dir(),
-            lager:start(),
+            ok = lager:start(),
             %% race condition where lager logs its own start up
             %% makes several tests fail. See test/lager_test_backend
             %% around line 800 for more information.
@@ -628,20 +629,26 @@ filesystem_test_() ->
             {ok, FInfo0} = file:read_file_info(TestLog),
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
+
             gen_event:add_handler(lager_event, lager_file_backend,
                 {TestLog, info, 10*1024*1024, "$D0", 5}),
+
+            % Note: required on win32, do this early to prevent subsequent failures
+            % from preventing cleanup
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
+
             ?assertEqual(1, lager_test_backend:count()),
             {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
             MessageFlat = lists:flatten(Message),
             ?assertEqual(
                 "Failed to open log file " ++ TestLog ++ " with error permission denied",
-                MessageFlat),
-            ?assertEqual(ok, file:write_file_info(TestLog, FInfo0))
+                MessageFlat)
         end},
         {"file that becomes unavailable at runtime should trigger an error message",
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
+            TestFileName = "test_" ++ erlang:integer_to_list(erlang:phash2(os:timestamp())) ++ ".log",
+            TestLog = filename:join(TestDir, TestFileName),
 
             gen_event:add_handler(lager_event, lager_file_backend,
                 [{file, TestLog}, {level, info}, {check_interval, 0}]),
@@ -649,22 +656,23 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            case os:type() of
-                {win32, _} ->
-                    ?assertEqual({error, eacces}, file:write_file(TestLog, ""));
-                {unix, _} ->
-                    ?assertEqual(ok, file:write_file(TestLog, "")),
-                    {ok, FInfo} = file:read_file_info(TestLog),
-                    ?assertEqual(ok, file:write_file_info(TestLog, FInfo#file_info{mode = 0})),
-                    lager:log(error, self(), "Test message"),
-                    ?assertEqual(3, lager_test_backend:count()),
-                    lager_test_backend:pop(),
-                    lager_test_backend:pop(),
-                    {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
-                    ?assertEqual(
-                        "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
-                        lists:flatten(Message))
-            end
+            ?assertEqual(ok, file:write_file(TestLog, "")),
+            {ok, FInfo0} = file:read_file_info(TestLog),
+            FInfo1 = FInfo0#file_info{mode = 0},
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
+            lager:log(error, self(), "Test message"),
+
+            % Note: required on win32, do this early to prevent subsequent failures
+            % from preventing cleanup
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
+
+            ?assertEqual(3, lager_test_backend:count()),
+            lager_test_backend:pop(),
+            lager_test_backend:pop(),
+            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+            ?assertEqual(
+                "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
+                lists:flatten(Message))
         end},
         {"unavailable files that are fixed at runtime should start having log messages written",
         fun() ->
@@ -1123,9 +1131,7 @@ safe_application_load(App) ->
         {error, {already_loaded, App}} ->
             ok;
         Error ->
-            % TODO how to report EUnit errors?
-            io:format(standard_error, "ERROR: application:load(~p) returned ~p~n", [App, Error]),
-            ?assert(false)
+            ?assertEqual(ok, Error)
     end.
 
 -endif.
