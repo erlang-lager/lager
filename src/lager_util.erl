@@ -843,8 +843,13 @@ create_test_dir() ->
     ok = application:set_env(lager, test_dir, TestDir).
 
 get_test_dir() ->
-    {ok, TestDir} = application:get_env(lager, test_dir),
-    TestDir.
+    case application:get_env(lager, test_dir) of
+        undefined ->
+            create_test_dir(),
+            get_test_dir();
+        {ok, _}=Res ->
+            Res
+    end.
 
 get_temp_dir() ->
     Tmp = case os:getenv("TEMP") of
@@ -859,19 +864,21 @@ get_temp_dir() ->
     {ok, Tmp}.
 
 delete_test_dir() ->
-    delete_test_dir(get_test_dir()).
+    {ok, TestDir} = get_test_dir(),
+    ok = delete_test_dir(TestDir).
 
 delete_test_dir(TestDir) ->
     {OsType, _} = os:type(),
-    case {OsType, otp_version()} of
-        {win32, _} ->
-            application:stop(lager),
-            do_delete_test_dir(TestDir);
-        {unix, 15} ->
-            os:cmd("rm -rf " ++ TestDir);
-        {unix, _} ->
-            do_delete_test_dir(TestDir)
-    end.
+    ok = case {OsType, otp_version()} of
+             {win32, _} ->
+                 application:stop(lager),
+                 do_delete_test_dir(TestDir);
+             {unix, 15} ->
+                 os:cmd("rm -rf " ++ TestDir);
+             {unix, _} ->
+                 do_delete_test_dir(TestDir)
+         end,
+    ok = application:unset_env(lager, test_dir).
 
 do_delete_test_dir(Dir) ->
     ListRet = file:list_dir_all(Dir),
