@@ -453,9 +453,11 @@ close_file(#state{fd=undefined} = State) ->
     State;
 close_file(#state{fd=FD} = State) ->
     %% Flush and close any file handles.
-    %% TODO LRB don't match, but preserve errors
-    ok = file:datasync(FD),
-    ok = file:close(FD),
+    %% TODO LRB don't match, but report errors???
+    _ = file:datasync(FD),
+    %% delayed write can cause file:close not to do a close
+    _ = file:close(FD),
+    _ = file:close(FD),
     State#state{fd=undefined}.
 
 -ifdef(TEST).
@@ -485,19 +487,19 @@ rotation_test_() ->
         fun(#state{}) ->
             ok = lager_util:delete_test_dir()
         end, [
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval, rotator = Rotator}) ->
+        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
             {"External rotation should work",
             fun() ->
                 {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{fd=FD, inode=Inode},
                 ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode},
-                write(State0, os:timestamp(), ?DEBUG, "hello world")),
-                file:delete(TestLog),
+                             write(State0, os:timestamp(), ?DEBUG, "hello world")),
+                ?assertEqual(ok, file:delete(TestLog)),
                 Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
                 %% assert file has changed
                 ?assert(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode} =/= Result),
                 ?assertMatch(#state{name=TestLog, level=?DEBUG}, Result),
-                file:rename(TestLog, TestLog ++ ".1"),
+                ?assertEqual(ok, file:rename(TestLog, TestLog ++ ".1")),
                 Result2 = write(Result, os:timestamp(), ?DEBUG, "hello world"),
                 %% assert file has changed
                 ?assert(Result =/= Result2),
@@ -527,6 +529,17 @@ rotation_test_() ->
                 Msg2Timestamp = add_secs(PreviousCheck, 2),
                 State0 = State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
 
+                % Note: we must ensure at least one second (DEFAULT_SYNC_INTERVAL) has passed
+                % for message 1 and 2 to be written to disk
+                ElapsedMs = timer:now_diff(os:timestamp(), PreviousCheck) div 1000,
+                case ElapsedMs > SyncInterval of
+                    true ->
+                        ok;
+                    _ ->
+                        S = SyncInterval - ElapsedMs,
+                        timer:sleep(S)
+                end,
+
                 %% although file size is big enough...
                 {ok, FInfo} = file:read_file_info(TestLog),
                 ?assert(RotationSize < FInfo#file_info.size),
@@ -543,9 +556,9 @@ rotation_test_() ->
 
                 {ok, Bin1} = file:read_file(TestLog0),
                 {ok, Bin2} = file:read_file(TestLog),
-                %% message 1-3 written to file
+                %% message 1-2 written to file
                 ?assertEqual(<<"big big message 1buffered message 2">>, Bin1),
-                %% message 4 buffered, not yet written to file
+                %% message 3 buffered, not yet written to file
                 ?assertEqual(<<"">>, Bin2),
                 ok
             end}

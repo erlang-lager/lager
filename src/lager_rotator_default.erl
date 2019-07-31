@@ -19,7 +19,7 @@ open_logfile(Name, Buffer) ->
     case filelib:ensure_dir(Name) of
         ok ->
             Options = [append, raw] ++
-            case  Buffer of
+            case Buffer of
                 {Size, Interval} when is_integer(Interval), Interval >= 0, is_integer(Size), Size >= 0 ->
                     [{delayed_write, Size, Interval}];
                 _ -> []
