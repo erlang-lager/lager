@@ -35,12 +35,12 @@
 -module(lager_file_backend).
 
 -include("lager.hrl").
+-include_lib("kernel/include/file.hrl").
 
 -behaviour(gen_event).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("kernel/include/file.hrl").
 -compile([{parse_transform, lager_transform}]).
 -endif.
 
@@ -239,13 +239,13 @@ config_to_id(Config) ->
     end.
 
 
-write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
-        count=Count, rotator=Rotator} = State, Timestamp, Level, Msg) ->
-    LastCheck = timer:now_diff(Timestamp, State#state.last_check) div 1000,
-    case LastCheck >= State#state.check_interval orelse FD == undefined of
+write(#state{name=Name, fd=FD,
+             inode=Inode, ctime=Ctime,
+             flap=Flap, size=RotSize,
+             count=Count, rotator=Rotator} = State, Timestamp, Level, Msg) ->
+    case write_should_check(State, Timestamp) of
         true ->
             %% need to check for rotation
-            Ctime = State#state.ctime,
             Buffer = {State#state.sync_size, State#state.sync_interval},
             case Rotator:ensure_logfile(Name, FD, Inode, Ctime, Buffer) of
                 {ok, {_FD, _Inode, _Ctime, Size}} when RotSize /= 0, Size > RotSize ->
@@ -276,6 +276,23 @@ write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
             end;
         false ->
             do_write(State, Level, Msg)
+    end.
+
+write_should_check(#state{fd=undefined}, _Timestamp) ->
+    true;
+write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
+                          name=Name, ctime=Ctime0}, Timestamp) ->
+    LastCheck1 = timer:now_diff(Timestamp, LastCheck0) div 1000,
+    case LastCheck1 >= CheckInterval of
+        true ->
+            true;
+        _ ->
+            case file:read_file_info(Name) of
+                {ok, #file_info{ctime=Ctime1}} ->
+                    Ctime0 =/= Ctime1;
+                _ ->
+                    true
+            end
     end.
 
 do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
@@ -519,19 +536,21 @@ rotation_test_() ->
                 RotationSize = 15,
                 PreviousCheck = os:timestamp(),
 
-                {ok, {FD, Inode, _Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{
-                    fd=FD, inode=Inode, size=RotationSize,
+                    fd=FD, inode=Inode, ctime=Ctime, size=RotationSize,
                     check_interval=CheckInterval, last_check=PreviousCheck},
 
                 %% new message within check interval with sync_on level
                 Msg1Timestamp = add_secs(PreviousCheck, 1),
-                State0 = State1 = write(State0, Msg1Timestamp, ?ERROR, "big big message 1"),
+                State1 = write(State0, Msg1Timestamp, ?ERROR, "big big message 1"),
+                ?assertEqual(State0, State1),
 
                 %% new message within check interval under sync_on level
                 %% not written to disk yet
                 Msg2Timestamp = add_secs(PreviousCheck, 2),
-                State0 = State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
+                State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
+                ?assertEqual(State0, State2),
 
                 % Note: we must ensure at least one second (DEFAULT_SYNC_INTERVAL) has passed
                 % for message 1 and 2 to be written to disk
