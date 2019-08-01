@@ -26,11 +26,11 @@ open_logfile(Name, Buffer) ->
             end,
             case file:open(Name, Options) of
                 {ok, FD} ->
-                    case file:read_file_info(Name) of
-                        {ok, FInfo} ->
-                            Inode = FInfo#file_info.inode,
-                            Ctime = FInfo#file_info.ctime,
-                            Size1 = FInfo#file_info.size,
+                    case file:read_file_info(Name, [raw]) of
+                        {ok, FInfo0} ->
+                            Inode = FInfo0#file_info.inode,
+                            {ok, Ctime} = maybe_update_ctime(Name, FInfo0),
+                            Size1 = FInfo0#file_info.size,
                             {ok, {FD, Inode, Ctime, Size1}};
                         X -> X
                     end;
@@ -42,7 +42,7 @@ open_logfile(Name, Buffer) ->
 ensure_logfile(Name, undefined, _Inode, _Ctime, Buffer) ->
     open_logfile(Name, Buffer);
 ensure_logfile(Name, FD, Inode0, Ctime0, Buffer) ->
-    case file:read_file_info(Name) of
+    case file:read_file_info(Name, [raw]) of
         {ok, FInfo} ->
             {OsType, _} = os:type(),
             Inode1 = FInfo#file_info.inode,
@@ -83,6 +83,7 @@ rotate_logfile(File, 0) ->
     case file:open(File, [write]) of
         {ok, FD} ->
             _ = file:close(FD),
+            {ok, _Ctime} = maybe_update_ctime(File),
             ok;
         Error ->
             Error
@@ -96,6 +97,29 @@ rotate_logfile(File0, Count) ->
     File2 = File0 ++ "." ++ integer_to_list(Count - 1),
     _ = file:rename(File1, File2),
     rotate_logfile(File0, Count - 1).
+
+maybe_update_ctime(Name) ->
+    case file:read_file_info(Name, [raw]) of
+        {ok, FInfo} ->
+            maybe_update_ctime(Name, FInfo);
+        _ ->
+            {ok, calendar:local_time()}
+    end.
+
+maybe_update_ctime(Name, FInfo) ->
+    {OsType, _} = os:type(),
+    do_update_ctime(OsType, Name, FInfo).
+
+do_update_ctime(win32, Name, FInfo0) ->
+    % Note: we force the creation time to be the current time.
+    % On win32 this may prevent the ctime from being updated:
+    % https://stackoverflow.com/q/8804342/1466825
+    NewCtime = calendar:local_time(),
+    FInfo1 = FInfo0#file_info{ctime = NewCtime},
+    ok = file:write_file_info(Name, FInfo1, [raw]),
+    {ok, NewCtime};
+do_update_ctime(_, _Name, FInfo) ->
+    {ok, FInfo#file_info.ctime}.
 
 -ifdef(TEST).
 
@@ -132,7 +156,7 @@ rotate_file_zero_count_test() ->
     ?assertEqual(true, filelib:is_regular(TestLog)),
     ?assertEqual(1, length(filelib:wildcard(TestLog++"*"))),
     %% assert the new file is 0 size:
-    case file:read_file_info(TestLog) of
+    case file:read_file_info(TestLog, [raw]) of
         {ok, FInfo} ->
             ?assertEqual(0, FInfo#file_info.size);
         _ ->
@@ -171,7 +195,7 @@ rotate_file_fail_test() ->
     ?assertEqual(2, length(filelib:wildcard(TestLog++"*"))),
 
     %% assert the new file is 0 size:
-    case file:read_file_info(TestLog) of
+    case file:read_file_info(TestLog, [raw]) of
         {ok, FInfo} ->
             ?assertEqual(0, FInfo#file_info.size);
         _ ->

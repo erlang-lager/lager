@@ -63,8 +63,8 @@
         name :: string(),
         level :: {'mask', integer()},
         fd :: file:io_device() | undefined,
-        inode = undefined :: integer() | undefined,
-        ctime = undefined :: file:date_time() | undefined,
+        inode :: integer() | undefined,
+        ctime :: file:date_time() | undefined,
         flap = false :: boolean(),
         size = 0 :: integer(),
         date :: undefined | string(),
@@ -238,7 +238,6 @@ config_to_id(Config) ->
             {?MODULE, File}
     end.
 
-
 write(#state{name=Name, fd=FD,
              inode=Inode, ctime=Ctime,
              flap=Flap, size=RotSize,
@@ -287,7 +286,7 @@ write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
         true ->
             true;
         _ ->
-            case file:read_file_info(Name) of
+            case file:read_file_info(Name, [raw]) of
                 {ok, #file_info{ctime=Ctime1}} ->
                     Ctime0 =/= Ctime1;
                 _ ->
@@ -564,7 +563,7 @@ rotation_test_() ->
                 end,
 
                 %% although file size is big enough...
-                {ok, FInfo} = file:read_file_info(TestLog),
+                {ok, FInfo} = file:read_file_info(TestLog, [raw]),
                 ?assert(RotationSize < FInfo#file_info.size),
                 %% ...no rotation yet
                 ?assertEqual(PreviousCheck, State2#state.last_check),
@@ -660,9 +659,9 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, file:write_file(TestLog, [])),
+            ?assertEqual(ok, safe_write_file(TestLog, [])),
 
-            {ok, FInfo0} = file:read_file_info(TestLog),
+            {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
 
@@ -691,8 +690,8 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, file:write_file(TestLog, "")),
-            {ok, FInfo0} = file:read_file_info(TestLog),
+            ?assertEqual(ok, safe_write_file(TestLog, "")),
+            {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
             lager:log(error, self(), "Test message"),
@@ -718,9 +717,9 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, file:write_file(TestLog, [])),
+            ?assertEqual(ok, safe_write_file(TestLog, [])),
 
-            {ok, FInfo} = file:read_file_info(TestLog),
+            {ok, FInfo} = file:read_file_info(TestLog, [raw]),
             OldPerms = FInfo#file_info.mode,
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo#file_info{mode = 0})),
             gen_event:add_handler(lager_event, lager_file_backend,
@@ -749,14 +748,16 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message1"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, file:write_file(TestLog, "")),
+            ?assertEqual(ok, safe_write_file(TestLog, "")),
             lager:log(error, self(), "Test message2"),
+            ?assertEqual(2, lager_test_backend:count()),
             {ok, Bin} = file:read_file(TestLog),
             Pid = pid_to_list(self()),
             ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
                 re:split(Bin, " ", [{return, list}, {parts, 5}])),
             ?assertEqual(ok, file:rename(TestLog, TestLog0)),
             lager:log(error, self(), "Test message3"),
+            ?assertEqual(3, lager_test_backend:count()),
             {ok, Bin2} = file:read_file(TestLog),
             ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],
                 re:split(Bin2, " ", [{return, list}, {parts, 5}]))
@@ -1073,8 +1074,8 @@ formatting_test_() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             Log1 = filename:join(TestDir, "test.log"),
             Log2 = filename:join(TestDir, "test2.log"),
-            ?assertEqual(ok, file:write_file(Log1, [])),
-            ?assertEqual(ok, file:write_file(Log2, [])),
+            ?assertEqual(ok, safe_write_file(Log1, [])),
+            ?assertEqual(ok, safe_write_file(Log2, [])),
             ok = error_logger:tty(false),
             ok = safe_application_load(lager),
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
@@ -1173,5 +1174,12 @@ safe_application_load(App) ->
         Error ->
             ?assertEqual(ok, Error)
     end.
+
+safe_write_file(File, Content) ->
+    ?assertEqual(ok, file:write_file(File, Content)),
+    NewCtime = calendar:local_time(),
+    {ok, FInfo0} = file:read_file_info(File, [raw]),
+    FInfo1 = FInfo0#file_info{ctime = NewCtime},
+    ?assertEqual(ok, file:write_file_info(File, FInfo1, [raw])).
 
 -endif.

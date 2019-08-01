@@ -281,7 +281,7 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"file can't be opened on startup triggers an error message",
             fun() ->
-                {ok, FInfo} = file:read_file_info(CrashLog),
+                {ok, FInfo} = file:read_file_info(CrashLog, [raw]),
                 file:write_file_info(CrashLog, FInfo#file_info{mode = 0}),
                 {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
                 ?assertEqual(1, lager_test_backend:count()),
@@ -301,7 +301,7 @@ filesystem_test_() ->
                 ?assertEqual(1, lager_test_backend:count()),
                 file:delete(CrashLog),
                 file:write_file(CrashLog, ""),
-                {ok, FInfo} = file:read_file_info(CrashLog),
+                {ok, FInfo} = file:read_file_info(CrashLog, [raw]),
                 file:write_file_info(CrashLog, FInfo#file_info{mode = 0}),
                 sync_error_logger:error_msg("Test message\n"),
                 _ = gen_event:which_handlers(error_logger),
@@ -316,7 +316,7 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"unavailable files that are fixed at runtime should start having log messages written",
             fun() ->
-                {ok, FInfo} = file:read_file_info(CrashLog),
+                {ok, FInfo} = file:read_file_info(CrashLog, [raw]),
                 OldPerms = FInfo#file_info.mode,
                 file:write_file_info(CrashLog, FInfo#file_info{mode = 0}),
                 {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
