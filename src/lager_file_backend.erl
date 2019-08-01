@@ -695,23 +695,15 @@ filesystem_test_() ->
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
             lager:log(error, self(), "Test message"),
-
             % Note: required on win32, do this early to prevent subsequent failures
             % from preventing cleanup
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
-
-            case os:type() of
-                {win32, _} ->
-                    % Note: on win32, setting mode = 0 does not result in a permission error
-                    ?assertEqual(2, lager_test_backend:count());
-                _ ->
-                    lager_test_backend:pop(),
-                    lager_test_backend:pop(),
-                    {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
-                    ?assertEqual(
-                        "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
-                        lists:flatten(Message))
-            end
+            lager_test_backend:pop(),
+            lager_test_backend:pop(),
+            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+            ?assertEqual(
+                "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
+                lists:flatten(Message))
         end},
         {"unavailable files that are fixed at runtime should start having log messages written",
         fun() ->
@@ -978,15 +970,18 @@ filesystem_test_() ->
         end},
         {"no silent hwm drops",
         fun() ->
+            MsgCount = 15,
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog}, {level, info},
                 {high_water_mark, 5}, {flush_queue, false}, {sync_on, "=warning"}]),
             {_, _, MS} = os:timestamp(),
-            timer:sleep((1000000 - MS) div 1000 + 1),
-            %start close to the beginning of a new second
-            [lager:log(info, self(), "Foo ~p", [K]) || K <- lists:seq(1, 15)],
-            timer:sleep(1000),
+            % start close to the beginning of a new second
+            ?assertEqual(ok, timer:sleep((1000000 - MS) div 1000 + 1)),
+            [lager:log(info, self(), "Foo ~p", [K]) || K <- lists:seq(1, MsgCount)],
+            ?assertEqual(MsgCount, lager_test_backend:count()),
+            % Note: bumped from 1000 to 1250 to ensure delayed write flushes to disk
+            ?assertEqual(ok, timer:sleep(1250)),
             {ok, Bin} = file:read_file(TestLog),
             Last = lists:last(re:split(Bin, "\n", [{return, list}, trim])),
             ?assertMatch([_, _, _, _, "lager_file_backend dropped 10 messages in the last second that exceeded the limit of 5 messages/sec"],
@@ -1176,10 +1171,15 @@ safe_application_load(App) ->
     end.
 
 safe_write_file(File, Content) ->
+    % Note: ensures that the new creation time is at least one second
+    % in the future
     ?assertEqual(ok, file:write_file(File, Content)),
-    NewCtime = calendar:local_time(),
+    Ctime0 = calendar:local_time(),
+    Ctime0Sec = calendar:datetime_to_gregorian_seconds(Ctime0),
+    Ctime1Sec = Ctime0Sec + 1,
+    Ctime1 = calendar:gregorian_seconds_to_datetime(Ctime1Sec),
     {ok, FInfo0} = file:read_file_info(File, [raw]),
-    FInfo1 = FInfo0#file_info{ctime = NewCtime},
+    FInfo1 = FInfo0#file_info{ctime = Ctime1},
     ?assertEqual(ok, file:write_file_info(File, FInfo1, [raw])).
 
 -endif.
