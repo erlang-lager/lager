@@ -280,15 +280,18 @@ write(#state{name=Name, fd=FD,
 write_should_check(#state{fd=undefined}, _Timestamp) ->
     true;
 write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
-                          name=Name, ctime=Ctime0}, Timestamp) ->
+                          name=Name, inode=Inode0, ctime=Ctime0}, Timestamp) ->
     LastCheck1 = timer:now_diff(Timestamp, LastCheck0) div 1000,
     case LastCheck1 >= CheckInterval of
         true ->
             true;
         _ ->
+            % TODO this code is duplicated in the default rotator, but we need
+            % to know if the file has changed "out from under lager" so we don't
+            % write to an invalid FD
             case file:read_file_info(Name, [raw]) of
-                {ok, #file_info{ctime=Ctime1}} ->
-                    Ctime0 =/= Ctime1;
+                {ok, #file_info{inode=Inode1, ctime=Ctime1}} ->
+                    Inode0 =/= Inode1 orelse Ctime0 =/= Ctime1;
                 _ ->
                     true
             end
