@@ -701,13 +701,18 @@ filesystem_test_() ->
             % from preventing cleanup
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
 
-            ?assertEqual(3, lager_test_backend:count()),
-            lager_test_backend:pop(),
-            lager_test_backend:pop(),
-            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
-            ?assertEqual(
-                "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
-                lists:flatten(Message))
+            case os:type() of
+                {win32, _} ->
+                    % Note: on win32, setting mode = 0 does not result in a permission error
+                    ?assertEqual(2, lager_test_backend:count());
+                _ ->
+                    lager_test_backend:pop(),
+                    lager_test_backend:pop(),
+                    {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+                    ?assertEqual(
+                        "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
+                        lists:flatten(Message))
+            end
         end},
         {"unavailable files that are fixed at runtime should start having log messages written",
         fun() ->
