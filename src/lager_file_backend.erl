@@ -920,29 +920,36 @@ filesystem_test_() ->
         end},
         {"tracing should not duplicate messages",
         fun() ->
-            {ok, TestDir} = lager_util:get_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be
+                    % deleted or renamed while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, critical}, {check_interval, always}]),
-            timer:sleep(500),
-            lager:critical("Test message"),
-            {ok, Bin1} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[critical]", _, "Test message\n"],
-                re:split(Bin1, " ", [{return, list}, {parts, 5}])),
-            ok = file:delete(TestLog),
-            {Level, _} = lager_config:get({lager_event, loglevel}),
-            lager_config:set({lager_event, loglevel},
-                {Level, [{[{module, ?MODULE}], ?DEBUG, {lager_file_backend, TestLog}}]}),
-            lager:critical("Test message"),
-            {ok, Bin2} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[critical]", _, "Test message\n"],
-                re:split(Bin2, " ", [{return, list}, {parts, 5}])),
-            ok = file:delete(TestLog),
-            lager:error("Test message"),
-            {ok, Bin3} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[error]", _, "Test message\n"],
-                re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, critical}, {check_interval, always}]),
+                    timer:sleep(500),
+                    lager:critical("Test message"),
+                    {ok, Bin1} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[critical]", _, "Test message\n"],
+                        re:split(Bin1, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    {Level, _} = lager_config:get({lager_event, loglevel}),
+                    lager_config:set({lager_event, loglevel},
+                        {Level, [{[{module, ?MODULE}], ?DEBUG, {lager_file_backend, TestLog}}]}),
+                    lager:critical("Test message"),
+                    {ok, Bin2} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[critical]", _, "Test message\n"],
+                        re:split(Bin2, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    lager:error("Test message"),
+                    {ok, Bin3} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[error]", _, "Test message\n"],
+                        re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+            end
         end},
         {"tracing to a dedicated file should work",
         fun() ->
