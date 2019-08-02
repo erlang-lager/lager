@@ -594,7 +594,7 @@ filesystem_test_() ->
     {foreach,
         fun() ->
             ok = error_logger:tty(false),
-            ok = safe_application_load(lager),
+            ok = lager_test_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = application:set_env(lager, async_threshold, undefined),
@@ -603,8 +603,8 @@ filesystem_test_() ->
             %% race condition where lager logs its own start up
             %% makes several tests fail. See test/lager_test_backend
             %% around line 800 for more information.
-            timer:sleep(5),
-            lager_test_backend:flush()
+            ok = timer:sleep(5),
+            ok = lager_test_backend:flush()
         end,
         fun(_) ->
             ok = application:stop(lager),
@@ -658,7 +658,7 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, safe_write_file(TestLog, [])),
+            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, [])),
 
             {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
@@ -689,7 +689,7 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, safe_write_file(TestLog, "")),
+            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "")),
             {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
@@ -708,7 +708,7 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, safe_write_file(TestLog, [])),
+            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, [])),
 
             {ok, FInfo} = file:read_file_info(TestLog, [raw]),
             OldPerms = FInfo#file_info.mode,
@@ -739,7 +739,7 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message1"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, safe_write_file(TestLog, "")),
+            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "")),
             lager:log(error, self(), "Test message2"),
             ?assertEqual(2, lager_test_backend:count()),
             {ok, Bin} = file:read_file(TestLog),
@@ -997,7 +997,7 @@ trace_files_test_() ->
             Events  = filename:join(TestDir, "events.log"),
 
             ok = error_logger:tty(false),
-            ok = safe_application_load(lager),
+            ok = lager_test_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [
                      {lager_file_backend, [
                          {file, Log},
@@ -1068,10 +1068,10 @@ formatting_test_() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             Log1 = filename:join(TestDir, "test.log"),
             Log2 = filename:join(TestDir, "test2.log"),
-            ?assertEqual(ok, safe_write_file(Log1, [])),
-            ?assertEqual(ok, safe_write_file(Log2, [])),
+            ?assertEqual(ok, lager_test_util:safe_write_file(Log1, [])),
+            ?assertEqual(ok, lager_test_util:safe_write_file(Log2, [])),
             ok = error_logger:tty(false),
-            ok = safe_application_load(lager),
+            ok = lager_test_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = lager:start(),
@@ -1158,27 +1158,5 @@ config_validation_test_() ->
                 validate_logfile_proplist([{file, "test.log"}, {rhubarb, spicy}]))
         }
     ].
-
-safe_application_load(App) ->
-    case application:load(App) of
-        ok ->
-            ok;
-        {error, {already_loaded, App}} ->
-            ok;
-        Error ->
-            ?assertEqual(ok, Error)
-    end.
-
-safe_write_file(File, Content) ->
-    % Note: ensures that the new creation time is at least one second
-    % in the future
-    ?assertEqual(ok, file:write_file(File, Content)),
-    Ctime0 = calendar:local_time(),
-    Ctime0Sec = calendar:datetime_to_gregorian_seconds(Ctime0),
-    Ctime1Sec = Ctime0Sec + 1,
-    Ctime1 = calendar:gregorian_seconds_to_datetime(Ctime1Sec),
-    {ok, FInfo0} = file:read_file_info(File, [raw]),
-    FInfo1 = FInfo0#file_info{ctime = Ctime1},
-    ?assertEqual(ok, file:write_file_info(File, FInfo1, [raw])).
 
 -endif.

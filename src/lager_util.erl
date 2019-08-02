@@ -597,7 +597,7 @@ maybe_flush(Flag, #lager_shaper{} = S) when is_boolean(Flag) ->
 
 -spec has_file_changed(Name :: file:name_all(),
                        Inode0 :: pos_integer(),
-                       Ctime0 :: file:date_time()) -> {boolean(), file:file_info()}.
+                       Ctime0 :: file:date_time()) -> {boolean(), file:file_info() | undefined}.
 has_file_changed(Name, Inode0, Ctime0) ->
     {OsType, _} = os:type(),
     F = file:read_file_info(Name, [raw]),
@@ -868,7 +868,7 @@ create_test_dir() ->
 get_test_dir() ->
     case application:get_env(lager, test_dir) of
         undefined ->
-            create_test_dir(),
+            ok = create_test_dir(),
             get_test_dir();
         {ok, _}=Res ->
             Res
@@ -891,6 +891,7 @@ delete_test_dir() ->
     ok = delete_test_dir(TestDir).
 
 delete_test_dir(TestDir) ->
+    ok = application:unset_env(lager, test_dir),
     {OsType, _} = os:type(),
     ok = case {OsType, otp_version()} of
              {win32, _} ->
@@ -900,8 +901,7 @@ delete_test_dir(TestDir) ->
                  os:cmd("rm -rf " ++ TestDir);
              {unix, _} ->
                  do_delete_test_dir(TestDir)
-         end,
-    ok = application:unset_env(lager, test_dir).
+         end.
 
 do_delete_test_dir(Dir) ->
     ListRet = file:list_dir_all(Dir),
