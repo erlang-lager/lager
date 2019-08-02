@@ -77,7 +77,8 @@
         check_interval = ?DEFAULT_CHECK_INTERVAL :: non_neg_integer(),
         sync_interval = ?DEFAULT_SYNC_INTERVAL :: non_neg_integer(),
         sync_size = ?DEFAULT_SYNC_SIZE :: non_neg_integer(),
-        last_check = os:timestamp() :: erlang:timestamp()
+        last_check = os:timestamp() :: erlang:timestamp(),
+        os_type :: atom()
     }).
 
 -type option() :: {file, string()} | {level, lager:log_level()} |
@@ -498,32 +499,45 @@ rotation_test_() ->
             CheckInterval = 0, %% hard to test delayed mode
             {ok, TestDir} = lager_util:create_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            #state{name=TestLog, level=?DEBUG, sync_on=SyncLevel,
-                sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval,
-                rotator=Rotator}
+            {OsType, _} = os:type(),
+            #state{name=TestLog,
+                   level=?DEBUG,
+                   sync_on=SyncLevel,
+                   sync_size=SyncSize,
+                   sync_interval=SyncInterval,
+                   check_interval=CheckInterval,
+                   rotator=Rotator,
+                   os_type=OsType}
         end,
         fun(#state{}) ->
             ok = lager_util:delete_test_dir()
         end, [
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
+        fun(DefaultState=#state{name=TestLog, os_type=OsType, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
             {"External rotation should work",
             fun() ->
-                {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
-                State0 = DefaultState#state{fd=FD, inode=Inode, ctime=Ctime},
-                State1 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime}, State1),
-                ?assertEqual(ok, file:delete(TestLog)),
-                State2 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
-                %% assert file has changed
-                ExpState1 = #state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime},
-                ?assertNotEqual(ExpState1, State2),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, State2),
-                ?assertEqual(ok, file:rename(TestLog, TestLog ++ ".1")),
-                State3 = write(State2, os:timestamp(), ?DEBUG, "hello world"),
-                %% assert file has changed
-                ?assertNotEqual(State3, State2),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, State3),
-                ok
+                case OsType of
+                    win32 ->
+                        % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                        % while a process has an open file handle referencing it
+                        ok;
+                    _ ->
+                        {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                        State0 = DefaultState#state{fd=FD, inode=Inode, ctime=Ctime},
+                        State1 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime}, State1),
+                        ?assertEqual(ok, file:delete(TestLog)),
+                        State2 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                        %% assert file has changed
+                        ExpState1 = #state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime},
+                        ?assertNotEqual(ExpState1, State2),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG}, State2),
+                        ?assertEqual(ok, file:rename(TestLog, TestLog ++ ".1")),
+                        State3 = write(State2, os:timestamp(), ?DEBUG, "hello world"),
+                        %% assert file has changed
+                        ?assertNotEqual(State3, State2),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG}, State3),
+                        ok
+                end
             end}
         end,
         fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
@@ -680,29 +694,33 @@ filesystem_test_() ->
         end},
         {"file that becomes unavailable at runtime should trigger an error message",
         fun() ->
-            {ok, TestDir} = lager_util:get_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be
+                    % deleted or renamed while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, info}, {check_interval, 0}]),
-            ?assertEqual(0, lager_test_backend:count()),
-            lager:log(error, self(), "Test message"),
-            ?assertEqual(1, lager_test_backend:count()),
-            ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
-            {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
-            FInfo1 = FInfo0#file_info{mode = 0},
-            ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
-            lager:log(error, self(), "Test message"),
-            % Note: required on win32, do this early to prevent subsequent failures
-            % from preventing cleanup
-            ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
-            lager_test_backend:pop(),
-            lager_test_backend:pop(),
-            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
-            ?assertEqual(
-                "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
-                lists:flatten(Message))
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, info}, {check_interval, 0}]),
+                    ?assertEqual(0, lager_test_backend:count()),
+                    lager:log(error, self(), "Test message"),
+                    ?assertEqual(1, lager_test_backend:count()),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
+                    {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
+                    FInfo1 = FInfo0#file_info{mode = 0},
+                    ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
+                    lager:log(error, self(), "Test message"),
+                    lager_test_backend:pop(),
+                    lager_test_backend:pop(),
+                    {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+                    ?assertEqual(
+                        "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
+                        lists:flatten(Message))
+            end
         end},
         {"unavailable files that are fixed at runtime should start having log messages written",
         fun() ->
