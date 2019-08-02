@@ -747,29 +747,36 @@ filesystem_test_() ->
         end},
         {"external logfile rotation/deletion should be handled",
         fun() ->
-            {ok, TestDir} = lager_util:get_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
-            TestLog0 = TestLog ++ ".0",
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                    % while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
+                    TestLog0 = TestLog ++ ".0",
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, info}, {check_interval, 0}]),
-            ?assertEqual(0, lager_test_backend:count()),
-            lager:log(error, self(), "Test message1"),
-            ?assertEqual(1, lager_test_backend:count()),
-            ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
-            lager:log(error, self(), "Test message2"),
-            ?assertEqual(2, lager_test_backend:count()),
-            {ok, Bin} = file:read_file(TestLog),
-            Pid = pid_to_list(self()),
-            ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-            ?assertEqual(ok, file:rename(TestLog, TestLog0)),
-            lager:log(error, self(), "Test message3"),
-            ?assertEqual(3, lager_test_backend:count()),
-            {ok, Bin2} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],
-                re:split(Bin2, " ", [{return, list}, {parts, 5}]))
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, info}, {check_interval, 0}]),
+                    ?assertEqual(0, lager_test_backend:count()),
+                    lager:log(error, self(), "Test message1"),
+                    ?assertEqual(1, lager_test_backend:count()),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
+                    lager:log(error, self(), "Test message2"),
+                    ?assertEqual(2, lager_test_backend:count()),
+                    {ok, Bin} = file:read_file(TestLog),
+                    Pid = pid_to_list(self()),
+                    ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
+                        re:split(Bin, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:rename(TestLog, TestLog0)),
+                    lager:log(error, self(), "Test message3"),
+                    ?assertEqual(3, lager_test_backend:count()),
+                    {ok, Bin2} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],
+                        re:split(Bin2, " ", [{return, list}, {parts, 5}]))
+            end
         end},
         {"internal size rotation should work",
         fun() ->

@@ -298,27 +298,34 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"file that becomes unavailable at runtime should trigger an error message",
             fun() ->
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
-                ?assertEqual(0, lager_test_backend:count()),
-                sync_error_logger:error_msg("Test message\n"),
-                _ = gen_event:which_handlers(error_logger),
-                ?assertEqual(1, lager_test_backend:count()),
-                ?assertEqual(ok, file:delete(CrashLog)),
-                ?assertEqual(ok, lager_util:safe_write_file(CrashLog, "")),
-                {ok, FInfo0} = file:read_file_info(CrashLog, [raw]),
-                FInfo1 = FInfo0#file_info{mode = 0},
-                ?assertEqual(ok, file:write_file_info(CrashLog, FInfo1)),
-                sync_error_logger:error_msg("Test message\n"),
-                _ = gen_event:which_handlers(error_logger),
-                % Note: required on win32, do this early to prevent subsequent failures
-                % from preventing cleanup
-                ?assertEqual(ok, file:write_file_info(CrashLog, FInfo0)),
-                ?assertEqual(3, lager_test_backend:count()),
-                lager_test_backend:pop(),
-                {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
-                ?assertEqual(
-                    "Failed to reopen crash log " ++ CrashLog ++ " with error: permission denied",
-                    lists:flatten(Message))
+                case os:type() of
+                    {win32, _} ->
+                        % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                        % while a process has an open file handle referencing it
+                        ok;
+                    _ ->
+                        {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        ?assertEqual(1, lager_test_backend:count()),
+                        ?assertEqual(ok, file:delete(CrashLog)),
+                        ?assertEqual(ok, lager_util:safe_write_file(CrashLog, "")),
+                        {ok, FInfo0} = file:read_file_info(CrashLog, [raw]),
+                        FInfo1 = FInfo0#file_info{mode = 0},
+                        ?assertEqual(ok, file:write_file_info(CrashLog, FInfo1)),
+                        sync_error_logger:error_msg("Test message\n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        % Note: required on win32, do this early to prevent subsequent failures
+                        % from preventing cleanup
+                        ?assertEqual(ok, file:write_file_info(CrashLog, FInfo0)),
+                        ?assertEqual(3, lager_test_backend:count()),
+                        lager_test_backend:pop(),
+                        {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
+                        ?assertEqual(
+                            "Failed to reopen crash log " ++ CrashLog ++ " with error: permission denied",
+                            lists:flatten(Message))
+                end
             end}
         end,
         fun(CrashLog) ->
@@ -343,23 +350,30 @@ filesystem_test_() ->
         fun(CrashLog) ->
             {"external logfile rotation/deletion should be handled",
             fun() ->
-                {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
-                ?assertEqual(0, lager_test_backend:count()),
-                sync_error_logger:error_msg("Test message~n"),
-                _ = gen_event:which_handlers(error_logger),
-                {ok, Bin} = file:read_file(CrashLog),
-                ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}])),
-                ?assertEqual(ok, file:delete(CrashLog)),
-                ?assertEqual(ok, lager_util:safe_write_file(CrashLog, "")),
-                sync_error_logger:error_msg("Test message1~n"),
-                _ = gen_event:which_handlers(error_logger),
-                {ok, Bin1} = file:read_file(CrashLog),
-                ?assertMatch([_, "Test message1\n"], re:split(Bin1, "\n", [{return, list}, {parts, 2}])),
-                file:rename(CrashLog, CrashLog ++ ".0"),
-                sync_error_logger:error_msg("Test message2~n"),
-                _ = gen_event:which_handlers(error_logger),
-                {ok, Bin2} = file:read_file(CrashLog),
-                ?assertMatch([_, "Test message2\n"], re:split(Bin2, "\n", [{return, list}, {parts, 2}]))
+                case os:type() of
+                    {win32, _} ->
+                        % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                        % while a process has an open file handle referencing it
+                        ok;
+                    _ ->
+                        {ok, _} = ?MODULE:start_link(CrashLog, 65535, 0, undefined, 0, lager_rotator_default),
+                        ?assertEqual(0, lager_test_backend:count()),
+                        sync_error_logger:error_msg("Test message~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin} = file:read_file(CrashLog),
+                        ?assertMatch([_, "Test message\n"], re:split(Bin, "\n", [{return, list}, {parts, 2}])),
+                        ?assertEqual(ok, file:delete(CrashLog)),
+                        ?assertEqual(ok, lager_util:safe_write_file(CrashLog, "")),
+                        sync_error_logger:error_msg("Test message1~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin1} = file:read_file(CrashLog),
+                        ?assertMatch([_, "Test message1\n"], re:split(Bin1, "\n", [{return, list}, {parts, 2}])),
+                        file:rename(CrashLog, CrashLog ++ ".0"),
+                        sync_error_logger:error_msg("Test message2~n"),
+                        _ = gen_event:which_handlers(error_logger),
+                        {ok, Bin2} = file:read_file(CrashLog),
+                        ?assertMatch([_, "Test message2\n"], re:split(Bin2, "\n", [{return, list}, {parts, 2}]))
+                end
             end}
         end
     ]}.
