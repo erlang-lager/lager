@@ -496,7 +496,7 @@ rotation_test_() ->
             SyncInterval = ?DEFAULT_SYNC_INTERVAL,
             Rotator = ?DEFAULT_ROTATION_MOD,
             CheckInterval = 0, %% hard to test delayed mode
-            {ok, TestDir} = lager_util:get_test_dir(),
+            {ok, TestDir} = lager_util:create_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             #state{name=TestLog, level=?DEBUG, sync_on=SyncLevel,
                 sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval,
@@ -598,7 +598,7 @@ filesystem_test_() ->
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = application:set_env(lager, async_threshold, undefined),
-            ok = lager_util:create_test_dir(),
+            {ok, _TestDir} = lager_util:create_test_dir(),
             ok = lager:start(),
             %% race condition where lager logs its own start up
             %% makes several tests fail. See test/lager_test_backend

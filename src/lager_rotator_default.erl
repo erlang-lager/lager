@@ -110,10 +110,10 @@ do_update_ctime(_, _Name, FInfo) ->
 
 rotate_file_test() ->
     RotCount = 10,
-    TestDir = lager_util:create_test_dir(),
+    {ok, TestDir} = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
     Outer = fun(N) ->
-        ?assertEqual(ok, file:write_file(TestLog, erlang:integer_to_list(N))),
+        ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, erlang:integer_to_list(N))),
         Inner = fun(M) ->
             File = lists:flatten([TestLog, $., erlang:integer_to_list(M)]),
             ?assert(filelib:is_regular(File)),
@@ -134,7 +134,7 @@ rotate_file_test() ->
 
 rotate_file_zero_count_test() ->
     %% Test that a rotation count of 0 simply truncates the file
-    TestDir = lager_util:create_test_dir(),
+    {ok, TestDir} = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
     ?assertMatch(ok, rotate_logfile(TestLog, 0)),
     ?assertNot(filelib:is_regular(TestLog ++ ".0")),
@@ -150,14 +150,14 @@ rotate_file_zero_count_test() ->
     lager_util:delete_test_dir(TestDir).
 
 rotate_file_fail_test() ->
-    TestDir = lager_util:create_test_dir(),
+    {ok, TestDir} = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
 
     %% set known permissions on it
     ok = lager_util:set_dir_permissions("u+rwx", TestDir),
 
     %% write a file
-    file:write_file(TestLog, "hello"),
+    ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "hello")),
 
     case os:type() of
         {win32, _} -> ok;

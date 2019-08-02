@@ -243,7 +243,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, ctime=Ctime, flap=Fla
 filesystem_test_() ->
     {foreach,
         fun() ->
-            {ok, TestDir} = lager_util:get_test_dir(),
+            {ok, TestDir} = lager_util:create_test_dir(),
             CrashLog = filename:join(TestDir, "crash_test.log"),
             ok = lager_test_util:safe_write_file(CrashLog, []),
             ok = error_logger:tty(false),

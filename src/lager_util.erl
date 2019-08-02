@@ -863,13 +863,13 @@ create_test_dir() ->
                       ?assertEqual({error, eexist}, Err),
                       create_test_dir()
                   end,
-    ok = application:set_env(lager, test_dir, TestDir).
+    ok = application:set_env(lager, test_dir, TestDir),
+    {ok, TestDir}.
 
 get_test_dir() ->
     case application:get_env(lager, test_dir) of
         undefined ->
-            ok = create_test_dir(),
-            get_test_dir();
+            create_test_dir();
         {ok, _}=Res ->
             Res
     end.
