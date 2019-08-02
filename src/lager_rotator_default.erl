@@ -42,26 +42,11 @@ open_logfile(Name, Buffer) ->
 ensure_logfile(Name, undefined, _Inode, _Ctime, Buffer) ->
     open_logfile(Name, Buffer);
 ensure_logfile(Name, FD, Inode0, Ctime0, Buffer) ->
-    case file:read_file_info(Name, [raw]) of
-        {ok, FInfo} ->
-            {OsType, _} = os:type(),
-            Inode1 = FInfo#file_info.inode,
-            Ctime1 = FInfo#file_info.ctime,
-            case {OsType, Inode0 =:= Inode1, Ctime0 =:= Ctime1} of
-                % Note: on win32, Inode is always zero
-                % So check the file's ctime to see if it
-                % needs to be re-opened
-                {win32, _, false} ->
-                    reopen_logfile(Name, FD, Buffer);
-                {win32, _, true} ->
-                    {ok, {FD, Inode0, Ctime0, FInfo#file_info.size}};
-                {unix, true, _} ->
-                    {ok, {FD, Inode0, Ctime0, FInfo#file_info.size}};
-                {unix, false, _} ->
-                    reopen_logfile(Name, FD, Buffer)
-            end;
-        _ ->
-            reopen_logfile(Name, FD, Buffer)
+    case lager_util:has_file_changed(Name, Inode0, Ctime0) of
+        {true, _FInfo} ->
+            reopen_logfile(Name, FD, Buffer);
+        {_, FInfo} ->
+            {ok, {FD, Inode0, Ctime0, FInfo#file_info.size}}
     end.
 
 reopen_logfile(Name, FD0, Buffer) ->

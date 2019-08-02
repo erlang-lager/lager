@@ -289,12 +289,8 @@ write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
             % TODO this code is duplicated in the default rotator, but we need
             % to know if the file has changed "out from under lager" so we don't
             % write to an invalid FD
-            case file:read_file_info(Name, [raw]) of
-                {ok, #file_info{inode=Inode1, ctime=Ctime1}} ->
-                    Inode0 =/= Inode1 orelse Ctime0 =/= Ctime1;
-                _ ->
-                    true
-            end
+            {Result, _FInfo} = lager_util:has_file_changed(Name, Inode0, Ctime0),
+            Result
     end.
 
 do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->

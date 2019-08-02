@@ -27,7 +27,8 @@
     localtime_ms/0, localtime_ms/1, maybe_utc/1, parse_rotation_date_spec/1,
     calculate_next_rotation/1, validate_trace/1, check_traces/4, is_loggable/3,
     trace_filter/1, trace_filter/2, expand_path/1, find_file/2, check_hwm/1, check_hwm/2,
-    make_internal_sink_name/1, otp_version/0, maybe_flush/2
+    make_internal_sink_name/1, otp_version/0, maybe_flush/2,
+    has_file_changed/3
 ]).
 
 -ifdef(TEST).
@@ -39,6 +40,8 @@
 -endif.
 
 -include("lager.hrl").
+
+-include_lib("kernel/include/file.hrl").
 
 levels() ->
     [debug, info, notice, warning, error, critical, alert, emergency, none].
@@ -591,6 +594,26 @@ maybe_flush(undefined, #lager_shaper{} = S) ->
     S;
 maybe_flush(Flag, #lager_shaper{} = S) when is_boolean(Flag) ->
     S#lager_shaper{flush_queue = Flag}.
+
+-spec has_file_changed(Name :: file:name_all(),
+                       Inode0 :: pos_integer(),
+                       Ctime0 :: file:date_time()) -> {boolean(), file:file_info()}.
+has_file_changed(Name, Inode0, Ctime0) ->
+    {OsType, _} = os:type(),
+    F = file:read_file_info(Name, [raw]),
+    case {OsType, F} of
+        {win32, {ok, #file_info{ctime=Ctime1}=FInfo}} ->
+            % Note: on win32, Inode is always zero
+            % So check the file's ctime to see if it
+            % needs to be re-opened
+            Changed = Ctime0 =/= Ctime1,
+            {Changed, FInfo};
+        {_, {ok, #file_info{inode=Inode1}=FInfo}} ->
+            Changed = Inode0 =/= Inode1,
+            {Changed, FInfo};
+        {_, _} ->
+            {true, undefined}
+    end.
 
 -ifdef(TEST).
 
