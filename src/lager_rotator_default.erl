@@ -113,7 +113,7 @@ rotate_file_test() ->
     {ok, TestDir} = lager_util:create_test_dir(),
     TestLog = filename:join(TestDir, "rotation.log"),
     Outer = fun(N) ->
-        ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, erlang:integer_to_list(N))),
+        ?assertEqual(ok, lager_util:safe_write_file(TestLog, erlang:integer_to_list(N))),
         Inner = fun(M) ->
             File = lists:flatten([TestLog, $., erlang:integer_to_list(M)]),
             ?assert(filelib:is_regular(File)),
@@ -157,7 +157,7 @@ rotate_file_fail_test() ->
     ok = lager_util:set_dir_permissions("u+rwx", TestDir),
 
     %% write a file
-    ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "hello")),
+    ?assertEqual(ok, lager_util:safe_write_file(TestLog, "hello")),
 
     case os:type() of
         {win32, _} -> ok;

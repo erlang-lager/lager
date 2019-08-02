@@ -32,10 +32,10 @@
 ]).
 
 -ifdef(TEST).
--export([create_test_dir/0,
-         get_test_dir/0,
-         delete_test_dir/0,
-         set_dir_permissions/2]).
+-export([create_test_dir/0, get_test_dir/0, delete_test_dir/0,
+         set_dir_permissions/2,
+         safe_application_load/1,
+         safe_write_file/2]).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
 
@@ -942,5 +942,27 @@ do_set_dir_permissions({win32, _}, _Perms, _Dir) ->
 do_set_dir_permissions({unix, _}, Perms, Dir) ->
     os:cmd("chmod -R " ++ Perms ++ " " ++ Dir),
     ok.
+
+safe_application_load(App) ->
+    case application:load(App) of
+        ok ->
+            ok;
+        {error, {already_loaded, App}} ->
+            ok;
+        Error ->
+            ?assertEqual(ok, Error)
+    end.
+
+safe_write_file(File, Content) ->
+    % Note: ensures that the new creation time is at least one second
+    % in the future
+    ?assertEqual(ok, file:write_file(File, Content)),
+    Ctime0 = calendar:local_time(),
+    Ctime0Sec = calendar:datetime_to_gregorian_seconds(Ctime0),
+    Ctime1Sec = Ctime0Sec + 1,
+    Ctime1 = calendar:gregorian_seconds_to_datetime(Ctime1Sec),
+    {ok, FInfo0} = file:read_file_info(File, [raw]),
+    FInfo1 = FInfo0#file_info{ctime = Ctime1},
+    ?assertEqual(ok, file:write_file_info(File, FInfo1, [raw])).
 
 -endif.

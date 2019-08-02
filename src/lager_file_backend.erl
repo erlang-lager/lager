@@ -594,7 +594,7 @@ filesystem_test_() ->
     {foreach,
         fun() ->
             ok = error_logger:tty(false),
-            ok = lager_test_util:safe_application_load(lager),
+            ok = lager_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = application:set_env(lager, async_threshold, undefined),
@@ -658,7 +658,7 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, [])),
 
             {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
@@ -689,7 +689,7 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "")),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
             {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
             FInfo1 = FInfo0#file_info{mode = 0},
             ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
@@ -708,7 +708,7 @@ filesystem_test_() ->
         fun() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, [])),
 
             {ok, FInfo} = file:read_file_info(TestLog, [raw]),
             OldPerms = FInfo#file_info.mode,
@@ -739,7 +739,7 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message1"),
             ?assertEqual(1, lager_test_backend:count()),
             ?assertEqual(ok, file:delete(TestLog)),
-            ?assertEqual(ok, lager_test_util:safe_write_file(TestLog, "")),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
             lager:log(error, self(), "Test message2"),
             ?assertEqual(2, lager_test_backend:count()),
             {ok, Bin} = file:read_file(TestLog),
@@ -997,7 +997,7 @@ trace_files_test_() ->
             Events  = filename:join(TestDir, "events.log"),
 
             ok = error_logger:tty(false),
-            ok = lager_test_util:safe_application_load(lager),
+            ok = lager_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [
                      {lager_file_backend, [
                          {file, Log},
@@ -1068,10 +1068,10 @@ formatting_test_() ->
             {ok, TestDir} = lager_util:get_test_dir(),
             Log1 = filename:join(TestDir, "test.log"),
             Log2 = filename:join(TestDir, "test2.log"),
-            ?assertEqual(ok, lager_test_util:safe_write_file(Log1, [])),
-            ?assertEqual(ok, lager_test_util:safe_write_file(Log2, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(Log1, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(Log2, [])),
             ok = error_logger:tty(false),
-            ok = lager_test_util:safe_application_load(lager),
+            ok = lager_util:safe_application_load(lager),
             ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
             ok = application:set_env(lager, error_logger_redirect, false),
             ok = lager:start(),
