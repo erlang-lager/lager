@@ -1,5 +1,9 @@
 # Windows build and test of lager
 
+cache:
+  - C:\ProgramData\chocolatey\bin -> appveyor.yml
+  - C:\ProgramData\chocolatey\lib -> appveyor.yml
+
 install:
   - cinst rebar3
 
