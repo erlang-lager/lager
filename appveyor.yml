@@ -1,0 +1,9 @@
+# Windows build and test of lager
+
+install:
+  - cinst rebar3
+
+test_script:
+  - rebar3 eunit
+
+deploy: false
