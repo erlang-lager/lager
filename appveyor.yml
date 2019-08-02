@@ -1,9 +1,6 @@
-install:
-  - cinst rebar3
-
 build: off
 
 test_script:
-  - rebar3 eunit
+  - escript rebar eunit
 
 deploy: false
