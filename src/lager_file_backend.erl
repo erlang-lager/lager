@@ -472,7 +472,6 @@ close_file(#state{fd=undefined} = State) ->
     State;
 close_file(#state{fd=FD} = State) ->
     %% Flush and close any file handles.
-    %% TODO LRB don't match, but report errors???
     _ = file:datasync(FD),
     %% delayed write can cause file:close not to do a close
     _ = file:close(FD),

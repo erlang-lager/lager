@@ -68,6 +68,7 @@ rotate_logfile(File, 0) ->
     case file:open(File, [write]) of
         {ok, FD} ->
             _ = file:close(FD),
+            _ = file:close(FD),
             {ok, _Ctime} = maybe_update_ctime(File),
             ok;
         Error ->
