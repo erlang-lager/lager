@@ -49,7 +49,7 @@ pr_stacktrace_bad_arity_test() ->
             lager:pr_stacktrace(?GET_STACK(Stacktrace), {Class, Reason})
     end,
     Want = "pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 46\n    lists:concat([], [])\nerror:undef",
-    ?assertNotEqual(nomatch, string:str(Got, Want)).
+    ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_no_reverse_test() ->
     application:set_env(lager, reverse_pretty_stacktrace, false),
