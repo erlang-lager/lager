@@ -930,7 +930,6 @@ do_delete_file(FsElem, Attempts) ->
     case file:delete(FsElem) of
         ok -> ok;
         Error ->
-            io:format(standard_error, "@@@@@@@@ DELETE FILE ~p ERROR ~p~n", [FsElem, Error]),
             do_delete_file(FsElem, Attempts - 1)
     end.
 

@@ -50,7 +50,9 @@ ensure_logfile(Name, FD, Inode0, Ctime0, Buffer) ->
     end.
 
 reopen_logfile(Name, FD0, Buffer) ->
+    %% Flush and close any file handles.
     %% delayed write can cause file:close not to do a close
+    _ = file:datasync(FD0),
     _ = file:close(FD0),
     _ = file:close(FD0),
     case open_logfile(Name, Buffer) of

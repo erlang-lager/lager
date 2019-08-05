@@ -191,8 +191,8 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
-handle_info({rotate, File}, #state{name=File,count=Count,date=Date,rotator=Rotator} = State) ->
-    State1 = close_file(State),
+handle_info({rotate, File}, #state{name=File, count=Count, date=Date, rotator=Rotator}=State0) ->
+    State1 = close_file(State0),
     _ = Rotator:rotate_logfile(File, Count),
     schedule_rotation(File, Date),
     {ok, State1};
@@ -242,40 +242,42 @@ config_to_id(Config) ->
 write(#state{name=Name, fd=FD,
              inode=Inode, ctime=Ctime,
              flap=Flap, size=RotSize,
-             count=Count, rotator=Rotator} = State, Timestamp, Level, Msg) ->
-    case write_should_check(State, Timestamp) of
+             count=Count, rotator=Rotator}=State0, Timestamp, Level, Msg) ->
+    case write_should_check(State0, Timestamp) of
         true ->
             %% need to check for rotation
-            Buffer = {State#state.sync_size, State#state.sync_interval},
+            Buffer = {State0#state.sync_size, State0#state.sync_interval},
             case Rotator:ensure_logfile(Name, FD, Inode, Ctime, Buffer) of
-                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize /= 0, Size > RotSize ->
+                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize > 0, Size > RotSize ->
+                    State1 = close_file(State0),
                     case Rotator:rotate_logfile(Name, Count) of
                         ok ->
                             %% go around the loop again, we'll do another rotation check and hit the next clause of ensure_logfile
-                            write(State, Timestamp, Level, Msg);
+                            write(State1, Timestamp, Level, Msg);
                         {error, Reason} ->
                             case Flap of
                                 true ->
-                                    State;
+                                    State1;
                                 _ ->
                                     ?INT_LOG(error, "Failed to rotate log file ~s with error ~s", [Name, file:format_error(Reason)]),
-                                    State#state{flap=true}
+                                    State1#state{flap=true}
                             end
                     end;
                 {ok, {NewFD, NewInode, NewCtime, _Size}} ->
                     %% update our last check and try again
-                    do_write(State#state{last_check=Timestamp, fd=NewFD, inode=NewInode, ctime=NewCtime}, Level, Msg);
+                    State1 = State0#state{last_check=Timestamp, fd=NewFD, inode=NewInode, ctime=NewCtime},
+                    do_write(State1, Level, Msg);
                 {error, Reason} ->
                     case Flap of
                         true ->
-                            State;
+                            State0;
                         _ ->
                             ?INT_LOG(error, "Failed to reopen log file ~s with error ~s", [Name, file:format_error(Reason)]),
-                            State#state{flap=true}
+                            State0#state{flap=true}
                     end
             end;
         false ->
-            do_write(State, Level, Msg)
+            do_write(State0, Level, Msg)
     end.
 
 write_should_check(#state{fd=undefined}, _Timestamp) ->
@@ -287,8 +289,7 @@ write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
         true ->
             true;
         _ ->
-            % TODO this code is duplicated in the default rotator, but we need
-            % to know if the file has changed "out from under lager" so we don't
+            % We need to know if the file has changed "out from under lager" so we don't
             % write to an invalid FD
             {Result, _FInfo} = lager_util:has_file_changed(Name, Inode0, Ctime0),
             Result
@@ -298,7 +299,7 @@ do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
     %% delayed_write doesn't report errors
     _ = file:write(FD, unicode:characters_to_binary(Msg)),
     {mask, SyncLevel} = State#state.sync_on,
-    case (Level band SyncLevel) /= 0 of
+    case (Level band SyncLevel) =/= 0 of
         true ->
             %% force a sync on any message that matches the 'sync_on' bitmask
             Flap2 = case file:datasync(FD) of
@@ -472,8 +473,8 @@ close_file(#state{fd=undefined} = State) ->
     State;
 close_file(#state{fd=FD} = State) ->
     %% Flush and close any file handles.
-    _ = file:datasync(FD),
     %% delayed write can cause file:close not to do a close
+    _ = file:datasync(FD),
     _ = file:close(FD),
     _ = file:close(FD),
     State#state{fd=undefined}.
