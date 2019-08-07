@@ -392,7 +392,7 @@ status() ->
                     Level = get_loglevel(Sink, Handler),
                     case Handler of
                         {lager_file_backend, File} ->
-                            io_lib:format("File ~s (~s) at level ~p\n", [File, Sink, Level]);
+                            io_lib:format("File ~ts (~s) at level ~p\n", [File, Sink, Level]);
                         lager_console_backend ->
                             io_lib:format("Console (~s) at level ~p\n", [Sink, Level]);
                         _ ->
