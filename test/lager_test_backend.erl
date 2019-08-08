@@ -1790,7 +1790,7 @@ async_threshold_test_() ->
 
             %% serialize on mailbox
             _ = gen_event:which_handlers(lager_event),
-            timer:sleep(1000),
+            timer:sleep(5000),
 
             %% By now the flood of messages should have forced the backend throttle
             %% to turn off async mode, but it's possible all outstanding requests
@@ -1807,12 +1807,12 @@ async_threshold_test_() ->
 
             %% serialize on the mailbox again
             _ = gen_event:which_handlers(lager_event),
+            timer:sleep(5000),
 
-            %% just in case...
-            timer:sleep(1000),
             lager:info("hello world"),
+
             _ = gen_event:which_handlers(lager_event),
-            timer:sleep(1000),
+            timer:sleep(5000),
 
             %% async is true again now that the mailbox has drained
             ?assertEqual(true, lager_config:get(async)),
