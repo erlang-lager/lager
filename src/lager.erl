@@ -24,6 +24,10 @@
 -define(TRACE_SINK, '__trace_sink').
 -define(ROTATE_TIMEOUT, 100000).
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
 %% API
 -export([start/0,
         log/3, log/4, log/5,
@@ -389,32 +393,25 @@ status() ->
     end,
     Status = ["Lager status:\n",
         [begin
-                    Level = get_loglevel(Sink, Handler),
-                    case Handler of
-                        {lager_file_backend, File} ->
-                            io_lib:format("File ~s (~s) at level ~p\n", [File, Sink, Level]);
-                        lager_console_backend ->
-                            io_lib:format("Console (~s) at level ~p\n", [Sink, Level]);
-                        _ ->
-                            []
-                    end
-            end || {Handler, _Watcher, Sink} <- lists:sort(fun({_, _, S1},
-                                                               {_, _, S2}) -> S1 =< S2 end,
-                                                           Handlers)],
+             Level = get_loglevel(Sink, Handler),
+             get_sink_handler_status(Sink, Handler, Level)
+         end || {Handler, _Watcher, Sink} <- lists:sort(fun({_, _, S1},
+                                                            {_, _, S2}) -> S1 =< S2 end,
+                                                        Handlers)],
         "Active Traces:\n",
         [begin
-                    LevelName = case Level of
-                        {mask, Mask} ->
-                            case lager_util:mask_to_levels(Mask) of
-                                [] -> none;
-                                Levels -> hd(Levels)
-                            end;
-                        Num ->
-                            lager_util:num_to_level(Num)
-                    end,
-                    io_lib:format("Tracing messages matching ~p (sink ~s) at level ~p to ~p\n",
-                        [Filter, Sink, LevelName, Destination])
-            end || {Sink, {Filter, Level, Destination}} <- Traces],
+             LevelName = case Level of
+                 {mask, Mask} ->
+                     case lager_util:mask_to_levels(Mask) of
+                         [] -> none;
+                         Levels -> hd(Levels)
+                     end;
+                 Num ->
+                     lager_util:num_to_level(Num)
+             end,
+             io_lib:format("Tracing messages matching ~p (sink ~s) at level ~p to ~p\n",
+                           [Filter, Sink, LevelName, Destination])
+         end || {Sink, {Filter, Level, Destination}} <- Traces],
          [
          "Tracing Reductions:\n",
             case ?DEFAULT_TRACER:info('query') of
@@ -432,6 +429,15 @@ status() ->
          ]],
     io:put_chars(Status).
 
+get_sink_handler_status(Sink, Handler, Level) ->
+    case Handler of
+        {lager_file_backend, File} ->
+            io_lib:format("File ~ts (~s) at level ~p\n", [File, Sink, Level]);
+        lager_console_backend ->
+            io_lib:format("Console (~s) at level ~p\n", [Sink, Level]);
+        _ ->
+            []
+    end.
 
 %% @doc Set the loglevel for a particular backend.
 set_loglevel(Handler, Level) when is_atom(Level) ->
@@ -719,3 +725,22 @@ check_timeout(#trace_func_state_v1{timeout=Timeout, started=Started} = FuncState
         false ->
             FuncState
     end.
+
+-ifdef(TEST).
+get_sink_handler_status_ascii_test() ->
+    File = "C:\\ProgramData\\Directory With Spaces\\lager.log",
+    validate_status(File).
+
+get_sink_handler_status_latin_test() ->
+    File = "C:\\ProgramData\\Tést Directory\\lager.log",
+    validate_status(File).
+
+get_sink_handler_status_unicode_test() ->
+    File = "C:\\ProgramData\\찦차를 타고 온 펲시맨과 쑛다리 똠방각하 (Korean)\\lager.log",
+    validate_status(File).
+
+validate_status(File) ->
+    Handler = {lager_file_backend, File},
+    Status = get_sink_handler_status(?DEFAULT_SINK, Handler, debug),
+    ?assertNotEqual(nomatch, string:find(Status, File)).
+-endif.
