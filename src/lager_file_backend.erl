@@ -128,7 +128,7 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
                 {ok, {FD, Inode, Ctime, _Size}} ->
                     State0#state{fd=FD, inode=Inode, ctime=Ctime};
                 {error, Reason} ->
-                    ?INT_LOG(error, "Failed to open log file ~s with error ~s", [Name, file:format_error(Reason)]),
+                    ?INT_LOG(error, "Failed to open log file ~ts with error ~s", [Name, file:format_error(Reason)]),
                     State0#state{flap=true}
             end,
             {ok, State}
@@ -151,7 +151,7 @@ handle_call({set_loghwm, Hwm}, #state{shaper=Shaper, name=Name} = State) ->
             {ok, {error, bad_log_hwm}, State};
         _ ->
             NewShaper = Shaper#lager_shaper{hwm=Hwm},
-            ?INT_LOG(notice, "Changed loghwm of ~s to ~p", [Name, Hwm]),
+            ?INT_LOG(notice, "Changed loghwm of ~ts to ~p", [Name, Hwm]),
             {ok, {last_loghwm, Shaper#lager_shaper.hwm}, State#state{shaper=NewShaper}}
     end;
 handle_call(rotate, State = #state{name=File}) ->
@@ -259,8 +259,8 @@ write(#state{name=Name, fd=FD,
                                 true ->
                                     State1;
                                 _ ->
-                                    ?INT_LOG(error, "Failed to rotate log file ~s with error ~s", [Name, file:format_error(Reason)]),
-                                    State1#state{flap=true}
+                                    ?INT_LOG(error, "Failed to rotate log file ~ts with error ~s", [Name, file:format_error(Reason)]),
+                                    State#state{flap=true}
                             end
                     end;
                 {ok, {NewFD, NewInode, NewCtime, _Size}} ->
@@ -272,8 +272,8 @@ write(#state{name=Name, fd=FD,
                         true ->
                             State0;
                         _ ->
-                            ?INT_LOG(error, "Failed to reopen log file ~s with error ~s", [Name, file:format_error(Reason)]),
-                            State0#state{flap=true}
+                            ?INT_LOG(error, "Failed to reopen log file ~ts with error ~s", [Name, file:format_error(Reason)]),
+                            State#state{flap=true}
                     end
             end;
         false ->
@@ -304,7 +304,7 @@ do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
             %% force a sync on any message that matches the 'sync_on' bitmask
             Flap2 = case file:datasync(FD) of
                 {error, Reason2} when Flap == false ->
-                    ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                    ?INT_LOG(error, "Failed to write log message to file ~ts: ~s",
                         [Name, file:format_error(Reason2)]),
                     true;
                 ok ->
@@ -347,7 +347,7 @@ validate_logfile_proplist(List) ->
             end
     catch
         {bad_config, Msg, Value} ->
-            ?INT_LOG(error, "~s ~p for file ~p",
+            ?INT_LOG(error, "~s ~p for file ~tp",
                 [Msg, Value, proplists:get_value(file, List)]),
             false
     end.

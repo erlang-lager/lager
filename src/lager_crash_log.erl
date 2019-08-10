@@ -81,7 +81,7 @@ init([RelFilename, MaxBytes, Size, Date, Count, Rotator]) ->
                     fmtmaxbytes=MaxBytes, size=Size, count=Count, date=Date,
                     rotator=Rotator}};
         {error, Reason} ->
-            ?INT_LOG(error, "Failed to open crash log file ~s with error: ~s",
+            ?INT_LOG(error, "Failed to open crash log file ~ts with error: ~s",
                 [Filename, file:format_error(Reason)]),
             {ok, #state{name=Filename, fmtmaxbytes=MaxBytes, flap=true,
                     size=Size, count=Count, date=Date, rotator=Rotator}}
@@ -217,7 +217,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, ctime=Ctime, flap=Fla
                     Msg = io_lib:format("~s~s~s", [Time, MsgStr, NodeSuffix]),
                     case file:write(NewFD, unicode:characters_to_binary(Msg)) of
                         {error, Reason} when Flap == false ->
-                            ?INT_LOG(error, "Failed to write log message to file ~s: ~s",
+                            ?INT_LOG(error, "Failed to write log message to file ~ts: ~s",
                                 [Name, file:format_error(Reason)]),
                             {ok, State#state{fd=NewFD, inode=NewInode, ctime=NewCtime, flap=true}};
                         ok ->
@@ -230,7 +230,7 @@ do_log({log, Event}, #state{name=Name, fd=FD, inode=Inode, ctime=Ctime, flap=Fla
                         true ->
                             {ok, State};
                         _ ->
-                            ?INT_LOG(error, "Failed to reopen crash log ~s with error: ~s",
+                            ?INT_LOG(error, "Failed to reopen crash log ~ts with error: ~s",
                                 [Name, file:format_error(Reason)]),
                             {ok, State#state{flap=true}}
                     end
