@@ -260,7 +260,7 @@ write(#state{name=Name, fd=FD,
                                     State1;
                                 _ ->
                                     ?INT_LOG(error, "Failed to rotate log file ~ts with error ~s", [Name, file:format_error(Reason)]),
-                                    State#state{flap=true}
+                                    State1#state{flap=true}
                             end
                     end;
                 {ok, {NewFD, NewInode, NewCtime, _Size}} ->
@@ -273,7 +273,7 @@ write(#state{name=Name, fd=FD,
                             State0;
                         _ ->
                             ?INT_LOG(error, "Failed to reopen log file ~ts with error ~s", [Name, file:format_error(Reason)]),
-                            State#state{flap=true}
+                            State0#state{flap=true}
                     end
             end;
         false ->

@@ -929,7 +929,7 @@ do_delete_file(_FsElem, 0) ->
 do_delete_file(FsElem, Attempts) ->
     case file:delete(FsElem) of
         ok -> ok;
-        Error ->
+        _Error ->
             do_delete_file(FsElem, Attempts - 1)
     end.
 
