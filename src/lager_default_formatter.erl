@@ -484,14 +484,13 @@ basic_test_() ->
         },
         {"node formatting basic",
             begin
-                [N, F] = format(lager_msg:new("Message",
-                                               Now,
-                                               info,
-                                               [{pid, self()}],
-                                               []),
-                                 [node, "foo"]),
-                ?_assertEqual("foo", F),
-                ?_assertNotEqual(nomatch, re:run(N, <<"@">>))
+                [N, "foo"] = format(lager_msg:new("Message",
+                                                  Now,
+                                                  info,
+                                                  [{pid, self()}],
+                                                  []),
+                                    [node, "foo"]),
+                ?_assertNotMatch(nomatch, re:run(N, <<"@">>))
             end
         }
     ].

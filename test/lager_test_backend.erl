@@ -1776,6 +1776,8 @@ async_threshold_test_() ->
     {foreach, Setup, Cleanup, [
         {"async threshold works",
          {timeout, 30, fun() ->
+            Sleep = get_long_sleep_value(),
+
             %% we start out async
             ?assertEqual(true, lager_config:get(async)),
             ?assertEqual([{sync_toggled, 0}],
@@ -1790,7 +1792,7 @@ async_threshold_test_() ->
 
             %% serialize on mailbox
             _ = gen_event:which_handlers(lager_event),
-            timer:sleep(500),
+            timer:sleep(Sleep),
 
             %% By now the flood of messages should have forced the backend throttle
             %% to turn off async mode, but it's possible all outstanding requests
@@ -1807,11 +1809,12 @@ async_threshold_test_() ->
 
             %% serialize on the mailbox again
             _ = gen_event:which_handlers(lager_event),
+            timer:sleep(Sleep),
 
-            %% just in case...
-            timer:sleep(1000),
             lager:info("hello world"),
+
             _ = gen_event:which_handlers(lager_event),
+            timer:sleep(Sleep),
 
             %% async is true again now that the mailbox has drained
             ?assertEqual(true, lager_config:get(async)),
@@ -1902,5 +1905,13 @@ high_watermark_test_() ->
             }
         ]
     }.
+
+get_long_sleep_value() ->
+    case os:getenv("CI") of
+        false ->
+            500;
+        _ ->
+            5000
+    end.
 
 -endif.

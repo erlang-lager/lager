@@ -1,0 +1,8 @@
+build: off
+
+test_script:
+  - escript ./rebar get-deps
+  - escript ./rebar compile
+  - escript ./rebar eunit
+
+deploy: false

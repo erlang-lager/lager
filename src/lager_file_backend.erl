@@ -35,12 +35,12 @@
 -module(lager_file_backend).
 
 -include("lager.hrl").
+-include_lib("kernel/include/file.hrl").
 
 -behaviour(gen_event).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--include_lib("kernel/include/file.hrl").
 -compile([{parse_transform, lager_transform}]).
 -endif.
 
@@ -64,7 +64,8 @@
         level :: {'mask', integer()},
         fd :: file:io_device() | undefined,
         inode :: integer() | undefined,
-        flap=false :: boolean(),
+        ctime :: file:date_time() | undefined,
+        flap = false :: boolean(),
         size = 0 :: integer(),
         date :: undefined | string(),
         count = 10 :: integer(),
@@ -76,7 +77,8 @@
         check_interval = ?DEFAULT_CHECK_INTERVAL :: non_neg_integer(),
         sync_interval = ?DEFAULT_SYNC_INTERVAL :: non_neg_integer(),
         sync_size = ?DEFAULT_SYNC_SIZE :: non_neg_integer(),
-        last_check = os:timestamp() :: erlang:timestamp()
+        last_check = os:timestamp() :: erlang:timestamp(),
+        os_type :: atom()
     }).
 
 -type option() :: {file, string()} | {level, lager:log_level()} |
@@ -123,8 +125,8 @@ init(LogFileConfig) when is_list(LogFileConfig) ->
                 shaper=Shaper, formatter=Formatter, formatter_config=FormatterConfig,
                 sync_on=SyncOn, sync_interval=SyncInterval, sync_size=SyncSize, check_interval=CheckInterval},
             State = case Rotator:create_logfile(Name, {SyncSize, SyncInterval}) of
-                {ok, {FD, Inode, _}} ->
-                    State0#state{fd=FD, inode=Inode};
+                {ok, {FD, Inode, Ctime, _Size}} ->
+                    State0#state{fd=FD, inode=Inode, ctime=Ctime};
                 {error, Reason} ->
                     ?INT_LOG(error, "Failed to open log file ~ts with error ~s", [Name, file:format_error(Reason)]),
                     State0#state{flap=true}
@@ -189,8 +191,8 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 %% @private
-handle_info({rotate, File}, #state{name=File,count=Count,date=Date,rotator=Rotator} = State) ->
-    State1 = close_file(State),
+handle_info({rotate, File}, #state{name=File, count=Count, date=Date, rotator=Rotator}=State0) ->
+    State1 = close_file(State0),
     _ = Rotator:rotate_logfile(File, Count),
     schedule_rotation(File, Date),
     {ok, State1};
@@ -237,49 +239,67 @@ config_to_id(Config) ->
             {?MODULE, File}
     end.
 
-
-write(#state{name=Name, fd=FD, inode=Inode, flap=Flap, size=RotSize,
-        count=Count, rotator=Rotator} = State, Timestamp, Level, Msg) ->
-    LastCheck = timer:now_diff(Timestamp, State#state.last_check) div 1000,
-    case LastCheck >= State#state.check_interval orelse FD == undefined of
+write(#state{name=Name, fd=FD,
+             inode=Inode, ctime=Ctime,
+             flap=Flap, size=RotSize,
+             count=Count, rotator=Rotator}=State0, Timestamp, Level, Msg) ->
+    case write_should_check(State0, Timestamp) of
         true ->
             %% need to check for rotation
-            case Rotator:ensure_logfile(Name, FD, Inode, {State#state.sync_size, State#state.sync_interval}) of
-                {ok, {_, _, Size}} when RotSize /= 0, Size > RotSize ->
+            Buffer = {State0#state.sync_size, State0#state.sync_interval},
+            case Rotator:ensure_logfile(Name, FD, Inode, Ctime, Buffer) of
+                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize > 0, Size > RotSize ->
+                    State1 = close_file(State0),
                     case Rotator:rotate_logfile(Name, Count) of
                         ok ->
                             %% go around the loop again, we'll do another rotation check and hit the next clause of ensure_logfile
-                            write(State, Timestamp, Level, Msg);
+                            write(State1, Timestamp, Level, Msg);
                         {error, Reason} ->
                             case Flap of
                                 true ->
-                                    State;
+                                    State1;
                                 _ ->
                                     ?INT_LOG(error, "Failed to rotate log file ~ts with error ~s", [Name, file:format_error(Reason)]),
-                                    State#state{flap=true}
+                                    State1#state{flap=true}
                             end
                     end;
-                {ok, {NewFD, NewInode, _}} ->
+                {ok, {NewFD, NewInode, NewCtime, _Size}} ->
                     %% update our last check and try again
-                    do_write(State#state{last_check=Timestamp, fd=NewFD, inode=NewInode}, Level, Msg);
+                    State1 = State0#state{last_check=Timestamp, fd=NewFD, inode=NewInode, ctime=NewCtime},
+                    do_write(State1, Level, Msg);
                 {error, Reason} ->
                     case Flap of
                         true ->
-                            State;
+                            State0;
                         _ ->
                             ?INT_LOG(error, "Failed to reopen log file ~ts with error ~s", [Name, file:format_error(Reason)]),
-                            State#state{flap=true}
+                            State0#state{flap=true}
                     end
             end;
         false ->
-            do_write(State, Level, Msg)
+            do_write(State0, Level, Msg)
+    end.
+
+write_should_check(#state{fd=undefined}, _Timestamp) ->
+    true;
+write_should_check(#state{last_check=LastCheck0, check_interval=CheckInterval,
+                          name=Name, inode=Inode0, ctime=Ctime0}, Timestamp) ->
+    LastCheck1 = timer:now_diff(Timestamp, LastCheck0) div 1000,
+    case LastCheck1 >= CheckInterval of
+        true ->
+            true;
+        _ ->
+            % We need to know if the file has changed "out from under lager" so we don't
+            % write to an invalid FD
+            {Result, _FInfo} = lager_util:has_file_changed(Name, Inode0, Ctime0),
+            Result
     end.
 
 do_write(#state{fd=FD, name=Name, flap=Flap} = State, Level, Msg) ->
     %% delayed_write doesn't report errors
     _ = file:write(FD, unicode:characters_to_binary(Msg)),
     {mask, SyncLevel} = State#state.sync_on,
-    case (Level band SyncLevel) /= 0 of
+    case (Level band SyncLevel) =/= 0 of
         true ->
             %% force a sync on any message that matches the 'sync_on' bitmask
             Flap2 = case file:datasync(FD) of
@@ -453,7 +473,9 @@ close_file(#state{fd=undefined} = State) ->
     State;
 close_file(#state{fd=FD} = State) ->
     %% Flush and close any file handles.
+    %% delayed write can cause file:close not to do a close
     _ = file:datasync(FD),
+    _ = file:close(FD),
     _ = file:close(FD),
     State#state{fd=undefined}.
 
@@ -461,10 +483,10 @@ close_file(#state{fd=FD} = State) ->
 
 get_loglevel_test() ->
     {ok, Level, _} = handle_call(get_loglevel,
-        #state{name="bar", level=lager_util:config_to_mask(info), fd=0, inode=0}),
+        #state{name="bar", level=lager_util:config_to_mask(info), fd=0, inode=0, ctime=undefined}),
     ?assertEqual(Level, lager_util:config_to_mask(info)),
     {ok, Level2, _} = handle_call(get_loglevel,
-        #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0}),
+        #state{name="foo", level=lager_util:config_to_mask(warning), fd=0, inode=0, ctime=undefined}),
     ?assertEqual(Level2, lager_util:config_to_mask(warning)).
 
 rotation_test_() ->
@@ -475,38 +497,50 @@ rotation_test_() ->
             SyncInterval = ?DEFAULT_SYNC_INTERVAL,
             Rotator = ?DEFAULT_ROTATION_MOD,
             CheckInterval = 0, %% hard to test delayed mode
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:create_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-
-            #state{name=TestLog, level=?DEBUG, sync_on=SyncLevel,
-                sync_size=SyncSize, sync_interval=SyncInterval, check_interval=CheckInterval,
-                rotator=Rotator}
-
+            {OsType, _} = os:type(),
+            #state{name=TestLog,
+                   level=?DEBUG,
+                   sync_on=SyncLevel,
+                   sync_size=SyncSize,
+                   sync_interval=SyncInterval,
+                   check_interval=CheckInterval,
+                   rotator=Rotator,
+                   os_type=OsType}
         end,
-        fun(#state{name=TestLog}) ->
-            lager_util:delete_test_dir(filename:dirname(TestLog))
+        fun(#state{}) ->
+            ok = lager_util:delete_test_dir()
         end, [
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval, rotator = Rotator}) ->
+        fun(DefaultState=#state{name=TestLog, os_type=OsType, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
             {"External rotation should work",
             fun() ->
-                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
-                State0 = DefaultState#state{fd=FD, inode=Inode},
-                ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode},
-                write(State0, os:timestamp(), ?DEBUG, "hello world")),
-                file:delete(TestLog),
-                Result = write(State0, os:timestamp(), ?DEBUG, "hello world"),
-                %% assert file has changed
-                ?assert(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode} =/= Result),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, Result),
-                file:rename(TestLog, TestLog ++ ".1"),
-                Result2 = write(Result, os:timestamp(), ?DEBUG, "hello world"),
-                %% assert file has changed
-                ?assert(Result =/= Result2),
-                ?assertMatch(#state{name=TestLog, level=?DEBUG}, Result2),
-                ok
+                case OsType of
+                    win32 ->
+                        % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                        % while a process has an open file handle referencing it
+                        ok;
+                    _ ->
+                        {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                        State0 = DefaultState#state{fd=FD, inode=Inode, ctime=Ctime},
+                        State1 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime}, State1),
+                        ?assertEqual(ok, file:delete(TestLog)),
+                        State2 = write(State0, os:timestamp(), ?DEBUG, "hello world"),
+                        %% assert file has changed
+                        ExpState1 = #state{name=TestLog, level=?DEBUG, fd=FD, inode=Inode, ctime=Ctime},
+                        ?assertNotEqual(ExpState1, State2),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG}, State2),
+                        ?assertEqual(ok, file:rename(TestLog, TestLog ++ ".1")),
+                        State3 = write(State2, os:timestamp(), ?DEBUG, "hello world"),
+                        %% assert file has changed
+                        ?assertNotEqual(State3, State2),
+                        ?assertMatch(#state{name=TestLog, level=?DEBUG}, State3),
+                        ok
+                end
             end}
         end,
-        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval = SyncInterval, rotator = Rotator}) ->
+        fun(DefaultState = #state{name=TestLog, sync_size=SyncSize, sync_interval=SyncInterval, rotator=Rotator}) ->
             {"Internal rotation and delayed write",
             fun() ->
                 TestLog0 = TestLog ++ ".0",
@@ -514,22 +548,35 @@ rotation_test_() ->
                 RotationSize = 15,
                 PreviousCheck = os:timestamp(),
 
-                {ok, {FD, Inode, _}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
+                {ok, {FD, Inode, Ctime, _Size}} = Rotator:open_logfile(TestLog, {SyncSize, SyncInterval}),
                 State0 = DefaultState#state{
-                    fd=FD, inode=Inode, size=RotationSize,
+                    fd=FD, inode=Inode, ctime=Ctime, size=RotationSize,
                     check_interval=CheckInterval, last_check=PreviousCheck},
 
                 %% new message within check interval with sync_on level
                 Msg1Timestamp = add_secs(PreviousCheck, 1),
-                State0 = State1 = write(State0, Msg1Timestamp, ?ERROR, "big big message 1"),
+                State1 = write(State0, Msg1Timestamp, ?ERROR, "big big message 1"),
+                ?assertEqual(State0, State1),
 
                 %% new message within check interval under sync_on level
                 %% not written to disk yet
                 Msg2Timestamp = add_secs(PreviousCheck, 2),
-                State0 = State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
+                State2 = write(State1, Msg2Timestamp, ?DEBUG, "buffered message 2"),
+                ?assertEqual(State0, State2),
+
+                % Note: we must ensure at least one second (DEFAULT_SYNC_INTERVAL) has passed
+                % for message 1 and 2 to be written to disk
+                ElapsedMs = timer:now_diff(os:timestamp(), PreviousCheck) div 1000,
+                case ElapsedMs > SyncInterval of
+                    true ->
+                        ok;
+                    _ ->
+                        S = SyncInterval - ElapsedMs,
+                        timer:sleep(S)
+                end,
 
                 %% although file size is big enough...
-                {ok, FInfo} = file:read_file_info(TestLog),
+                {ok, FInfo} = file:read_file_info(TestLog, [raw]),
                 ?assert(RotationSize < FInfo#file_info.size),
                 %% ...no rotation yet
                 ?assertEqual(PreviousCheck, State2#state.last_check),
@@ -544,9 +591,9 @@ rotation_test_() ->
 
                 {ok, Bin1} = file:read_file(TestLog0),
                 {ok, Bin2} = file:read_file(TestLog),
-                %% message 1-3 written to file
+                %% message 1-2 written to file
                 ?assertEqual(<<"big big message 1buffered message 2">>, Bin1),
-                %% message 4 buffered, not yet written to file
+                %% message 3 buffered, not yet written to file
                 ?assertEqual(<<"">>, Bin2),
                 ok
             end}
@@ -560,26 +607,28 @@ add_secs({Mega, Secs, Micro}, Add) ->
 filesystem_test_() ->
     {foreach,
         fun() ->
-            error_logger:tty(false),
-            application:load(lager),
-            application:set_env(lager, handlers, [{lager_test_backend, info}]),
-            application:set_env(lager, error_logger_redirect, false),
-            application:set_env(lager, async_threshold, undefined),
-            lager:start(),
+            ok = error_logger:tty(false),
+            ok = lager_util:safe_application_load(lager),
+            ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
+            ok = application:set_env(lager, error_logger_redirect, false),
+            ok = application:set_env(lager, async_threshold, undefined),
+            {ok, _TestDir} = lager_util:create_test_dir(),
+            ok = lager:start(),
             %% race condition where lager logs its own start up
             %% makes several tests fail. See test/lager_test_backend
             %% around line 800 for more information.
-            timer:sleep(5),
-            lager_test_backend:flush()
+            ok = timer:sleep(5),
+            ok = lager_test_backend:flush()
         end,
         fun(_) ->
-            application:stop(lager),
-            application:stop(goldrush),
-            error_logger:tty(true)
+            ok = application:stop(lager),
+            ok = application:stop(goldrush),
+            ok = error_logger:tty(true),
+            ok = lager_util:delete_test_dir()
         end, [
         {"under normal circumstances, file should be opened",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend,
@@ -588,13 +637,11 @@ filesystem_test_() ->
             {ok, Bin} = file:read_file(TestLog),
             Pid = pid_to_list(self()),
             ?assertMatch([_, _, "[error]", Pid, "Test message\n"],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin, " ", [{return, list}, {parts, 5}]))
         end},
         {"don't choke on unicode",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend,
@@ -604,13 +651,11 @@ filesystem_test_() ->
             Pid = pid_to_list(self()),
             ?assertMatch([_, _, "[error]", Pid,
                 [228,184,173,230,150,135,230,181,139,232,175,149, $\n]],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin, " ", [{return, list}, {parts, 5}]))
         end},
         {"don't choke on latin-1",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             %% XXX if this test fails, check that this file is encoded latin-1, not utf-8!
@@ -621,107 +666,121 @@ filesystem_test_() ->
             Pid = pid_to_list(self()),
             Res = re:split(Bin, " ", [{return, list}, {parts, 5}]),
             ?assertMatch([_, _, "[error]", Pid,
-                [76,195,134,195,157,195,142,78,45,195,175,$\n]], Res),
-
-            lager_util:delete_test_dir(TestDir)
+                [76,195,134,195,157,195,142,78,45,195,175,$\n]], Res)
         end},
         {"file can't be opened on startup triggers an error message",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, file:write_file(TestLog, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, [])),
 
-            {ok, FInfo} = file:read_file_info(TestLog),
-            file:write_file_info(TestLog, FInfo#file_info{mode = 0}),
+            {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
+            FInfo1 = FInfo0#file_info{mode = 0},
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
+
             gen_event:add_handler(lager_event, lager_file_backend,
                 {TestLog, info, 10*1024*1024, "$D0", 5}),
+
+            % Note: required on win32, do this early to prevent subsequent failures
+            % from preventing cleanup
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo0)),
+
             ?assertEqual(1, lager_test_backend:count()),
-            {_Level, _Time,Message,_Metadata} = lager_test_backend:pop(),
+            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+            MessageFlat = lists:flatten(Message),
             ?assertEqual(
                 "Failed to open log file " ++ TestLog ++ " with error permission denied",
-                lists:flatten(Message)),
-
-            lager_util:delete_test_dir(TestDir)
+                MessageFlat)
         end},
         {"file that becomes unavailable at runtime should trigger an error message",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be
+                    % deleted or renamed while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, info}, {check_interval, 0}]),
-            ?assertEqual(0, lager_test_backend:count()),
-            lager:log(error, self(), "Test message"),
-            ?assertEqual(1, lager_test_backend:count()),
-            file:delete(TestLog),
-            file:write_file(TestLog, ""),
-            {ok, FInfo} = file:read_file_info(TestLog),
-            file:write_file_info(TestLog, FInfo#file_info{mode = 0}),
-            lager:log(error, self(), "Test message"),
-            ?assertEqual(3, lager_test_backend:count()),
-            lager_test_backend:pop(),
-            lager_test_backend:pop(),
-            {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
-            ?assertEqual(
-                "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
-                lists:flatten(Message)),
-
-            lager_util:delete_test_dir(TestDir)
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, info}, {check_interval, 0}]),
+                    ?assertEqual(0, lager_test_backend:count()),
+                    lager:log(error, self(), "Test message"),
+                    ?assertEqual(1, lager_test_backend:count()),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
+                    {ok, FInfo0} = file:read_file_info(TestLog, [raw]),
+                    FInfo1 = FInfo0#file_info{mode = 0},
+                    ?assertEqual(ok, file:write_file_info(TestLog, FInfo1)),
+                    lager:log(error, self(), "Test message"),
+                    lager_test_backend:pop(),
+                    lager_test_backend:pop(),
+                    {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
+                    ?assertEqual(
+                        "Failed to reopen log file " ++ TestLog ++ " with error permission denied",
+                        lists:flatten(Message))
+            end
         end},
         {"unavailable files that are fixed at runtime should start having log messages written",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
-            ?assertEqual(ok, file:write_file(TestLog, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(TestLog, [])),
 
-            {ok, FInfo} = file:read_file_info(TestLog),
+            {ok, FInfo} = file:read_file_info(TestLog, [raw]),
             OldPerms = FInfo#file_info.mode,
-            file:write_file_info(TestLog, FInfo#file_info{mode = 0}),
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo#file_info{mode = 0})),
             gen_event:add_handler(lager_event, lager_file_backend,
                 [{file, TestLog},{check_interval, 0}]),
             ?assertEqual(1, lager_test_backend:count()),
-            {_Level, _Time, Message,_Metadata} = lager_test_backend:pop(),
+            {_Level, _Time, Message, _Metadata} = lager_test_backend:pop(),
             ?assertEqual(
                 "Failed to open log file " ++ TestLog ++ " with error permission denied",
                 lists:flatten(Message)),
-            file:write_file_info(TestLog, FInfo#file_info{mode = OldPerms}),
+            ?assertEqual(ok, file:write_file_info(TestLog, FInfo#file_info{mode = OldPerms})),
             lager:log(error, self(), "Test message"),
             {ok, Bin} = file:read_file(TestLog),
             Pid = pid_to_list(self()),
             ?assertMatch([_, _, "[error]", Pid, "Test message\n"],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin, " ", [{return, list}, {parts, 5}]))
         end},
         {"external logfile rotation/deletion should be handled",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
-            TestLog0 = TestLog ++ ".0",
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be deleted or renamed
+                    % while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
+                    TestLog0 = TestLog ++ ".0",
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, info}, {check_interval, 0}]),
-            ?assertEqual(0, lager_test_backend:count()),
-            lager:log(error, self(), "Test message1"),
-            ?assertEqual(1, lager_test_backend:count()),
-            file:delete(TestLog),
-            file:write_file(TestLog, ""),
-            lager:log(error, self(), "Test message2"),
-            {ok, Bin} = file:read_file(TestLog),
-            Pid = pid_to_list(self()),
-            ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-            file:rename(TestLog, TestLog0),
-            lager:log(error, self(), "Test message3"),
-            {ok, Bin2} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],
-                re:split(Bin2, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, info}, {check_interval, 0}]),
+                    ?assertEqual(0, lager_test_backend:count()),
+                    lager:log(error, self(), "Test message1"),
+                    ?assertEqual(1, lager_test_backend:count()),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    ?assertEqual(ok, lager_util:safe_write_file(TestLog, "")),
+                    lager:log(error, self(), "Test message2"),
+                    ?assertEqual(2, lager_test_backend:count()),
+                    {ok, Bin} = file:read_file(TestLog),
+                    Pid = pid_to_list(self()),
+                    ?assertMatch([_, _, "[error]", Pid, "Test message2\n"],
+                        re:split(Bin, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:rename(TestLog, TestLog0)),
+                    lager:log(error, self(), "Test message3"),
+                    ?assertEqual(3, lager_test_backend:count()),
+                    {ok, Bin2} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[error]", Pid, "Test message3\n"],
+                        re:split(Bin2, " ", [{return, list}, {parts, 5}]))
+            end
         end},
         {"internal size rotation should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             TestLog0 = TestLog ++ ".0",
 
@@ -729,13 +788,11 @@ filesystem_test_() ->
                 [{file, TestLog}, {level, info}, {check_interval, 0}, {size, 10}]),
             lager:log(error, self(), "Test message1"),
             lager:log(error, self(), "Test message1"),
-            ?assert(filelib:is_regular(TestLog0)),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(filelib:is_regular(TestLog0))
         end},
         {"internal time rotation should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             TestLog0 = TestLog ++ ".0",
 
@@ -745,13 +802,11 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message1"),
             whereis(lager_event) ! {rotate, TestLog},
             lager:log(error, self(), "Test message1"),
-            ?assert(filelib:is_regular(TestLog0)),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(filelib:is_regular(TestLog0))
         end},
         {"rotation call should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             TestLog0 = TestLog ++ ".0",
 
@@ -761,13 +816,11 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message1"),
             gen_event:call(lager_event, {lager_file_backend, TestLog}, rotate, infinity),
             lager:log(error, self(), "Test message1"),
-            ?assert(filelib:is_regular(TestLog0)),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(filelib:is_regular(TestLog0))
         end},
         {"sync_on option should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog},
@@ -777,13 +830,11 @@ filesystem_test_() ->
             ?assertEqual({ok, <<>>}, file:read_file(TestLog)),
             lager:log(info, self(), "Test message1"),
             {ok, Bin} = file:read_file(TestLog),
-            ?assert(<<>> /= Bin),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(<<>> /= Bin)
         end},
         {"sync_on none option should work (also tests sync_interval)",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog},
@@ -795,13 +846,11 @@ filesystem_test_() ->
             ?assertEqual({ok, <<>>}, file:read_file(TestLog)),
             timer:sleep(2000),
             {ok, Bin} = file:read_file(TestLog),
-            ?assert(<<>> /= Bin),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(<<>> /= Bin)
         end},
         {"sync_size option should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog}, {level, info},
@@ -820,13 +869,11 @@ filesystem_test_() ->
             %% now we've written enough bytes
             lager:log(error, self(), "Test messageis64bytes"),
             {ok, Bin} = file:read_file(TestLog),
-            ?assert(<<>> /= Bin),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(<<>> /= Bin)
         end},
         {"runtime level changes",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, {lager_file_backend, TestLog}, {TestLog, info}),
@@ -841,26 +888,22 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message4"),
             {ok, Bin2} = file:read_file(TestLog),
             Lines2 = length(re:split(Bin2, "\n", [{return, list}, trim])),
-            ?assertEqual(Lines2, 3),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assertEqual(Lines2, 3)
         end},
         {"invalid runtime level changes",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             TestLog3 = filename:join(TestDir, "test3.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend,
                 [{TestLog, info, 10*1024*1024, "$D0", 5}, {lager_default_formatter}]),
             gen_event:add_handler(lager_event, lager_file_backend, {TestLog3, info}),
-            ?assertEqual({error, bad_module}, lager:set_loglevel(lager_file_backend, TestLog, warning)),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assertEqual({error, bad_module}, lager:set_loglevel(lager_file_backend, TestLog, warning))
         end},
         {"tracing should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
 
             gen_event:add_handler(lager_event, lager_file_backend, {TestLog, critical}),
@@ -873,41 +916,44 @@ filesystem_test_() ->
             timer:sleep(1000),
             {ok, Bin} = file:read_file(TestLog),
             ?assertMatch([_, _, "[error]", _, "Test message\n"],
-                re:split(Bin, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin, " ", [{return, list}, {parts, 5}]))
         end},
         {"tracing should not duplicate messages",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
-            TestLog = filename:join(TestDir, "test.log"),
+            case os:type() of
+                {win32, _} ->
+                    % Note: test is skipped on win32 due to the fact that a file can't be
+                    % deleted or renamed while a process has an open file handle referencing it
+                    ok;
+                _ ->
+                    {ok, TestDir} = lager_util:get_test_dir(),
+                    TestLog = filename:join(TestDir, "test.log"),
 
-            gen_event:add_handler(lager_event, lager_file_backend,
-                [{file, TestLog}, {level, critical}, {check_interval, always}]),
-            timer:sleep(500),
-            lager:critical("Test message"),
-            {ok, Bin1} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[critical]", _, "Test message\n"],
-                re:split(Bin1, " ", [{return, list}, {parts, 5}])),
-            ok = file:delete(TestLog),
-            {Level, _} = lager_config:get({lager_event, loglevel}),
-            lager_config:set({lager_event, loglevel},
-                {Level, [{[{module, ?MODULE}], ?DEBUG, {lager_file_backend, TestLog}}]}),
-            lager:critical("Test message"),
-            {ok, Bin2} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[critical]", _, "Test message\n"],
-                re:split(Bin2, " ", [{return, list}, {parts, 5}])),
-            ok = file:delete(TestLog),
-            lager:error("Test message"),
-            {ok, Bin3} = file:read_file(TestLog),
-            ?assertMatch([_, _, "[error]", _, "Test message\n"],
-                re:split(Bin3, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                    gen_event:add_handler(lager_event, lager_file_backend,
+                        [{file, TestLog}, {level, critical}, {check_interval, always}]),
+                    timer:sleep(500),
+                    lager:critical("Test message"),
+                    {ok, Bin1} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[critical]", _, "Test message\n"],
+                        re:split(Bin1, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    {Level, _} = lager_config:get({lager_event, loglevel}),
+                    lager_config:set({lager_event, loglevel},
+                        {Level, [{[{module, ?MODULE}], ?DEBUG, {lager_file_backend, TestLog}}]}),
+                    lager:critical("Test message"),
+                    {ok, Bin2} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[critical]", _, "Test message\n"],
+                        re:split(Bin2, " ", [{return, list}, {parts, 5}])),
+                    ?assertEqual(ok, file:delete(TestLog)),
+                    lager:error("Test message"),
+                    {ok, Bin3} = file:read_file(TestLog),
+                    ?assertMatch([_, _, "[error]", _, "Test message\n"],
+                        re:split(Bin3, " ", [{return, list}, {parts, 5}]))
+            end
         end},
         {"tracing to a dedicated file should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "foo.log"),
 
             {ok, _} = lager:trace_file(TestLog, [{module, ?MODULE}]),
@@ -916,13 +962,11 @@ filesystem_test_() ->
             lager:log(error, self(), "Test message"),
             {ok, Bin3} = file:read_file(TestLog),
             ?assertMatch([_, _, "[error]", _, "Test message\n"],
-                re:split(Bin3, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin3, " ", [{return, list}, {parts, 5}]))
         end},
         {"tracing to a dedicated file should work even if root_log is set",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             LogName = "foo.log",
             LogPath = filename:join(TestDir, LogName),
 
@@ -934,13 +978,11 @@ filesystem_test_() ->
             {ok, Bin3} = file:read_file(LogPath),
             application:unset_env(lager, log_root),
             ?assertMatch([_, _, "[error]", _, "Test message\n"],
-                re:split(Bin3, " ", [{return, list}, {parts, 5}])),
-
-            lager_util:delete_test_dir(TestDir)
+                re:split(Bin3, " ", [{return, list}, {parts, 5}]))
         end},
         {"tracing with options should work",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "foo.log"),
             TestLog0 = TestLog ++ ".0",
 
@@ -955,68 +997,67 @@ filesystem_test_() ->
             timer:sleep(2),
             lager:error("Test message"),
             timer:sleep(10),
-            ?assert(filelib:is_regular(TestLog0)),
-
-            lager_util:delete_test_dir(TestDir)
+            ?assert(filelib:is_regular(TestLog0))
         end},
         {"no silent hwm drops",
         fun() ->
-            TestDir = lager_util:create_test_dir(),
+            MsgCount = 15,
+            {ok, TestDir} = lager_util:get_test_dir(),
             TestLog = filename:join(TestDir, "test.log"),
             gen_event:add_handler(lager_event, lager_file_backend, [{file, TestLog}, {level, info},
                 {high_water_mark, 5}, {flush_queue, false}, {sync_on, "=warning"}]),
             {_, _, MS} = os:timestamp(),
-            timer:sleep((1000000 - MS) div 1000 + 1),
-            %start close to the beginning of a new second
-            [lager:log(info, self(), "Foo ~p", [K]) || K <- lists:seq(1, 15)],
-            timer:sleep(1000),
+            % start close to the beginning of a new second
+            ?assertEqual(ok, timer:sleep((1000000 - MS) div 1000 + 1)),
+            [lager:log(info, self(), "Foo ~p", [K]) || K <- lists:seq(1, MsgCount)],
+            ?assertEqual(MsgCount, lager_test_backend:count()),
+            % Note: bumped from 1000 to 1250 to ensure delayed write flushes to disk
+            ?assertEqual(ok, timer:sleep(1250)),
             {ok, Bin} = file:read_file(TestLog),
             Last = lists:last(re:split(Bin, "\n", [{return, list}, trim])),
             ?assertMatch([_, _, _, _, "lager_file_backend dropped 10 messages in the last second that exceeded the limit of 5 messages/sec"],
-                re:split(Last, " ", [{return, list}, {parts, 5}])),
-            lager_util:delete_test_dir(TestDir)
+                re:split(Last, " ", [{return, list}, {parts, 5}]))
         end}
     ]}.
 
 trace_files_test_() ->
     {foreach,
         fun() ->
-            Dir     = lager_util:create_test_dir(),
-            Log     = filename:join(Dir, "test.log"),
-            Debug   = filename:join(Dir, "debug.log"),
-            Events  = filename:join(Dir, "events.log"),
+            {ok, TestDir} = lager_util:get_test_dir(),
+            Log     = filename:join(TestDir, "test.log"),
+            Debug   = filename:join(TestDir, "debug.log"),
+            Events  = filename:join(TestDir, "events.log"),
 
-            error_logger:tty(false),
-            application:load(lager),
-            application:set_env(lager, handlers, [
-                {lager_file_backend, [
-                    {file, Log},
-                    {level, error},
-                    {formatter, lager_default_formatter},
-                    {formatter_config, [message, "\n"]}
-                ]}
-            ]),
-            application:set_env(lager, traces, [
-                { % get default level of debug
-                    {lager_file_backend, Debug}, [{module, ?MODULE}]
-                },
-                { % Handler                       Filters              Level
-                    {lager_file_backend, Events}, [{module, ?MODULE}], notice
-                }
-            ]),
-            application:set_env(lager, async_threshold, undefined),
-            lager:start(),
-            {Dir, Log, Debug, Events}
+            ok = error_logger:tty(false),
+            ok = lager_util:safe_application_load(lager),
+            ok = application:set_env(lager, handlers, [
+                     {lager_file_backend, [
+                         {file, Log},
+                         {level, error},
+                         {formatter, lager_default_formatter},
+                         {formatter_config, [message, "\n"]}
+                     ]}
+                 ]),
+            ok = application:set_env(lager, traces, [
+                     { % get default level of debug
+                         {lager_file_backend, Debug}, [{module, ?MODULE}]
+                     },
+                     { % Handler                       Filters              Level
+                         {lager_file_backend, Events}, [{module, ?MODULE}], notice
+                     }
+                 ]),
+            ok = application:set_env(lager, async_threshold, undefined),
+            ok = lager:start(),
+            {Log, Debug, Events}
         end,
-        fun({Dir, _, _, _}) ->
+        fun({_, _, _}) ->
             catch ets:delete(lager_config),
-            application:unset_env(lager, traces),
-            application:stop(lager),
-
-            lager_util:delete_test_dir(Dir),
-            error_logger:tty(true)
+            ok = application:unset_env(lager, traces),
+            ok = application:stop(lager),
+            ok = lager_util:delete_test_dir(),
+            ok = error_logger:tty(true)
         end, [
-        fun({_, Log, Debug, Events}) ->
+        fun({Log, Debug, Events}) ->
             {"a trace using file backend set up in configuration should work",
             fun() ->
                 lager:error("trace test error message"),
@@ -1056,28 +1097,27 @@ count_lines_until(Lines, Timeout, File, Last) ->
 formatting_test_() ->
     {foreach,
         fun() ->
-            Dir = lager_util:create_test_dir(),
-            Log1 = filename:join(Dir, "test.log"),
-            Log2 = filename:join(Dir, "test2.log"),
-            ?assertEqual(ok, file:write_file(Log1, [])),
-            ?assertEqual(ok, file:write_file(Log2, [])),
-
-            error_logger:tty(false),
-            application:load(lager),
-            application:set_env(lager, handlers, [{lager_test_backend, info}]),
-            application:set_env(lager, error_logger_redirect, false),
-            lager:start(),
+            {ok, TestDir} = lager_util:get_test_dir(),
+            Log1 = filename:join(TestDir, "test.log"),
+            Log2 = filename:join(TestDir, "test2.log"),
+            ?assertEqual(ok, lager_util:safe_write_file(Log1, [])),
+            ?assertEqual(ok, lager_util:safe_write_file(Log2, [])),
+            ok = error_logger:tty(false),
+            ok = lager_util:safe_application_load(lager),
+            ok = application:set_env(lager, handlers, [{lager_test_backend, info}]),
+            ok = application:set_env(lager, error_logger_redirect, false),
+            ok = lager:start(),
             %% same race condition issue
-            timer:sleep(5),
-            {Dir, Log1, Log2}
+            ok = timer:sleep(5),
+            {ok, Log1, Log2}
         end,
-        fun({Dir, _, _}) ->
-            application:stop(lager),
-            application:stop(goldrush),
-            lager_util:delete_test_dir(Dir),
-            error_logger:tty(true)
+        fun({ok, _, _}) ->
+            ok = application:stop(lager),
+            ok = application:stop(goldrush),
+            ok = lager_util:delete_test_dir(),
+            ok = error_logger:tty(true)
         end, [
-        fun({_, Log1, Log2}) ->
+        fun({ok, Log1, Log2}) ->
             {"Should have two log files, the second prefixed with 2>",
             fun() ->
                 gen_event:add_handler(lager_event, lager_file_backend,
@@ -1150,6 +1190,5 @@ config_validation_test_() ->
                 validate_logfile_proplist([{file, "test.log"}, {rhubarb, spicy}]))
         }
     ].
-
 
 -endif.

@@ -58,7 +58,6 @@
     end).
 
 -ifdef(TEST).
--compile(export_all).
 %% Make CRASH synchronous when testing, to avoid timing headaches
 -define(CRASH_LOG(Event),
     catch(gen_server:call(lager_crash_log, {log, Event}))).

@@ -20,8 +20,6 @@
 
 -module(lager_rotate).
 
--compile(export_all).
-
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -39,7 +37,7 @@
 rotate_test_() ->
     {foreach,
         fun() ->
-            Dir = lager_util:create_test_dir(),
+            {ok, Dir} = lager_util:create_test_dir(),
             Log1 = filename:join(Dir, "test1.log"),
             Log2 = filename:join(Dir, "test2.log"),
             Sink = filename:join(Dir, "sink.log"),
@@ -72,11 +70,11 @@ rotate_test_() ->
             timer:sleep(1000),
             State
         end,
-        fun(#state{dir = Dir}) ->
-            application:stop(lager),
-            application:stop(goldrush),
-            lager_util:delete_test_dir(Dir),
-            error_logger:tty(true)
+        fun(#state{}) ->
+            ok = application:stop(lager),
+            ok = application:stop(goldrush),
+            ok = lager_util:delete_test_dir(),
+            ok = error_logger:tty(true)
         end, [
         fun(State) ->
             {"Rotate single file",

@@ -2,7 +2,13 @@
 
 -compile([{parse_transform, lager_transform}]).
 
--record(a, {field1, field2, foo, bar, baz, zyu, zix}).
+-record(a, {field1 :: term(),
+            field2 :: term(),
+            foo :: term(),
+            bar :: term(),
+            baz :: term(),
+            zyu :: term(),
+            zix :: term()}).
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

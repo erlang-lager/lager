@@ -22,56 +22,42 @@ bad_arg() ->
     integer_to_list(1.0).
 
 pr_stacktrace_throw_test() ->
-    Result = try
+    Got = try
         make_throw()
     catch
         ?EXCEPTION(Class, Reason, Stacktrace) ->
             lager:pr_stacktrace(?GET_STACK(Stacktrace), {Class, Reason})
     end,
-ExpectedPart = "
-    pr_stacktrace_test:pr_stacktrace_throw_test/0 line 26
-    pr_stacktrace_test:make_throw/0 line 16
-throw:{test,exception}",
-    ?assertNotEqual(0, string:str(Result, ExpectedPart)).
-
+    Want = "pr_stacktrace_test:pr_stacktrace_throw_test/0 line 26\n    pr_stacktrace_test:make_throw/0 line 16\nthrow:{test,exception}",
+    ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_bad_arg_test() ->
-    Result = try
+    Got = try
         bad_arg()
     catch
         ?EXCEPTION(Class, Reason, Stacktrace) ->
             lager:pr_stacktrace(?GET_STACK(Stacktrace), {Class, Reason})
     end,
-ExpectedPart = "
-    pr_stacktrace_test:pr_stacktrace_bad_arg_test/0 line 40
-    pr_stacktrace_test:bad_arg/0 line 22
-error:badarg",
-    ?assertNotEqual(0, string:str(Result, ExpectedPart)).
-
+    Want = "pr_stacktrace_test:pr_stacktrace_bad_arg_test/0 line 36\n    pr_stacktrace_test:bad_arg/0 line 22\nerror:badarg",
+    ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_bad_arity_test() ->
-    Result = try
+    Got = try
         bad_arity()
     catch
         ?EXCEPTION(Class, Reason, Stacktrace) ->
             lager:pr_stacktrace(?GET_STACK(Stacktrace), {Class, Reason})
     end,
-ExpectedPart = "
-    pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 54
-    lists:concat([], [])
-error:undef",
-    ?assertNotEqual(0, string:str(Result, ExpectedPart)).
+    Want = "pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 46\n    lists:concat([], [])\nerror:undef",
+    ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_no_reverse_test() ->
     application:set_env(lager, reverse_pretty_stacktrace, false),
-    Result = try
+    Got = try
         bad_arity()
     catch
         ?EXCEPTION(Class, Reason, Stacktrace) ->
             lager:pr_stacktrace(?GET_STACK(Stacktrace), {Class, Reason})
     end,
-ExpectedPart = "error:undef
-    lists:concat([], [])
-    pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 68",
-
-    ?assertEqual(0, string:str(Result, ExpectedPart)).
+    Want = "error:undef\n    lists:concat([], [])\n    pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 57",
+    ?assertEqual(nomatch, string:find(Got, Want)).

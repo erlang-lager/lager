@@ -1141,6 +1141,16 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.8.0 - 12 August 2019
+
+    * API change: Modify the `lager_rotator_behaviour` to pass in a file's creation
+      time to `ensure_logfile/5` to be used to determine if file has changed on
+      systems where inodes are not available (i.e. `win32`). The return value from
+      `create_logfile/2`, `open_logfile/2` and `ensure_logfile/5` now requires
+      ctime to be returned (#509)
+    * Bugfix: ensure log file rotation works on `win32` (#509)
+    * Bugfix: ensure test suite passes on `win32` (#509)
+
 3.7.0 - 24 May 2019
 
     * Policy: Officially ending support for OTP 19 (Support OTP 20, 21, 22)

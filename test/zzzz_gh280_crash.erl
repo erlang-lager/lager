@@ -5,7 +5,6 @@
 %% and lager starts up to replace the current handlers with its own.  This causes a start up crash because
 %% OTP error logging modules do not have any notion of a lager-style log level.
 -module(zzzz_gh280_crash).
--compile(export_all).
 
 -include_lib("eunit/include/eunit.hrl").
 
