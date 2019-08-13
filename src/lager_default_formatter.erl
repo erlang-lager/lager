@@ -22,6 +22,7 @@
 -include("lager.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+-compile({parse_transform, lager_transform}).
 -endif.
 
 %%
@@ -57,15 +58,11 @@
 format(Msg,[], Colors) ->
     format(Msg, [{eol, "\n"}], Colors);
 format(Msg,[{eol, EOL}], Colors) ->
-    format(Msg,
-        [date, " ", time, " ", color, "[", severity, "] ",
-            {pid, ""},
-            {module, [
-                    {pid, ["@"], ""},
-                    module,
-                    {function, [":", function], ""},
-                    {line, [":",line], ""}], ""},
-            " ", message, EOL], Colors);
+    Config = case application:get_env(lager, metadata_whitelist) of
+        undefined -> config(EOL, []);
+        {ok, Whitelist} -> config(EOL, Whitelist)
+    end,
+    format(Msg, Config, Colors);
 format(Message,Config,Colors) ->
     [ case V of
         color -> output_color(Message,Colors);
@@ -210,6 +207,33 @@ get_metadata(Key, Metadata, Default) ->
         {Key, Value} ->
             Value
     end.
+
+config(EOL, []) ->
+    [
+        date, " ", time, " ", color, "[", severity, "] ",
+        {pid, ""},
+        {module, [
+            {pid, ["@"], ""},
+            module,
+            {function, [":", function], ""},
+            {line, [":",line], ""}], ""},
+        " ", message, EOL
+    ];
+config(EOL, MetaWhitelist) ->
+    [
+        date, " ", time, " ", color, "[", severity, "] ",
+        {pid, ""},
+        {module, [
+            {pid, ["@"], ""},
+            module,
+            {function, [":", function], ""},
+            {line, [":",line], ""}], ""},
+        " "
+    ] ++
+    [{M, [atom_to_list(M), "=", M, " "], ""}|| M <- MetaWhitelist] ++
+    [message, EOL].
+
+
 
 uppercase_severity(debug) -> "DEBUG";
 uppercase_severity(info) -> "INFO";
@@ -494,5 +518,6 @@ basic_test_() ->
             end
         }
     ].
+
 
 -endif.
