@@ -22,7 +22,6 @@
 -include("lager.hrl").
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
--compile({parse_transform, lager_transform}).
 -endif.
 
 %%
