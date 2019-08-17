@@ -741,6 +741,6 @@ get_sink_handler_status_unicode_test() ->
 
 validate_status(File) ->
     Handler = {lager_file_backend, File},
-    Status = get_sink_handler_status(?DEFAULT_SINK, Handler, debug),
-    ?assertNotEqual(nomatch, string:find(Status, File)).
+    Status = unicode:characters_to_binary(get_sink_handler_status(?DEFAULT_SINK, Handler, debug)),
+    ?assertNotEqual(nomatch, binary:match(Status, unicode:characters_to_binary(File))).
 -endif.
