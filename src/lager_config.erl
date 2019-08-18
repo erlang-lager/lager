@@ -73,40 +73,9 @@ set(Key, Value) ->
 %% persistent term was added in OTP 21.2 but we can't
 %% check minor versions with macros so we're stuck waiting
 %% for OTP 22
--if(?OTP_RELEASE < 22).
+-ifdef(HAVE_PERSISTENT_TERM).
 init() ->
-    %% set up the ETS configuration table
-    _ = try ets:new(?TBL, [named_table, public, set, {keypos, 1}, {read_concurrency, true}]) of
-            _Result ->
-                ok
-        catch
-            error:badarg ->
-                ?INT_LOG(warning, "Table ~p already exists", [?TBL])
-        end.
-
-insert(Key, Value) ->
-    ets:insert(?TBL, {{Sink, Key}, Value}).
-
-insert_new(Key, Value) ->
-    ets:insert_new(?TBL, Key, Value).
-
-lookup(Key, Default) ->
-    try
-        case ets:lookup(?TBL, Key) of
-            [] ->
-                Default;
-            [{Key, Res}] ->
-                Res
-        end
-    catch
-        _:_ ->
-            Default
-    end.
-
-cleanup() -> ok.
-
--else.
-init() -> ok.
+    ok.
 
 insert(Key, Value) ->
     persistent_term:put({?TBL, Key}, Value).
@@ -131,5 +100,37 @@ lookup(Key, Default) ->
 cleanup() ->
     [ persistent_term:erase(K) || {{?TBL, _} = K, _} <- persistent_term:get() ].
 
+-else.
+
+init() ->
+    %% set up the ETS configuration table
+    _ = try ets:new(?TBL, [named_table, public, set, {keypos, 1}, {read_concurrency, true}]) of
+            _Result ->
+                ok
+        catch
+            error:badarg ->
+                ?INT_LOG(warning, "Table ~p already exists", [?TBL])
+        end.
+
+insert(Key, Value) ->
+    ets:insert(?TBL, {Key, Value}).
+
+insert_new(Key, Value) ->
+    ets:insert_new(?TBL, {Key, Value}).
+
+lookup(Key, Default) ->
+    try
+        case ets:lookup(?TBL, Key) of
+            [] ->
+                Default;
+            [{Key, Res}] ->
+                Res
+        end
+    catch
+        _:_ ->
+            Default
+    end.
+
+cleanup() -> ok.
 -endif.
 

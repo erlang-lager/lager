@@ -1,10 +1,22 @@
+
+ExistingErlOpts = proplists:get_value(erl_opts, CONFIG, []),
+
+CONFIG1 = case code:which(persistent_term) of
+    preloaded ->
+        lists:keyreplace(erl_opts, 1, CONFIG, {erl_opts, [{d, 'HAVE_PERSISTENT_TERM'}|ExistingErlOpts]});
+    non_existing ->
+        CONFIG
+    end,
+
+
+
 case erlang:function_exported(rebar3, main, 1) of
     true -> % rebar3
-        CONFIG;
+        CONFIG1;
     false -> % rebar 2.x or older
         %% Rebuild deps, possibly including those that have been moved to
         %% profiles
         [{deps, [
 	   {goldrush, ".*", {git, "https://github.com/DeadZen/goldrush.git", {tag, "0.1.9"}}}
-        ]} | lists:keydelete(deps, 1, CONFIG)]
+        ]} | lists:keydelete(deps, 1, CONFIG1)]
 end.
