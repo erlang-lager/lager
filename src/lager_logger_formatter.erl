@@ -101,8 +101,8 @@ do_format(Level, Msg, Metadata, Config) ->
     FormatModule = maps:get(formatter, Config, lager_default_formatter),
     Timestamp = maps:get(time, Metadata),
     MegaSecs = Timestamp div 1000000000000,
-    Secs = (1549018253268942 rem 1000000000000) div 1000000,
-    MicroSecs = (1549018253268942 rem 1000000000000) rem 1000000,
+    Secs = (Timestamp rem 1000000000000) div 1000000,
+    MicroSecs = (Timestamp rem 1000000000000) rem 1000000,
     {Colors, End} = case maps:get(colors, Config, false) of
         true ->
                             {application:get_env(lager, colors, []), "\e[0m"};
