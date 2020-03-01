@@ -211,6 +211,9 @@ log_event(Event, #state{sink=Sink} = State) ->
                         %% Handle changed logging in gen_statem stdlib-3.9 (ClientArgs)
                         [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _CallbackMode, Stacktrace | _ClientArgs] ->
                             {gen_statem, TName, TStateName, {TReason, Stacktrace}};
+                        %% Handle changed logging in gen_statem stdlib-3.9 (ClientArgs)
+                        [TName, {TStateName, _StateData}, _ExitType, TReason, _CallbackMode, Stacktrace | _ClientArgs] ->
+                            {gen_statem, TName, TStateName, {TReason, Stacktrace}};
                         [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _CallbackMode, Stacktrace | _ClientArgs] ->
                             %% sometimes gen_statem wraps its statename/data in a list for some reason???
                             {gen_statem, TName, TStateName, {TReason, Stacktrace}}
