@@ -725,20 +725,21 @@ generate_logger_handlers([{lager_file_backend, Config}|Tail], {CurrentLevel, Acc
     Level = proplists:get_value(level, Config, info),
     File = proplists:get_value(file, Config),
     LogRoot = application:get_env(lager, log_root, ""),
-    Size = proplists:get_value(size, Config),
-    Count = proplists:get_value(count, Config),
+    Size = proplists:get_value(size, Config, 10485760),
+    Count = proplists:get_value(count, Config, 5),
     Formatter = proplists:get_value(formatter, Config, lager_default_formatter),
     FormatterConfig = proplists:get_value(formatter_config, Config, []),
-    %% XXX I don't think disk_log is suitable as it is, we should provide a logger compatible version of
-    %% lager's file_backend and try to patch disk_log upstream
-    Handler = {handler, list_to_atom(File), logger_disk_log_h, #{level => Level,
-                                                                 file => filename:join(LogRoot, File),
-                                                                 max_no_files => Count,
-                                                                 max_no_bytes => Size,
-                                                                 formatter =>
-                                                                 {lager_logger_formatter, #{report_cb => fun lager_logger_formatter:report_cb/1,
-                                                                                            formatter => Formatter,
-                                                                                            formatter_config => FormatterConfig}}}},
+    %% the standard log handler has a file mode with size based rotation support that is much saner than
+    %% disk_log's, so use that here
+    Handler = {handler, list_to_atom(File), logger_std_h, #{level => Level,
+                                                            config => #{type => file,
+                                                                         file => filename:join(LogRoot, File),
+                                                                         max_no_files => Count,
+                                                                         max_no_bytes => Size},
+                                                            formatter =>
+                                                            {lager_logger_formatter, #{report_cb => fun lager_logger_formatter:report_cb/1,
+                                                                                       formatter => Formatter,
+                                                                                       formatter_config => FormatterConfig}}}},
     NewLevel = case lager_util:level_to_num(Level) > lager_util:level_to_num(CurrentLevel) of
                    true ->
                        Level;
