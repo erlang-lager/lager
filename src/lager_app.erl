@@ -235,6 +235,12 @@ start(_StartType, _StartArgs) ->
             clean_up_config_checks(),
             {ok, Pid, SavedHandlers};
         true ->
+            case application:get_env(lager, configure_logger, false) of
+                true ->
+                    ok = lager:configure_logger();
+                false ->
+                    ok
+            end,
             {ok, Pid}
     end.
 

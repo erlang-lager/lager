@@ -1179,8 +1179,6 @@ support these options. A toplevel dependency will override any lager
 dependencies in any of your application's dependencies and thus ensure the parse
 transform is the right version.
 
-XXX the following is not yet implemented:
-
 To generate a logger configuration from your lager configuration you can do:
 
 ```
@@ -1195,6 +1193,12 @@ lager configure logger you can, in your sys.config in the lager stanza:
         {configure_logger, true},
        ...
 ]}
+```
+
+Alternatively you can use:
+
+```
+lager:configure_logger()
 ```
 
 3.x Changelog
