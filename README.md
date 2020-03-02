@@ -1138,6 +1138,65 @@ Example Usage:
 :lager.warning('Some message with a term: ~p', [term])
 ```
 
+Integration with OTP's Logger
+-----------------------------
+
+Now that OTP includes a modern log event pipeline, the Lager project has decided
+to work on winding down Lager development in favor of unifying the Erlang
+ecosystem behind Logger. To that end, Lager now supports being configured to use
+its parse transform to rewrite lager calls into logger calls. To enable this
+mode, the following changes are required:
+
+In sys.config:
+```
+[
+ {kernel,
+  [{logger,
+    [{handler, default, logger_std_h,
+      #{formatter => {lager_logger_formatter, #{report_cb => fun lager_logger_formatter:report_cb/1}}}},
+    ]}]},
+...
+{lager, [
+        {lager_use_logger, true},
+       ...
+]}
+]
+```
+
+The logger stanza changes are not needed if you wish to use logger's default
+formatter.
+
+In your applications top level rebar.config (probably requires rebar3):
+
+```
+{overrides, [{add, [{erl_opts, [{lager_use_logger, true}]}]}]}.
+```
+
+This will force the parse transform configuration to apply to all the
+dependencies as well. Make sure you've defined the lager version in your
+toplevel application's rebar.config and that the version is high enough to
+support these options. A toplevel dependency will override any lager
+dependencies in any of your application's dependencies and thus ensure the parse
+transform is the right version.
+
+XXX the following is not yet implemented:
+
+To generate a logger configuration from your lager configuration you can do:
+
+```
+lager:generate_logger_configuration()
+```
+
+If you wish to simply use your existing lager configuration as is, and have
+lager configure logger you can, in your sys.config in the lager stanza:
+
+```
+{lager, [
+        {configure_logger, true},
+       ...
+]}
+```
+
 3.x Changelog
 -------------
 3.6.8 - 21 December 2018
