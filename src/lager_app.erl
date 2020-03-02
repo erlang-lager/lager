@@ -31,7 +31,8 @@
          start_handler/3,
          configure_sink/2,
          stop/1,
-         boot/1]).
+         boot/1,
+         default_handlers/0]).
 
 %% The `application:get_env/3` compatibility wrapper was useful
 %% for other modules in r15 and before
@@ -280,6 +281,9 @@ stop(Handlers) ->
     lists:foreach(fun(Handler) ->
           error_logger:add_report_handler(Handler)
       end, Handlers).
+
+default_handlers() ->
+    ?DEFAULT_HANDLER_CONF.
 
 expand_handlers([]) ->
     [];
