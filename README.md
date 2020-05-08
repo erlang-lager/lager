@@ -6,6 +6,7 @@ that plays nicely with traditional UNIX logging tools like logrotate and
 syslog.
 
 [Travis-CI](http://travis-ci.org/erlang-lager/lager) :: [![Travis-CI](https://travis-ci.org/erlang-lager/lager.svg?branch=master)](http://travis-ci.org/erlang-lager/lager)
+[![Hex pm](https://img.shields.io/hexpm/v/lager)](https://hex.pm/packages/lager)
 
 Features
 --------
