@@ -98,6 +98,10 @@ output(metadata, Msg) ->
 output({metadata, IntSep, FieldSep}, Msg) ->
     MD = lists:keysort(1, lager_msg:metadata(Msg)),
     string:join([io_lib:format("~s~s~p", [K, IntSep, V]) || {K, V} <- MD], FieldSep);
+output({pterm, Key}, Msg) ->
+    output({pterm, Key, ""}, Msg);
+output({pterm, Key, Default}, _Msg) ->
+    make_printable(maybe_get_persistent_term(Key, Default));
 output(Prop,Msg) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
     make_printable(get_metadata(Prop,Metadata,<<"Undefined">>));
@@ -147,6 +151,10 @@ output(metadata, Msg, _Width) ->
 output({metadata, IntSep, FieldSep}, Msg, _Width) ->
     MD = lists:keysort(1, lager_msg:metadata(Msg)),
     [string:join([io_lib:format("~s~s~p", [K, IntSep, V]) || {K, V} <- MD], FieldSep)];
+output({pterm, Key}, Msg, Width) ->
+    output({pterm, Key, ""}, Msg, Width);
+output({pterm, Key, Default}, _Msg, _Width) ->
+    make_printable(maybe_get_persistent_term(Key, Default));
 
 output(Prop, Msg, Width) when is_atom(Prop) ->
     Metadata = lager_msg:metadata(Msg),
@@ -184,6 +192,20 @@ make_printable(A,{Align,W}) when is_integer(W) ->
     end;
 
 make_printable(A,_W) -> make_printable(A).
+
+%% persistent term was introduced in OTP 21.2, so
+%% if we're running on an older OTP, just return the
+%% default value.
+-ifdef(OTP_RELEASE).
+maybe_get_persistent_term(Key, Default) ->
+    try
+        persistent_term:get(Key, Default)
+    catch
+        _:undef -> Default
+    end.
+-else.
+maybe_get_persistent_term(_Key, Default) -> Default.
+-endif.
 
 run_function(Function, Default) ->
     try Function() of
@@ -504,6 +526,34 @@ basic_test_() ->
                             [{pid, self()}],
                             []),
                         [severity_upper, " Simplist Format"])))
+        },
+        {"pterm presence test",
+            %% skip test on OTP < 21
+            case list_to_integer(erlang:system_info(otp_release)) >= 21 of
+                true ->
+                    ?_assertEqual(<<"Pterm is: something">>,
+                      begin
+                        persistent_term:put(thing, something),
+                        Ret = iolist_to_binary(format(lager_msg:new("Message",
+                                    Now,
+                                    emergency,
+                                    [{pid, self()}],
+                                    []),
+                                ["Pterm is: ", {pterm, thing}])),
+                        persistent_term:erase(thing),
+                        Ret
+                      end);
+                false -> ?_assert(true)
+            end
+        },
+        {"pterm absence test",
+            ?_assertEqual(<<"Pterm is: nothing">>,
+                iolist_to_binary(format(lager_msg:new("Message",
+                            Now,
+                            emergency,
+                            [{pid, self()}],
+                            []),
+                        ["Pterm is: ", {pterm, thing, "nothing"}])))
         },
         {"node formatting basic",
             begin
