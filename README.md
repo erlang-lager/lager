@@ -259,6 +259,19 @@ call "semi-iolist":
       conditional operator: if a value for the atom placeholder can be
       found, the first semi-iolist will be output; otherwise, the
       second will be used.
+    * A tuple of `{pterm, atom()}` will attempt to lookup
+      the value of the specified atom from the
+      [persistent_term](http://erlang.org/doc/man/persistent_term.html)
+      feature added in OTP 21.2. The default value is `""`. The
+      default value will be used if the key cannot be found or
+      if this formatting term is specified on an OTP release before
+      OTP 21.
+    * A tuple of `{pterm, atom(), semi-iolist()}` will attempt to
+      lookup the value of the specified atom from the persistent_term
+      feature added in OTP 21.2. The default value is the specified
+      semi-iolist(). The default value will be used if the key cannot
+      be found or the if this formatting term is specified on an OTP
+      release before OTP 21.
 
 Examples:
 
@@ -268,6 +281,7 @@ Examples:
 [{pid,"Unknown Pid"}] -> "<?.?.?>" if pid is in the metadata, "Unknown Pid" if not.
 [{pid, ["My pid is ", pid], ["Unknown Pid"]}] -> if pid is in the metadata print "My pid is <?.?.?>", otherwise print "Unknown Pid"
 [{server,{pid, ["(", pid, ")"], ["(Unknown Server)"]}}] -> user provided server metadata, otherwise "(<?.?.?>)", otherwise "(Unknown Server)"
+[{pterm, pterm_key, <<"undefined">>}] -> if a value for 'pterm_key' is found in OTP 21 (or later) persistent_term storage it is used, otherwise "undefined"
 ```
 
 Universal time
