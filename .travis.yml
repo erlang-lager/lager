@@ -1,7 +1,6 @@
 sudo: false
 language: erlang
 otp_release:
-  - 22.0
-  - 21.1
-  - 20.3
-
+  - 23.0
+  - 22.3
+  - 21.3

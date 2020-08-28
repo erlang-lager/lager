@@ -5,7 +5,7 @@ to provide a more traditional way to perform logging in an erlang application
 that plays nicely with traditional UNIX logging tools like logrotate and
 syslog.
 
-[Travis-CI](http://travis-ci.org/erlang-lager/lager) :: [![Travis-CI](https://travis-ci.org/erlang-lager/lager.svg?branch=master)](http://travis-ci.org/erlang-lager/lager)
+[Travis-CI](http://travis-ci.org/erlang-lager/lager) :: [![Build Status](https://travis-ci.org/erlang-lager/lager.svg?branch=master)]
 [![Hex pm](https://img.shields.io/hexpm/v/lager)](https://hex.pm/packages/lager)
 
 Features
@@ -1155,6 +1155,15 @@ Example Usage:
 
 3.x Changelog
 -------------
+
+3.8.1 - 28 August 2020
+
+    * Feature: Allow metadata fields to be whitelisted in log formatting (#514)
+    * Feature: Enable a persistent_term log formatter (#530) (#531)
+    * Bugfix: Handle gen_statem crashes in newer OTP releases correctly (#523)
+    * Cleanup: Add a hex badge (#525)
+    * Cleanup: Fix Travis CI badge link
+    * Policy: Officially ending support for OTP 20 (Support OTP 21, 22, 23)
 
 3.8.0 - 9 August 2019
 
