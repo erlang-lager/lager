@@ -32,7 +32,7 @@
 ]).
 
 -ifdef(TEST).
--export([create_test_dir/0, get_test_dir/0, delete_test_dir/0,
+-export([create_test_dir/0, get_test_dir/0, delete_test_dir/0, delete_test_dir/1,
          set_dir_permissions/2,
          safe_application_load/1,
          safe_write_file/2]).
