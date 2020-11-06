@@ -4,3 +4,8 @@ otp_release:
   - 23.0
   - 22.3
   - 21.3
+script:
+  - rebar3 --version
+  - erl -version
+  - rebar3 dialyzer
+  - rebar3 eunit
