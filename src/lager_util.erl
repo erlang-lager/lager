@@ -460,19 +460,21 @@ i3l(I)              -> integer_to_list(I).
 
 %% When log_root option is provided, get the real path to a file
 expand_path(RelPath) ->
-    case application:get_env(lager, log_root) of
-        {ok, LogRoot} when is_list(LogRoot) -> % Join relative path
-            %% check if the given RelPath contains LogRoot, if so, do not add
-            %% it again; see gh #304
-            case string:str(filename:dirname(RelPath), LogRoot) of
-                X when X > 0 ->
-                    RelPath;
-                _Zero ->
-                    filename:join(LogRoot, RelPath)
-            end;
-        undefined -> % No log_root given, keep relative path
-            RelPath
-    end.
+    RelPath2 = case application:get_env(lager, log_root) of
+                   {ok, LogRoot} when is_list(LogRoot) -> % Join relative path
+                       %% check if the given RelPath contains LogRoot, if so, do not add
+                       %% it again; see gh #304
+                       case string:str(filename:dirname(RelPath), LogRoot) of
+                           X when X > 0 ->
+                               RelPath;
+                           _Zero ->
+                               filename:join(LogRoot, RelPath)
+                       end;
+                   undefined -> % No log_root given, keep relative path
+                       RelPath
+               end,
+    %% see #534 make sure c:cd can't change file path, trans filename to abs name
+    filename:absname(RelPath2).
 
 %% Find a file among the already installed handlers.
 %%
@@ -481,8 +483,8 @@ expand_path(RelPath) ->
 find_file(_File1, _Handlers = []) ->
     false;
 find_file(File1, [{{lager_file_backend, File2}, _Handler, _Sink} = HandlerInfo | Handlers]) ->
-    File1Abs = filename:absname(File1),
-    File2Abs = filename:absname(lager_util:expand_path(File2)),
+    File1Abs = File1,
+    File2Abs = lager_util:expand_path(File2),
     case File1Abs =:= File2Abs of
         true ->
             % The file inside HandlerInfo is the same as the file we are looking
@@ -831,13 +833,13 @@ expand_path_test() ->
     OldRootVal = application:get_env(lager, log_root),
 
     ok = application:unset_env(lager, log_root),
-    ?assertEqual("/foo/bar", expand_path("/foo/bar")),
-    ?assertEqual("foo/bar", expand_path("foo/bar")),
+    ?assertEqual(filename:absname("/foo/bar"), expand_path("/foo/bar")),
+    ?assertEqual(filename:absname("foo/bar"), expand_path("foo/bar")),
 
     ok = application:set_env(lager, log_root, "log/dir"),
-    ?assertEqual("/foo/bar", expand_path("/foo/bar")), % Absolute path should not be changed
-    ?assertEqual("log/dir/foo/bar", expand_path("foo/bar")),
-    ?assertEqual("log/dir/foo/bar", expand_path("log/dir/foo/bar")), %% gh #304
+    ?assertEqual(filename:absname("/foo/bar"), expand_path("/foo/bar")), % Absolute path should not be changed
+    ?assertEqual(filename:absname("log/dir/foo/bar"), expand_path("foo/bar")),
+    ?assertEqual(filename:absname("log/dir/foo/bar"), expand_path("log/dir/foo/bar")), %% gh #304
 
     case OldRootVal of
         undefined -> application:unset_env(lager, log_root);
