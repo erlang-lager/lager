@@ -30,6 +30,8 @@
 
             ]},
 
+            %% Where to write the logs
+            {log_root, "log"},
             %% Whether to write a crash log, and where. False means no crash logger.
             {crash_log, "crash.log"},
             %% Maximum size in bytes of events in the crash log - defaults to 65536
