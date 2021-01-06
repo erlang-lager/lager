@@ -31,7 +31,7 @@
             ]},
 
             %% Whether to write a crash log, and where. False means no crash logger.
-            {crash_log, "log/crash.log"},
+            {crash_log, "crash.log"},
             %% Maximum size in bytes of events in the crash log - defaults to 65536
             {crash_log_msg_size, 65536},
             %% Maximum size of the crash log in bytes, before its rotated, set
