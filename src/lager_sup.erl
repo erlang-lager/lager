@@ -78,11 +78,7 @@ decide_crash_log(undefined) ->
     [];
 decide_crash_log(false) ->
     [];
-decide_crash_log(File0) ->
-    File = case application:get_env(lager, log_root, undefined) of
-               undefined -> "log/" ++ File0;
-               LogRoot -> LogRoot ++ "/" ++ File0
-           end,
+decide_crash_log(File) ->
     MaxBytes = validate_positive(application:get_env(lager, crash_log_msg_size), 65536),
     RotationSize = validate_positive(application:get_env(lager, crash_log_size), 0),
     RotationCount = validate_positive(application:get_env(lager, crash_log_count), 0),
