@@ -41,11 +41,11 @@
 -define(DEFAULT_HANDLER_CONF,
         [{lager_console_backend, [{level, info}]},
          {lager_file_backend,
-          [{file, "log/error.log"}, {level, error},
+          [{file, "error.log"}, {level, error},
            {size, 10485760}, {date, "$D0"}, {count, 5}]
          },
          {lager_file_backend,
-          [{file, "log/console.log"}, {level, info},
+          [{file, "console.log"}, {level, info},
            {size, 10485760}, {date, "$D0"}, {count, 5}]
          }
         ]).
