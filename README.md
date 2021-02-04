@@ -1156,6 +1156,12 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.8.2 - 4 February 2021
+
+    * Bugfix: Make directory expansion return an absolute path (#535)
+    * Feature: Write crash.log under the log_root location (#536)
+    * Bugfix: Handle line numbering correctly in forthcoming OTP 24 release (#537)
+
 3.8.1 - 28 August 2020
 
     * Feature: Allow metadata fields to be whitelisted in log formatting (#514)
