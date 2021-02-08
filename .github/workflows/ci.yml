@@ -1,0 +1,25 @@
+---
+name: build
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  ci:
+    name: >
+      Run checks and tests over ${{matrix.otp_vsn}} and ${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    container:
+      image: erlang:${{matrix.otp_vsn}}
+      options: --user 1001
+    strategy:
+      matrix:
+        otp_vsn: [21.3, 22.3, 23.2]
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - run: rebar3 dialyzer
+      - run: rebar3 eunit
