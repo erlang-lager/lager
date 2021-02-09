@@ -464,11 +464,11 @@ expand_path(RelPath) ->
                    {ok, LogRoot} when is_list(LogRoot) -> % Join relative path
                        %% check if the given RelPath contains LogRoot, if so, do not add
                        %% it again; see gh #304
-                       case string:str(filename:dirname(RelPath), LogRoot) of
-                           X when X > 0 ->
-                               RelPath;
-                           _Zero ->
-                               filename:join(LogRoot, RelPath)
+                       case filename:dirname(RelPath) of
+                           "." ->
+                               filename:join(LogRoot, RelPath);
+                           false ->
+                               RelPath
                        end;
                    undefined -> % No log_root given, keep relative path
                        RelPath
