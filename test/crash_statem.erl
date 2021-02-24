@@ -1,6 +1,5 @@
 -module(crash_statem).
 %% we're only going to compile this on OTP 19+
--ifdef(test_statem).
 -behaviour(gen_statem).
 
 -export([
@@ -45,11 +44,3 @@ handle_event({call, _From}, timeout, _Arg, _Data) ->
     {keep_state_and_data, [{state_timeout, 0, timeout}]};
 handle_event({call, _From}, {stop, Reason}, state1, _Data) ->
     {stop, Reason}.
-
--else.
--export([start/0, crash/0]).
-
-start() -> ok.
-crash() -> ok.
-
--endif.
