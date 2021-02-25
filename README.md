@@ -1156,6 +1156,12 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.9.0 - 24 February 2021
+
+    * Bugfix: Try to make a log root of "log" more sensible (#540)
+    * Feature: Further adapt to OTP 24 (also remove pre OTP 21 code),
+               adopt Github Actions for tests
+
 3.8.2 - 4 February 2021
 
     * Bugfix: Make directory expansion return an absolute path (#535)
