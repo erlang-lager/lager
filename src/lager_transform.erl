@@ -267,11 +267,8 @@ handle_args(DefaultAttrs, Line, [Arg1, Arg2]) ->
 handle_args(DefaultAttrs, _Line, [Attrs, Format, Args]) ->
     {concat_lists(Attrs, DefaultAttrs), Format, Args}.
 
-make_varname(Prefix, Loc) ->
-    list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(line_from_loc(Loc))).
-
-line_from_loc({Line, _Col}) -> Line;
-line_from_loc(Line) -> Line.
+make_varname(Prefix, CallAnno) ->
+    list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(erl_anno:line(CallAnno))).
 
 %% concat 2 list ASTs by replacing the terminating [] in A with the contents of B
 concat_lists({var, Line, _Name}=Var, B) ->

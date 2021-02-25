@@ -305,18 +305,18 @@ lager_test_() ->
                         lager:info(Attr, "hello ~p", Args),
                         lager:info([{d, delta}, {g, gamma}], Fmt, Args),
                         ?assertEqual(6, count()),
-                        {_Level, _Time, Message, Metadata}  = pop(),
+                        {Level, _Time, Message, Metadata}  = pop(),
                         ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(),
+                        {Level, _Time2, Message2, _Metadata2}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(),
+                        {Level, _Time3, Message3, _Metadata3}  = pop(),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(),
+                        {Level, _Time4, Message4, _Metadata4}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(),
+                        {Level, _Time5, Message5, _Metadata5}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(),
+                        {Level, _Time6, Message6, Metadata6}  = pop(),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
                         ok
@@ -335,18 +335,18 @@ lager_test_() ->
                         lager:info([{K, atom_to_list(V)} || {K, V} <- Attr], "hello ~p", [{atom, X} || X <- Args]),
                         lager:info([{d, delta}, {g, gamma}], Fmt, [{atom, X} || X <- Args]),
                         ?assertEqual(6, count()),
-                        {_Level, _Time, Message, Metadata}  = pop(),
+                        {Level, _Time, Message, Metadata}  = pop(),
                         ?assertMatch([{a, "alpha"}, {b, "beta"}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(),
+                        {Level, _Time2, Message2, _Metadata2}  = pop(),
                         ?assertEqual("hello {atom,world}", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(),
+                        {Level, _Time3, Message3, _Metadata3}  = pop(),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(),
+                        {Level, _Time4, Message4, _Metadata4}  = pop(),
                         ?assertEqual("hello {atom,world}", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(),
+                        {Level, _Time5, Message5, _Metadata5}  = pop(),
                         ?assertEqual("hello {atom,world}", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(),
+                        {Level, _Time6, Message6, Metadata6}  = pop(),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format {atom,world}", lists:flatten(Message6)),
                         ok
@@ -365,18 +365,18 @@ lager_test_() ->
                         lager:info(fun() -> get(attrs) end(), "hello ~p", get(args)),
                         lager:info([{d, delta}, {g, gamma}], get(format), get(args)),
                         ?assertEqual(6, count()),
-                        {_Level, _Time, Message, Metadata}  = pop(),
+                        {Level, _Time, Message, Metadata}  = pop(),
                         ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(),
+                        {Level, _Time2, Message2, _Metadata2}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(),
+                        {Level, _Time3, Message3, _Metadata3}  = pop(),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(),
+                        {Level, _Time4, Message4, _Metadata4}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(),
+                        {Level, _Time5, Message5, _Metadata5}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(),
+                        {Level, _Time6, Message6, Metadata6}  = pop(),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
                         ok
@@ -393,18 +393,18 @@ lager_test_() ->
                         lager:info(Test#test.attrs, "hello ~p", Test#test.args),
                         lager:info([{d, delta}, {g, gamma}], Test#test.format, Test#test.args),
                         ?assertEqual(6, count()),
-                        {_Level, _Time, Message, Metadata}  = pop(),
+                        {Level, _Time, Message, Metadata}  = pop(),
                         ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(),
+                        {Level, _Time2, Message2, _Metadata2}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(),
+                        {Level, _Time3, Message3, _Metadata3}  = pop(),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(),
+                        {Level, _Time4, Message4, _Metadata4}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(),
+                        {Level, _Time5, Message5, _Metadata5}  = pop(),
                         ?assertEqual("hello world", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(),
+                        {Level, _Time6, Message6, Metadata6}  = pop(),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
                         ok
@@ -794,18 +794,18 @@ extra_sinks_test_() ->
                         ?TEST_SINK_NAME:info(Attr, "hello ~p", Args),
                         ?TEST_SINK_NAME:info([{d, delta}, {g, gamma}], Fmt, Args),
                         ?assertEqual(6, count(?TEST_SINK_EVENT)),
-                        {_Level, _Time, Message, Metadata}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time, Message, Metadata}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch([{a, alpha}, {b, beta}|_], Metadata),
                         ?assertEqual("hello", lists:flatten(Message)),
-                        {_Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time2, Message2, _Metadata2}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message2)),
-                        {_Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time3, Message3, _Metadata3}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("format world", lists:flatten(Message3)),
-                        {_Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time4, Message4, _Metadata4}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message4)),
-                        {_Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time5, Message5, _Metadata5}  = pop(?TEST_SINK_EVENT),
                         ?assertEqual("hello world", lists:flatten(Message5)),
-                        {_Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_EVENT),
+                        {Level, _Time6, Message6, Metadata6}  = pop(?TEST_SINK_EVENT),
                         ?assertMatch([{d, delta}, {g, gamma}|_], Metadata6),
                         ?assertEqual("format world", lists:flatten(Message6)),
                         ok
@@ -912,6 +912,9 @@ crash(Type) ->
     _ = gen_event:which_handlers(error_logger),
     ok.
 
+test_body({slice, Expected}, Actual) ->
+    SlicedActual = string:slice(Actual, 0, length(Expected)),
+    ?assertEqual(Expected, SlicedActual, {Actual, sliced_to, SlicedActual, is_not_a_member_of, Expected});
 test_body(Expected, Actual) ->
     ExLen = length(Expected),
     {Body, Rest} = case length(Actual) > ExLen of
@@ -1056,11 +1059,10 @@ crash_fsm_test_() ->
             }
         end,
 
-        TestBody("gen_fsm crash", crash_fsm, crash, [], "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/"),
-        TestBody("gen_statem crash", crash_statem, crash, [], "gen_statem crash_statem in state state1 terminated with reason: no function clause matching crash_statem:handle"),
-        TestBody("gen_statem stop", crash_statem, stop, [explode], "gen_statem crash_statem in state state1 terminated with reason: explode"),
-        TestBody("gen_statem timeout", crash_statem, timeout, [], "gen_statem crash_statem in state state1 terminated with reason: timeout")
-    ],
+        TestBody("gen_statem crash", crash_statem, crash, [], {slice, "gen_statem crash_statem in state state1 terminated with reason"}),
+        TestBody("gen_statem stop", crash_statem, stop, [explode], {slice, "gen_statem crash_statem in state state1 terminated with reason"}),
+        TestBody("gen_statem timeout", crash_statem, timeout, [], {slice, "gen_statem crash_statem in state state1 terminated with reason"})
+    ] ++ test_body_gen_fsm_crash(TestBody),
 
     {"FSM crash output tests", [
         {"Default sink",
@@ -1074,6 +1076,14 @@ crash_fsm_test_() ->
             fun crash_fsm_cleanup/1,
             Tests}}
     ]}.
+
+-if(?OTP_RELEASE < 23).
+test_body_gen_fsm_crash(TestBody) ->
+    [TestBody("gen_fsm crash", crash_fsm, crash, [], "gen_fsm crash_fsm in state state1 terminated with reason: call to undefined function crash_fsm:state1/3 from gen_fsm:handle_msg/")].
+-else.
+test_body_gen_fsm_crash(_TestBody) ->
+    [].
+-endif.
 
 error_logger_redirect_crash_test_() ->
     TestBody=fun(Name,CrashReason,Expected) ->
