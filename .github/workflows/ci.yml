@@ -10,7 +10,7 @@ on:
 jobs:
   ci:
     name: >
-      Run checks and tests over ${{matrix.otp_vsn}} and ${{matrix.os}}
+      Run Linux-based checks and tests over ${{matrix.otp_vsn}} and ${{matrix.os}}
     runs-on: ${{matrix.os}}
     container:
       image: erlang:${{matrix.otp_vsn}}
@@ -23,3 +23,23 @@ jobs:
       - uses: actions/checkout@v2
       - run: rebar3 dialyzer
       - run: rebar3 eunit
+  ci-windows:
+    name: >
+      Run Windows-based checks and tests over ${{matrix.otp_vsn}} and ${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        otp_vsn: [23.2]
+        os: [windows-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: gleam-lang/setup-erlang@v1.1.2
+      with:
+        otp-version: ${{matrix.otp_vsn}}
+      id: install_erlang
+    - run: wget https://s3.amazonaws.com/rebar3/rebar3 -OutFile rebar3
+      shell: powershell
+    - run: |
+        & "${{steps.install_erlang.outputs.erlpath}}\bin\escript.exe" rebar3 dialyzer
+    - run: |
+        & "${{steps.install_erlang.outputs.erlpath}}\bin\escript.exe" rebar3 eunit
