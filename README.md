@@ -1156,6 +1156,11 @@ Example Usage:
 3.x Changelog
 -------------
 
+3.9.1 - 2 March 2021
+
+   * Bugfix: More log_root fun (#543)
+   * Bugfix: Use GHA for all the CIs
+
 3.9.0 - 24 February 2021
 
     * Bugfix: Try to make a log root of "log" more sensible (#540)
