@@ -459,22 +459,16 @@ i3l(I) when I < 100 -> [$0 | i2l(I)];
 i3l(I)              -> integer_to_list(I).
 
 %% When log_root option is provided, get the real path to a file
-expand_path(RelPath) ->
-    RelPath2 = case application:get_env(lager, log_root) of
-                   {ok, LogRoot} when is_list(LogRoot) -> % Join relative path
-                       %% check if the given RelPath contains LogRoot, if so, do not add
-                       %% it again; see gh #304
-                       case filename:dirname(RelPath) of
-                           "." ->
-                               filename:join(LogRoot, RelPath);
-                           false ->
-                               RelPath
-                       end;
-                   undefined -> % No log_root given, keep relative path
-                       RelPath
+expand_path(LogPath) ->
+    LogRoot = application:get_env(lager, log_root, undefined),
+    RealPath = case filename:absname(LogPath) =:= LogPath of
+                   false when LogRoot =/= undefined ->
+                       filename:join(LogRoot, LogPath);
+                   _ ->
+                       LogPath
                end,
     %% see #534 make sure c:cd can't change file path, trans filename to abs name
-    filename:absname(RelPath2).
+    filename:absname(RealPath).
 
 %% Find a file among the already installed handlers.
 %%
@@ -839,7 +833,6 @@ expand_path_test() ->
     ok = application:set_env(lager, log_root, "log/dir"),
     ?assertEqual(filename:absname("/foo/bar"), expand_path("/foo/bar")), % Absolute path should not be changed
     ?assertEqual(filename:absname("log/dir/foo/bar"), expand_path("foo/bar")),
-    ?assertEqual(filename:absname("log/dir/foo/bar"), expand_path("log/dir/foo/bar")), %% gh #304
 
     case OldRootVal of
         undefined -> application:unset_env(lager, log_root);

@@ -20,7 +20,7 @@ pr_stacktrace_throw_test() ->
         Class:Reason:Stacktrace ->
             lager:pr_stacktrace(Stacktrace, {Class, Reason})
     end,
-    Want = "pr_stacktrace_test:pr_stacktrace_throw_test/0 line 26\n    pr_stacktrace_test:make_throw/0 line 16\nthrow:{test,exception}",
+    Want = "pr_stacktrace_test:pr_stacktrace_throw_test/0 line 18\n    pr_stacktrace_test:make_throw/0 line 8\nthrow:{test,exception}",
     ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_bad_arg_test() ->
@@ -30,7 +30,7 @@ pr_stacktrace_bad_arg_test() ->
         Class:Reason:Stacktrace ->
             lager:pr_stacktrace(Stacktrace, {Class, Reason})
     end,
-    Want = "pr_stacktrace_test:pr_stacktrace_bad_arg_test/0 line 36\n    pr_stacktrace_test:bad_arg/0 line 22\nerror:badarg",
+    Want = "pr_stacktrace_test:pr_stacktrace_bad_arg_test/0 line 28\n    pr_stacktrace_test:bad_arg/0 line 14\nerror:badarg",
     ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_bad_arity_test() ->
@@ -40,7 +40,7 @@ pr_stacktrace_bad_arity_test() ->
         Class:Reason:Stacktrace ->
             lager:pr_stacktrace(Stacktrace, {Class, Reason})
     end,
-    Want = "pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 46\n    lists:concat([], [])\nerror:undef",
+    Want = "pr_stacktrace_test:pr_stacktrace_bad_arity_test/0 line 38\n    lists:concat([], [])\nerror:undef",
     ?assertNotEqual(nomatch, string:find(Got, Want)).
 
 pr_stacktrace_no_reverse_test() ->
