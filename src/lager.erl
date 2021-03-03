@@ -40,7 +40,8 @@
         get_loglevel/1, get_loglevel/2, set_loglevel/2, set_loglevel/3, set_loglevel/4, get_loglevels/1,
         update_loglevel_config/1, posix_error/1, set_loghwm/2, set_loghwm/3, set_loghwm/4,
         safe_format/3, safe_format_chop/3, unsafe_format/2, dispatch_log/5, dispatch_log/7, dispatch_log/9,
-        do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3, pr_stacktrace/1, pr_stacktrace/2]).
+        do_log/9, do_log/10, do_log_unsafe/10, pr/2, pr/3, pr_stacktrace/1, pr_stacktrace/2,
+        generate_logger_config/0, configure_logger/0]).
 
 -type log_level() :: none | debug | info | notice | warning | error | critical | alert | emergency.
 -type log_level_number() :: 0..7.
@@ -694,6 +695,65 @@ rotate_handler(Handler) ->
 
 rotate_handler(Handler, Sink) ->
     gen_event:call(Sink, Handler, rotate, ?ROTATE_TIMEOUT).
+
+generate_logger_config() ->
+    Handlers = application:get_env(lager, handlers, lager_app:default_handlers()),
+    {Level, NewHandlers} = generate_logger_handlers(Handlers, {notice, []}),
+    {kernel, [{logger_level, Level}, {logger, NewHandlers}]}.
+
+configure_logger() ->
+    Handlers = application:get_env(lager, handlers, lager_app:default_handlers()),
+    WhitelistedLoggerHandlers = application:get_env(lager, whitelisted_logger_handlers, []),
+    [ ok = logger:remove_handler(Id) || #{id := Id} <- logger:get_handler_config(), not lists:member(Id, WhitelistedLoggerHandlers) ],
+    {Level, NewHandlers} = generate_logger_handlers(Handlers, {notice, []}),
+    logger:set_primary_config(maps:merge(logger:get_primary_config(), #{level => Level})),
+    [ ok = logger:add_handler(HandlerId, HandlerModule, HandlerConfig) || {handler, HandlerId, HandlerModule, HandlerConfig} <- NewHandlers ],
+    ok.
+
+generate_logger_handlers([], Acc) ->
+    Acc;
+generate_logger_handlers([{lager_console_backend, Config}|Tail], {CurrentLevel, Acc}) ->
+    Level = proplists:get_value(level, Config, info),
+    Formatter = proplists:get_value(formatter, Config, lager_default_formatter),
+    FormatterConfig = proplists:get_value(formatter_config, Config, []),
+    Handler = {handler, console, logger_std_h, #{level => Level, formatter =>
+                                                 {lager_logger_formatter, #{report_cb => fun lager_logger_formatter:report_cb/1,
+                                                                            formatter => Formatter,
+                                                                            formatter_config => FormatterConfig}}}},
+    NewLevel = case lager_util:level_to_num(Level) > lager_util:level_to_num(CurrentLevel) of
+                   true ->
+                       Level;
+                   false ->
+                       CurrentLevel
+               end,
+    generate_logger_handlers(Tail, {NewLevel, [Handler|Acc]});
+generate_logger_handlers([{lager_file_backend, Config}|Tail], {CurrentLevel, Acc}) ->
+    Level = proplists:get_value(level, Config, info),
+    File = proplists:get_value(file, Config),
+    LogRoot = application:get_env(lager, log_root, ""),
+    Size = proplists:get_value(size, Config, 10485760),
+    Count = proplists:get_value(count, Config, 5),
+    Formatter = proplists:get_value(formatter, Config, lager_default_formatter),
+    FormatterConfig = proplists:get_value(formatter_config, Config, []),
+    %% the standard log handler has a file mode with size based rotation support that is much saner than
+    %% disk_log's, so use that here
+    Handler = {handler, list_to_atom(File), logger_std_h, #{level => Level,
+                                                            config => #{type => file,
+                                                                         file => filename:join(LogRoot, File),
+                                                                         max_no_files => Count,
+                                                                         max_no_bytes => Size},
+                                                            formatter =>
+                                                            {lager_logger_formatter, #{report_cb => fun lager_logger_formatter:report_cb/1,
+                                                                                       formatter => Formatter,
+                                                                                       formatter_config => FormatterConfig}}}},
+    NewLevel = case lager_util:level_to_num(Level) > lager_util:level_to_num(CurrentLevel) of
+                   true ->
+                       Level;
+                   false ->
+                       CurrentLevel
+               end,
+    generate_logger_handlers(Tail, {NewLevel, [Handler|Acc]}).
+
 
 %% @private
 trace_func(#trace_func_state_v1{pid=Pid, level=Level, format_string=Fmt}=FuncState, Event, ProcState) ->

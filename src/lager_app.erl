@@ -30,7 +30,8 @@
          start_handler/3,
          configure_sink/2,
          stop/1,
-         boot/1]).
+         boot/1,
+         default_handlers/0]).
 
 %% The `application:get_env/3` compatibility wrapper was useful
 %% for other modules in r15 and before
@@ -225,11 +226,22 @@ get_env(Application, Key, Default) ->
 
 start(_StartType, _StartArgs) ->
     {ok, Pid} = lager_sup:start_link(),
-    SavedHandlers = boot(),
-    _ = boot('__all_extra'),
-    _ = boot('__traces'),
-    clean_up_config_checks(),
-    {ok, Pid, SavedHandlers}.
+    case application:get_env(lager, lager_use_logger, false) of
+        false ->
+            SavedHandlers = boot(),
+            _ = boot('__all_extra'),
+            _ = boot('__traces'),
+            clean_up_config_checks(),
+            {ok, Pid, SavedHandlers};
+        true ->
+            case application:get_env(lager, configure_logger, false) of
+                true ->
+                    ok = lager:configure_logger();
+                false ->
+                    ok
+            end,
+            {ok, Pid}
+    end.
 
 boot() ->
     %% Handle the default sink.
@@ -275,6 +287,9 @@ stop(Handlers) ->
           error_logger:add_report_handler(Handler)
       end, Handlers),
     lager_config:cleanup().
+
+default_handlers() ->
+    ?DEFAULT_HANDLER_CONF.
 
 expand_handlers([]) ->
     [];

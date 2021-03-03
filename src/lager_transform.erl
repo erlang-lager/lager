@@ -33,10 +33,12 @@ parse_transform(AST, Options) ->
     Enable = proplists:get_value(lager_print_records_flag, Options, true),
     Sinks = [lager] ++ proplists:get_value(lager_extra_sinks, Options, []),
     Functions = proplists:get_value(lager_function_transforms, Options, []),
+    UseLogger = proplists:get_value(lager_use_logger, Options, false),
     put(print_records_flag, Enable),
     put(truncation_size, TruncSize),
     put(sinks, Sinks),
     put(functions, lists:keysort(1, Functions)),
+    put(use_logger, UseLogger),
     erlang:put(records, []),
     %% .app file should either be in the outdir, or the same dir as the source file
     guess_application(proplists:get_value(outdir, Options), hd(AST)),
@@ -63,6 +65,7 @@ walk_ast(Acc, [{attribute, _, lager_function_transforms, FromModule }=H|T]) ->
     walk_ast([H|Acc], T);
 walk_ast(Acc, [{function, Line, Name, Arity, Clauses}|T]) ->
     put(function, Name),
+    put(arity, Arity),
     walk_ast([{function, Line, Name, Arity,
                 walk_clauses([], Clauses)}|Acc], T);
 walk_ast(Acc, [{attribute, _, record, {Name, Fields}}=H|T]) ->
@@ -140,24 +143,40 @@ do_transform(Line, SinkName, Severity, Arguments0) ->
     do_transform(Line, SinkName, Severity, Arguments0, safe).
 
 do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
-    SeverityAsInt=lager_util:level_to_num(Severity),
-    DefaultAttrs0 = {cons, Line, {tuple, Line, [
-                                                {atom, Line, module}, {atom, Line, get(module)}]},
-                     {cons, Line, {tuple, Line, [
-                                                 {atom, Line, function}, {atom, Line, get(function)}]},
-                      {cons, Line, {tuple, Line, [
-                                                  {atom, Line, line},
-                                                  {integer, Line, Line}]},
-                       {cons, Line, {tuple, Line, [
-                                                   {atom, Line, pid},
-                                                   {call, Line, {atom, Line, pid_to_list}, [
-                                                                                            {call, Line, {atom, Line ,self}, []}]}]},
-                        {cons, Line, {tuple, Line, [
-                                                    {atom, Line, node},
-                                                    {call, Line, {atom, Line, node}, []}]},
-                         %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
-                         {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}},
-                                                %{nil, Line}}}}}}},
+    DefaultAttrs0 = case get(use_logger) of
+                        true ->
+                            {cons, Line, {tuple, Line, [
+                                                        {atom, Line, pid}, {call, Line, {atom, Line, self}, []}]},
+                             {cons, Line, {tuple, Line, [
+                                                         {atom, Line, gl}, {call, Line, {atom, Line, group_leader}, []}]},
+                              {cons, Line, {tuple, Line, [
+                                                          {atom, Line, time}, {call, Line, {remote, Line, {atom, Line, erlang}, {atom, Line, system_time}}, [{atom, Line, microsecond}]}]},
+                               {cons, Line, {tuple, Line, [
+                                                           {atom, Line, mfa}, {tuple, Line, [{atom, Line, get(module)}, {atom, Line, get(function)}, {atom, Line, get(arity)}]}]},
+                                {cons, Line, {tuple, Line, [
+                                                            {atom, Line, file}, {string, Line, get(filename)}]},
+                                 {cons, Line, {tuple, Line, [
+                                                             {atom, Line, line}, {integer, Line, Line}]},
+                                  %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
+                                  {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}}};
+                        false ->
+                            {cons, Line, {tuple, Line, [
+                                                        {atom, Line, module}, {atom, Line, get(module)}]},
+                             {cons, Line, {tuple, Line, [
+                                                         {atom, Line, function}, {atom, Line, get(function)}]},
+                              {cons, Line, {tuple, Line, [
+                                                          {atom, Line, line},
+                                                          {integer, Line, Line}]},
+                               {cons, Line, {tuple, Line, [
+                                                           {atom, Line, pid},
+                                                           {call, Line, {atom, Line, pid_to_list}, [
+                                                                                                    {call, Line, {atom, Line ,self}, []}]}]},
+                                {cons, Line, {tuple, Line, [
+                                                            {atom, Line, node},
+                                                            {call, Line, {atom, Line, node}, []}]},
+                                 %% get the metadata with lager:md(), this will always return a list so we can use it as the tail here
+                                 {call, Line, {remote, Line, {atom, Line, lager}, {atom, Line, md}}, []}}}}}}
+                    end,
     Functions = get(functions),
     DefaultAttrs1 = add_function_transforms(Line, DefaultAttrs0, Functions),
     DefaultAttrs = case erlang:get(application) of
@@ -171,67 +190,82 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                                          {nil, Line}}, DefaultAttrs1)
                    end,
     {Meta, Message, Arguments} = handle_args(DefaultAttrs, Line, Arguments0),
-    %% Generate some unique variable names so we don't accidentally export from case clauses.
-    %% Note that these are not actual atoms, but the AST treats variable names as atoms.
-    LevelVar = make_varname("__Level", Line),
-    TracesVar = make_varname("__Traces", Line),
-    PidVar = make_varname("__Pid", Line),
-    LogFun = case Safety of
-                 safe ->
-                     do_log;
-                 unsafe ->
-                     do_log_unsafe
-             end,
-    %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not elegible for logging
-    %% See lager.erl (lines 89-100) for lager:dispatch_log/6
-    %% case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
-    {'case',Line,
-         {tuple,Line,
-                [{call,Line,{atom,Line,whereis},[{atom,Line,SinkName}]},
-                 {call,Line,{atom,Line,whereis},[{atom,Line,?DEFAULT_SINK}]}, 
-                 {call,Line,
-                       {remote,Line,{atom,Line,lager_config},{atom,Line,get}},
-                       [{tuple,Line,[{atom,Line,SinkName},{atom,Line,loglevel}]},
-                        {tuple,Line,[{integer,Line,0},{nil,Line}]}]}]},
-         %% {undefined, undefined, _} -> {error, lager_not_running};
-         [{clause,Line,
-                  [{tuple,Line,
-                          [{atom,Line,undefined},{atom,Line,undefined},{var,Line,'_'}]}],
-                  [],
-                  %% trick the linter into avoiding a 'term constructed but not used' error:
-                  %% (fun() -> {error, lager_not_running} end)()
-                  [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
-          },
-          %% {undefined, _, _} -> {error, {sink_not_configured, Sink}};
-          {clause,Line,
-                  [{tuple,Line,
-                          [{atom,Line,undefined},{var,Line,'_'},{var,Line,'_'}]}],
-                  [],
-                  %% same trick as above to avoid linter error
-                  [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple,Line, [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]}]}}, []}] 
-          },
-          %% {SinkPid, _, {Level, Traces}} when ... -> lager:do_log/9;
-          {clause,Line,
-                  [{tuple,Line,
-                          [{var,Line,PidVar},
-                           {var,Line,'_'},
-                           {tuple,Line,[{var,Line,LevelVar},{var,Line,TracesVar}]}]}],
-                  [[{op, Line, 'orelse',
-                    {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
-                    {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
-                  [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, LogFun}},
-                         [{atom,Line,Severity},
-                          Meta,
-                          Message,
-                          Arguments,
-                          {integer, Line, get(truncation_size)},
-                          {integer, Line, SeverityAsInt},
-                          {var, Line, LevelVar},
-                          {var, Line, TracesVar},
-                          {atom, Line, SinkName},
-                          {var, Line, PidVar}]}]},
-          %% _ -> ok
-          {clause,Line,[{var,Line,'_'}],[],[{atom,Line,ok}]}]}.
+    case get(use_logger) of
+        true ->
+            case Arguments of
+                {atom, _, none} ->
+                    %% logger:log(Level, Format, Args, Metadata)
+                    {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
+                     [{atom,Line,Severity}, Message, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
+                _ ->
+                    %% logger:log(Level, String, Metadata)
+                    {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
+                     [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]}
+            end;
+        false ->
+            SeverityAsInt=lager_util:level_to_num(Severity),
+            %% Generate some unique variable names so we don't accidentally export from case clauses.
+            %% Note that these are not actual atoms, but the AST treats variable names as atoms.
+            LevelVar = make_varname("__Level", Line),
+            TracesVar = make_varname("__Traces", Line),
+            PidVar = make_varname("__Pid", Line),
+            LogFun = case Safety of
+                         safe ->
+                             do_log;
+                         unsafe ->
+                             do_log_unsafe
+                     end,
+            %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not elegible for logging
+            %% See lager.erl (lines 89-100) for lager:dispatch_log/6
+            %% case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
+            {'case',Line,
+             {tuple,Line,
+              [{call,Line,{atom,Line,whereis},[{atom,Line,SinkName}]},
+               {call,Line,{atom,Line,whereis},[{atom,Line,?DEFAULT_SINK}]}, 
+               {call,Line,
+                {remote,Line,{atom,Line,lager_config},{atom,Line,get}},
+                [{tuple,Line,[{atom,Line,SinkName},{atom,Line,loglevel}]},
+                 {tuple,Line,[{integer,Line,0},{nil,Line}]}]}]},
+             %% {undefined, undefined, _} -> {error, lager_not_running};
+             [{clause,Line,
+               [{tuple,Line,
+                 [{atom,Line,undefined},{atom,Line,undefined},{var,Line,'_'}]}],
+               [],
+               %% trick the linter into avoiding a 'term constructed but not used' error:
+               %% (fun() -> {error, lager_not_running} end)()
+               [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
+              },
+              %% {undefined, _, _} -> {error, {sink_not_configured, Sink}};
+              {clause,Line,
+               [{tuple,Line,
+                 [{atom,Line,undefined},{var,Line,'_'},{var,Line,'_'}]}],
+               [],
+               %% same trick as above to avoid linter error
+               [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple,Line, [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]}]}}, []}] 
+              },
+              %% {SinkPid, _, {Level, Traces}} when ... -> lager:do_log/9;
+              {clause,Line,
+               [{tuple,Line,
+                 [{var,Line,PidVar},
+                  {var,Line,'_'},
+                  {tuple,Line,[{var,Line,LevelVar},{var,Line,TracesVar}]}]}],
+               [[{op, Line, 'orelse',
+                  {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
+                  {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
+               [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, LogFun}},
+                 [{atom,Line,Severity},
+                  Meta,
+                  Message,
+                  Arguments,
+                  {integer, Line, get(truncation_size)},
+                  {integer, Line, SeverityAsInt},
+                  {var, Line, LevelVar},
+                  {var, Line, TracesVar},
+                  {atom, Line, SinkName},
+                  {var, Line, PidVar}]}]},
+              %% _ -> ok
+              {clause,Line,[{var,Line,'_'}],[],[{atom,Line,ok}]}]}
+    end.
  
 handle_args(DefaultAttrs, Line, [{cons, LineNum, {tuple, _, _}, _} = Attrs]) ->
     {concat_lists(DefaultAttrs, Attrs), {string, LineNum, ""}, {atom, Line, none}};
@@ -317,6 +351,7 @@ guess_application(Dirname, Attr) when Dirname /= undefined ->
             ok
     end;
 guess_application(undefined, {attribute, _, file, {Filename, _}}) ->
+    put(filename, Filename),
     Dir = filename:dirname(Filename),
     find_app_file(Dir);
 guess_application(_, _) ->

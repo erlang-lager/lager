@@ -32,24 +32,29 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    %% set up the config, is safe even during relups
-    lager_config:new(),
-    %% TODO:
-    %% Always start lager_event as the default and make sure that
-    %% other gen_event stuff can start up as needed
-    %%
-    %% Maybe a new API to handle the sink and its policy?
-    Children = [
-        {lager, {gen_event, start_link, [{local, lager_event}]},
-            permanent, 5000, worker, dynamic},
-        {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
-            permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
+    case application:get_env(lager, lager_use_logger, false) of
+        true ->
+            {ok, {{one_for_one, 10, 60}, []}};
+        false ->
+            %% set up the config, is safe even during relups
+            lager_config:new(),
+            %% TODO:
+            %% Always start lager_event as the default and make sure that
+            %% other gen_event stuff can start up as needed
+            %%
+            %% Maybe a new API to handle the sink and its policy?
+            Children = [
+                        {lager, {gen_event, start_link, [{local, lager_event}]},
+                         permanent, 5000, worker, dynamic},
+                        {lager_handler_watcher_sup, {lager_handler_watcher_sup, start_link, []},
+                         permanent, 5000, supervisor, [lager_handler_watcher_sup]}],
 
-    CrashLog = decide_crash_log(application:get_env(lager, crash_log, false)),
+            CrashLog = decide_crash_log(application:get_env(lager, crash_log, false)),
 
-    {ok, {{one_for_one, 10, 60},
-          Children ++ CrashLog
-         }}.
+            {ok, {{one_for_one, 10, 60},
+                  Children ++ CrashLog
+                 }}
+    end.
 
 validate_positive({ok, Val}, _Default) when is_integer(Val) andalso Val >= 0 ->
     Val;
