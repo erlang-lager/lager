@@ -198,17 +198,14 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                   [{tuple,Line,
                           [{atom,Line,undefined},{atom,Line,undefined},{var,Line,'_'}]}],
                   [],
-                  %% trick the linter into avoiding a 'term constructed but not used' error:
-                  %% (fun() -> {error, lager_not_running} end)()
-                  [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
+                  [{tuple, erl_anno:set_generated(true, Line), [{atom, Line, error},{atom, Line, lager_not_running}]}]
           },
           %% {undefined, _, _} -> {error, {sink_not_configured, Sink}};
           {clause,Line,
                   [{tuple,Line,
                           [{atom,Line,undefined},{var,Line,'_'},{var,Line,'_'}]}],
                   [],
-                  %% same trick as above to avoid linter error
-                  [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple,Line, [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]}]}}, []}] 
+                  [{tuple, erl_anno:set_generated(true, Line), [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]
           },
           %% {SinkPid, _, {Level, Traces}} when ... -> lager:do_log/9;
           {clause,Line,
