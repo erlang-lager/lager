@@ -586,6 +586,8 @@ set_loglevel_test_() ->
                         ?assertEqual(info, lager:get_loglevel(lager_console_backend)),
                         lager:set_loglevel(lager_console_backend, '!=info'),
                         ?assertEqual(debug, lager:get_loglevel(lager_console_backend)),
+                        lager:set_loglevel(lager_console_backend, [debug, info]),
+                        ?assertEqual(debug, lager:get_loglevel(lager_console_backend)),
                         ok
                 end
             },

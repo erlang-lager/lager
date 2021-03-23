@@ -98,9 +98,11 @@ mask_to_levels(Mask, [Level|Levels], Acc) ->
     end,
     mask_to_levels(Mask, Levels, NewAcc).
 
--spec config_to_levels(atom()|string()) -> [lager:log_level()].
+-spec config_to_levels(atom()|string()|[atom()]) -> [lager:log_level()].
 config_to_levels(Conf) when is_atom(Conf) ->
     config_to_levels(atom_to_list(Conf));
+config_to_levels([Level | _Rest] = Conf) when is_atom(Level) ->
+    lists:filter(fun(E) -> lists:member(E, Conf) end, levels());
 config_to_levels([$! | Rest]) ->
     levels() -- config_to_levels(Rest);
 config_to_levels([$=, $< | Rest]) ->
