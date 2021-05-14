@@ -1155,6 +1155,10 @@ Example Usage:
 
 3.x Changelog
 -------------
+3.9.2 - 14 May 2021
+
+   * Bugfix: Prevent "a term is constructed but never used" warnings (#547)
+   * Bugfix: Update CI test matrix to include OTP 24 (#551)
 
 3.9.1 - 2 March 2021
 
