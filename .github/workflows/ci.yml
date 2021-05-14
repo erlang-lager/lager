@@ -17,7 +17,7 @@ jobs:
       options: --user 1001
     strategy:
       matrix:
-        otp_vsn: [21.3, 22.3, 23.2]
+        otp_vsn: [21.3, 22.3, 23.3, 24.0]
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v2
