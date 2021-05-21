@@ -440,17 +440,17 @@ get_sink_handler_status(Sink, Handler, Level) ->
     end.
 
 %% @doc Set the loglevel for a particular backend.
-set_loglevel(Handler, Level) when is_atom(Level) ->
+set_loglevel(Handler, Level) when is_atom(Level); is_list(Level) ->
     set_loglevel(?DEFAULT_SINK, Handler, undefined, Level).
 
 %% @doc Set the loglevel for a particular backend that has multiple identifiers
 %% (eg. the file backend).
-set_loglevel(Handler, Ident, Level) when is_atom(Level) ->
+set_loglevel(Handler, Ident, Level) when is_atom(Level); is_list(Level) ->
     set_loglevel(?DEFAULT_SINK, Handler, Ident, Level).
 
 %% @doc Set the loglevel for a particular sink's backend that potentially has
 %% multiple identifiers. (Use `undefined' if it doesn't have any.)
-set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level) ->
+set_loglevel(Sink, Handler, Ident, Level) when is_atom(Level); is_list(Level) ->
     HandlerArg = case Ident of
         undefined -> Handler;
         _ -> {Handler, Ident}
