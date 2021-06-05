@@ -13,6 +13,7 @@
 -define(SECOND_LOG_ENTRY_TIMEOUT, 1000). % 1 second
 
 -define(FNAME, "test/test1.log").
+-define(FNAME2, "test/test2.log").
 
 trace_test_() ->
     {timeout,
@@ -48,7 +49,8 @@ trace_test_() ->
                  application:unset_env(lager, async_threshold),
                  error_logger:tty(true)
          end,
-         [{"Trace combined with log_root",
+         [
+          {"Trace combined with log_root",
              fun() ->
                  lager:info([{tag, mytag}], "Test message"),
 
@@ -71,6 +73,77 @@ trace_test_() ->
                          throw({too_many_entries, file:read_file(?FNAME)});
                      {error, timeout} ->
                          ok
+                 end
+             end}
+          ]}}.
+
+trace_silence_test_() ->
+    {timeout,
+     10,
+     {foreach,
+         fun() ->
+                 file:write_file(?FNAME2, ""),
+                 error_logger:tty(false),
+                 application:load(lager),
+                 application:set_env(lager, log_root, "test"),
+                 application:set_env(lager, handlers,
+                                     [{lager_file_backend,
+                                       [{file, "test2.log"},
+                                        {level, info},
+                                        {formatter, lager_default_formatter},
+                                        {formatter_config, [message, "\n"]}
+                                       ]}]),
+                 application:set_env(lager, traces,
+                                     [{{lager_file_backend, "test2.log"},
+                                       [{tag, silencetag}], silence}]),
+                 application:set_env(lager, error_logger_redirect, false),
+                 application:set_env(lager, async_threshold, undefined),
+                 lager:start()
+         end,
+         fun(_) ->
+                 file:delete(?FNAME2),
+                 application:stop(lager),
+                 application:stop(goldrush),
+                 application:unset_env(lager, log_root),
+                 application:unset_env(lager, handlers),
+                 application:unset_env(lager, traces),
+                 application:unset_env(lager, error_logger_redirect),
+                 application:unset_env(lager, async_threshold),
+                 error_logger:tty(true)
+         end,
+         [
+          {"Trace filter silences output",
+             fun() ->
+                 %% One message is supposed to get through, the other not
+                 lager:info([{tag, mytag}], "Test message"),
+                 lager:info([{tag, silencetag}], "This shouldn't get logged"),
+
+                 % Wait until we have the expected log entry in the log file.
+                 case wait_until(fun() ->
+                                         count_lines(?FNAME2) >= 1
+                                 end, ?FIRST_LOG_ENTRY_TIMEOUT) of
+                     ok ->
+                         ok;
+                     {error, timeout} ->
+                         throw({file_empty, file:read_file(?FNAME)})
+                 end,
+
+                 % Let's wait a little to see that we don't get a duplicate log
+                 % entry.
+                 case wait_until(fun() ->
+                                         count_lines(?FNAME2) >= 2
+                                 end, ?SECOND_LOG_ENTRY_TIMEOUT) of
+                     ok ->
+                         throw({too_many_entries, file:read_file(?FNAME)});
+                     {error, timeout} ->
+                         ok
+                 end,
+                 {ok, Bin} = file:read_file(?FNAME2),
+                 case Bin of
+                     <<"Test message\n">> ->
+                         ok;
+                     _ ->
+                         throw({unexpected_output_in_log, Bin})
                  end
              end}
           ]}}.
