@@ -786,6 +786,15 @@ a black hole; nothing is passed through.  A filter of `{null, true}` means
 *everything* passes through. No other values for the null filter are valid and
 will be rejected.
 
+### Silencing filters
+A special log level, `silence` can be used together with a filter in order
+to suppress specific log output. This can be useful if a backend has been
+configured for a particular log level, but a particular set of log messages
+clutters the log. If these come from a dependency, they might be difficult
+to remove entirely, and it might not be desireable to do so in general.
+In such situations, a trace filter with log level `silence` can turn them
+off selectively, while letting other messages through as before.
+
 ### Multiple sink support
 
 If using multiple sinks, there are limitations on tracing that you
