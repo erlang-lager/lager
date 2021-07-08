@@ -29,17 +29,14 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        otp_vsn: [23.2]
+        otp_vsn: [23.2, 24]
         os: [windows-latest]
+        rebar3_vsn: ['3.16']
     steps:
     - uses: actions/checkout@v2
-    - uses: gleam-lang/setup-erlang@v1.1.2
+    - uses: erlef/setup-beam@v1
       with:
         otp-version: ${{matrix.otp_vsn}}
-      id: install_erlang
-    - run: wget https://s3.amazonaws.com/rebar3/rebar3 -OutFile rebar3
-      shell: powershell
-    - run: |
-        & "${{steps.install_erlang.outputs.erlpath}}\bin\escript.exe" rebar3 dialyzer
-    - run: |
-        & "${{steps.install_erlang.outputs.erlpath}}\bin\escript.exe" rebar3 eunit
+        rebar3-version: ${{matrix.rebar3_vsn}}
+    - run: rebar3 dialyzer
+    - run: rebar3 eunit
