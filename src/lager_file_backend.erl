@@ -20,7 +20,7 @@
 
 %% @doc File backend for lager, with multiple file support.
 %% Multiple files are supported, each with the path and the loglevel being
-%% configurable. The configuration paramter for this backend is a list of
+%% configurable. The configuration parameter for this backend is a list of
 %% key-value 2-tuples. See the init() function for the available options.
 %% This backend supports external and internal log
 %% rotation and will re-open handles to files if the inode changes. It will
@@ -111,7 +111,7 @@ init([{FileName, LogLevel}, {Formatter,FormatterConfig}]) when is_list(FileName)
 init(LogFileConfig) when is_list(LogFileConfig) ->
     case validate_logfile_proplist(LogFileConfig) of
         false ->
-            %% falied to validate config
+            %% failed to validate config
             {error, {fatal, bad_config}};
         Config ->
             %% probabably a better way to do this, but whatever

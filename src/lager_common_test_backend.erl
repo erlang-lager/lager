@@ -13,7 +13,7 @@
         bounce/0,
         bounce/1]).
 
-%% holds the log messages for retreival on terminate
+%% holds the log messages for retrieval on terminate
 -record(state, {level :: {mask, integer()},
                 formatter :: atom(),
                 format_config :: any(),

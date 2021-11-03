@@ -21,7 +21,7 @@
 %% The error_logger API, but synchronous!
 %% This is helpful for tests, otherwise you need lots of nasty timer:sleep.
 %% Additionally, the warning map can be set on a per-process level, for
-%% convienience, via the process dictionary value `warning_map'.
+%% convenience, via the process dictionary value `warning_map'.
 
 -export([
         info_msg/1, info_msg/2,

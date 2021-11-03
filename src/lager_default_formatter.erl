@@ -381,7 +381,7 @@ basic_test_() ->
                         [metadata]
                     )))
         },
-        {"Metadata can be printed in its enterity with custom seperators",
+        {"Metadata can be printed in its enterity with custom separators",
             ?_assertEqual(iolist_to_binary(["bar->2, baz->3, foo->1"]),
                 iolist_to_binary(format(lager_msg:new("Message",
                             Now,

@@ -182,7 +182,7 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
                  unsafe ->
                      do_log_unsafe
              end,
-    %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not elegible for logging
+    %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not eligible for logging
     %% See lager.erl (lines 89-100) for lager:dispatch_log/6
     %% case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
     {'case',Line,
