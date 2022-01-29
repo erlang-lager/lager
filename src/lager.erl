@@ -53,7 +53,7 @@
           count :: infinity | pos_integer(),
           format_string :: string(),
           timeout :: infinity | pos_integer(),
-          started = os:timestamp() :: erlang:timestamp() %% use os:timestamp for compatability
+          started = os:timestamp() :: erlang:timestamp() %% use os:timestamp for compatibility
          }).
 
 %% API

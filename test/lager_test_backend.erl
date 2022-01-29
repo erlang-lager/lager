@@ -437,9 +437,9 @@ lager_test_() ->
                         ?assertEqual(0, count()),
                         lager:trace(?MODULE, [{module, ?MODULE}], debug),
                         ?assertMatch({?ERROR bor ?CRITICAL bor ?ALERT bor ?EMERGENCY, _}, lager_config:get(loglevel)),
-                        %% elegible for tracing
+                        %% eligible for tracing
                         ok = lager:info("hello world"),
-                        %% NOT elegible for tracing
+                        %% NOT eligible for tracing
                         ok = lager:log(info, [{pid, self()}], "hello world"),
                         ?assertEqual(1, count()),
                         ok
@@ -943,7 +943,7 @@ test_body(Expected, Actual) ->
                        "Trailing data \"~s\" following \"~s\"",
                        [Rest, Expected]);
                 {match, [{0, _}]} ->
-                    % the whole sting is " line NNN"
+                    % the whole string is " line NNN"
                     ok;
                 {match, [{Off, _}]} ->
                     ?debugFmt(

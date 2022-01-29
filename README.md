@@ -218,7 +218,7 @@ will be applied on that sink.
 
 Custom Formatting
 -----------------
-All loggers have a default formatting that can be overriden.  A formatter is any module that
+All loggers have a default formatting that can be overridden.  A formatter is any module that
 exports `format(#lager_log_message{},Config#any())`.  It is specified as part of the configuration
 for the backend:
 
@@ -653,7 +653,7 @@ record a module compiled with the lager parse transform knows about by using the
 lager:info("My state is ~p", [lager:pr(State, ?MODULE)])
 ```
 
-Often, `?MODULE` is sufficent, but you can obviously substitute that for a literal module name.
+Often, `?MODULE` is sufficient, but you can obviously substitute that for a literal module name.
 `lager:pr` also works from the shell.
 
 Colored terminal output
@@ -791,7 +791,7 @@ A special log level, `silence` can be used together with a filter in order
 to suppress specific log output. This can be useful if a backend has been
 configured for a particular log level, but a particular set of log messages
 clutters the log. If these come from a dependency, they might be difficult
-to remove entirely, and it might not be desireable to do so in general.
+to remove entirely, and it might not be desirable to do so in general.
 In such situations, a trace filter with log level `silence` can turn them
 off selectively, while letting other messages through as before.
 
@@ -1263,7 +1263,7 @@ Example Usage:
     * Bugfix: flush_threshold not working (#449)
     * Feature: Add `node` as a formatting option (#447)
     * Documentation: Update Elixir section with information about parse_transform (#446)
-    * Bugfix: Correct default console configuation to use "[{level,info}]" instead (#445)
+    * Bugfix: Correct default console configuration to use "[{level,info}]" instead (#445)
     * Feature: Pretty print lists of records at top level and field values with lager:pr (#442)
     * Bugfix: Ignore return value of lager:dispatch_log in lager.hrl (#441)
 
@@ -1339,7 +1339,7 @@ Example Usage:
 
 3.3.0 - 16 February 2017
 
-    * Docs: Fix documentation to make 'it' unambiguous when discussing asychronous
+    * Docs: Fix documentation to make 'it' unambiguous when discussing asynchronous
       operation. (#387)
     * Test: Fix test flappiness due to insufficient sanitation between test runs (#384, #385)
     * Feature: Allow metadata only logging. (#380)
