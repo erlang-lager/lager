@@ -197,9 +197,9 @@ handle_info({rotate, File}, #state{name=File, count=Count, date=Date, rotator=Ro
     schedule_rotation(File, Date),
     {ok, State1};
 handle_info({shaper_expired, Name}, #state{shaper=Shaper, name=Name, formatter=Formatter, formatter_config=FormatConfig} = State) ->
-    _ = case Shaper#lager_shaper.dropped of
+    State1 = case Shaper#lager_shaper.dropped of
             0 ->
-                ok;
+                State;
             Dropped ->
                 Report = io_lib:format(
                            "lager_file_backend dropped ~p messages in the last second that exceeded the limit of ~p messages/sec",
@@ -208,7 +208,7 @@ handle_info({shaper_expired, Name}, #state{shaper=Shaper, name=Name, formatter=F
                 write(State, lager_msg:timestamp(ReportMsg),
                       lager_msg:severity_as_int(ReportMsg), Formatter:format(ReportMsg, FormatConfig))
         end,
-    {ok, State#state{shaper=Shaper#lager_shaper{dropped=0, mps=0, lasttime=os:timestamp()}}};
+    {ok, State1#state{shaper=Shaper#lager_shaper{dropped=0, mps=0, lasttime=os:timestamp()}}};
 handle_info(_Info, State) ->
     {ok, State}.
 
@@ -248,8 +248,8 @@ write(#state{name=Name, fd=FD,
             %% need to check for rotation
             Buffer = {State0#state.sync_size, State0#state.sync_interval},
             case Rotator:ensure_logfile(Name, FD, Inode, Ctime, Buffer) of
-                {ok, {_FD, _Inode, _Ctime, Size}} when RotSize > 0, Size > RotSize ->
-                    State1 = close_file(State0),
+                {ok, {NewFD, NewInode, NewCtime, Size}} when RotSize > 0, Size > RotSize ->
+                    State1 = close_file(State0#state{fd=NewFD, inode=NewInode, ctime=NewCtime}),
                     case Rotator:rotate_logfile(Name, Count) of
                         ok ->
                             %% go around the loop again, we'll do another rotation check and hit the next clause of ensure_logfile

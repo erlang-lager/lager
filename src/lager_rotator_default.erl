@@ -56,7 +56,7 @@ reopen_logfile(Name, FD0, Buffer) ->
     _ = file:close(FD0),
     _ = file:close(FD0),
     case open_logfile(Name, Buffer) of
-        {ok, {_FD1, _Inode, _Size, _Ctime}=FileInfo} ->
+        {ok, {_FD1, _Inode, _Ctime, _Size}=FileInfo} ->
             %% inode changed, file was probably moved and
             %% recreated
             {ok, FileInfo};
