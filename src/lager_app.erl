@@ -190,7 +190,7 @@ maybe_remove_logger_handler() ->
     try
         ok = logger:remove_handler(default)
     catch
-        error:undef -> ok;
+        error:{badmatch, {error, {badmatch, default}}} -> ok;
         Err:Reason ->
             error_logger:error_msg("calling logger:remove_handler(default) failed: ~p ~p",
                                    [Err, Reason])
