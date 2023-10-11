@@ -25,7 +25,11 @@
 
 -include("lager.hrl").
 
--export([parse_transform/2]).
+-export([parse_transform/2, parse_transform_info/0]).
+
+%% @private
+parse_transform_info() ->
+    #{error_location => line}.
 
 %% @private
 parse_transform(AST, Options) ->
