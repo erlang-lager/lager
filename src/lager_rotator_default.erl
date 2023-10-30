@@ -76,17 +76,17 @@ rotate_logfile(File, 0) ->
         Error ->
             Error
     end,
-    _ = file:change_mode(File,8#0755);
+    _ = file:change_mode(File,8#0777);
 rotate_logfile(File0, 1) ->
     File1 = File0 ++ ".0",
     _ = file:rename(File0, File1),
-    _ = file:change_mode(File1,8#0755),
+    _ = file:change_mode(File1,8#0777),
     rotate_logfile(File0, 0);
 rotate_logfile(File0, Count) ->
     File1 = File0 ++ "." ++ integer_to_list(Count - 2),
     File2 = File0 ++ "." ++ integer_to_list(Count - 1),
     _ = file:rename(File1, File2),
-    _ = file:change_mode(File2,8#0755),
+    _ = file:change_mode(File2,8#0777),
     rotate_logfile(File0, Count - 1).
 
 maybe_update_ctime(Name) ->
