@@ -391,12 +391,15 @@ format_crash_report(Report, Neighbours) ->
 
     {Class, Reason, Trace} = get_value(error_info, Report),
     {Md, ReasonStr} = format_reason_md({Reason, Trace}),
+    % `format_reason_md` only formats the last stack frame, we're also interested
+    % in making the rest of the stack available to formatters
+    TraceStr = format_trace(tl(Trace)),
     Type = case Class of
         exit -> "exited";
         _ -> "crashed"
     end,
-    {Md0 ++ Md, io_lib:format("Process ~w with ~w neighbours ~s with reason: ~s",
-        [Name, length(Neighbours), Type, ReasonStr])}.
+    {Md0 ++ Md, io_lib:format("Process ~w with ~w neighbours ~s with reason: ~s [~s]",
+        [Name, length(Neighbours), Type, ReasonStr, TraceStr])}.
 
 format_offender(Off) ->
     case get_value(mfargs, Off) of
@@ -585,6 +588,20 @@ format_args([], FmtAcc, ArgsAcc) ->
 format_args([H|T], FmtAcc, ArgsAcc) ->
     {Str, _} = lager_trunc_io:print(H, 100),
     format_args(T, ["~s"|FmtAcc], [Str|ArgsAcc]).
+
+format_trace(Trace) ->
+    string:join(lists:reverse(format_trace_(Trace, [])), ", ").
+
+format_trace_([], Acc) -> Acc;
+format_trace_([{M, F, A, Props} | Rest], Acc0) ->
+    File = get_value(file, Props, "undefined"),
+    Line = get_value(line, Props, 0),
+    % eg. 'proc_lib:init_p_do_apply/3@proc_lib.erl#L226'
+    Formatted = io_lib:format("~w:~w/~w@~s#L~w",
+                              [M, F, A, File, Line]),
+    format_trace_(Rest, [Formatted | Acc0]);
+format_trace_([_ | Rest], Acc) ->
+    format_trace_(Rest, Acc).
 
 print_silly_list(L) when is_list(L) ->
     case lager_stdlib:string_p(L) of
