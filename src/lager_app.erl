@@ -190,7 +190,8 @@ maybe_remove_logger_handler() ->
     try
         ok = logger:remove_handler(default)
     catch
-        error:undef -> ok;
+        error:undef -> ok; %% No remove_handler(), OTP < 21.1
+        error:{badmatch, {error, {not_found, default}}} -> ok; %% No default handler, already removed
         Err:Reason ->
             error_logger:error_msg("calling logger:remove_handler(default) failed: ~p ~p",
                                    [Err, Reason])
