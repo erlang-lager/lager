@@ -301,6 +301,8 @@ handle_args(DefaultAttrs, Line, [Arg1, Arg2]) ->
 handle_args(DefaultAttrs, _Line, [Attrs, Format, Args]) ->
     {concat_lists(Attrs, DefaultAttrs), Format, Args}.
 
+make_varname(Prefix, {Line, Column}) ->
+    list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(Line) ++ "_" ++ integer_to_list(Column));
 make_varname(Prefix, Line) ->
     list_to_atom(Prefix ++ atom_to_list(get(module)) ++ integer_to_list(Line)).
 
