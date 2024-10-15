@@ -185,6 +185,7 @@ log_event(Event, #state{sink=Sink} = State) ->
             case {FormatRaw, Fmt} of
                 {false, "** Generic server "++_} ->
                     %% gen_server terminate
+                    ?CRASH_LOG(Event),
                     {Reason, Name} = case Args of
                                          [N, _Msg, _State, R] ->
                                              {R, N};
@@ -196,31 +197,68 @@ log_event(Event, #state{sink=Sink} = State) ->
                                              %% TODO do something with them
                                              {R, N}
                                      end,
-                    ?CRASH_LOG(Event),
                     {Md, Formatted} = format_reason_md(Reason),
                     ?LOGFMT(Sink, error, [{pid, Pid}, {name, Name} | Md], "gen_server ~w terminated with reason: ~s",
                         [Name, Formatted]);
                 {false, "** State machine "++_} ->
+                    ?CRASH_LOG(Event),
                     %% Check if the terminated process is gen_fsm or gen_statem
                     %% since they generate the same exit message
-                    {Type, Name, StateName, Reason} = case Args of
-                        [TName, _Msg, TStateName, _StateData, TReason] ->
-                            {gen_fsm, TName, TStateName, TReason};
-                        [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _FsmType, Stacktrace] ->
-                            {gen_statem, TName, TStateName, {TReason, Stacktrace}};
-                        [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _FsmType, Stacktrace] ->
-                            %% sometimes gen_statem wraps its statename/data in a list for some reason???
-                            {gen_statem, TName, TStateName, {TReason, Stacktrace}}
-                    end,
+
+                    %% gen_statem has a variable set of fields it will include
+                    %% so we have to parse the format string to find the ones we want
+                    %%
+                    %% first, get rid of any newline formatters
+                    Fm2 = lists:flatten(string:replace(Fmt, "~n", "", all)),
+                    Tokens = string:tokens(Fm2, "~"),
+
+
+                    {FormatArgs, _} = lists:foldl(fun(Token, {Acc, [H|T]}) ->
+                                        case string:tokens(Token, "**") of
+                                            [" State machine "] ->
+                                                {maps:put(name, H, Acc), T};
+                                            [_ ," Last event = "] ->
+                                                {maps:put(last_event, H, Acc), T};
+                                            [_, " When server state  = "] ->
+                                                {maps:put(state, H, Acc), T};
+                                            [_, " Reason for termination = "] ->
+                                                {maps:put(reason, H, Acc), T};
+                                            [_, " Callback modules = "] ->
+                                                {maps:put(callback_modules, H, Acc), T};
+                                            [_, " Callback mode = "] ->
+                                                {maps:put(callback_mode, H, Acc), T};
+                                            [_, " Stacktrace =" |_] ->
+                                                {maps:put(stacktrace, H, Acc), T};
+                                            [_, " Time-outs: " |_] ->
+                                                {maps:put(time_outs, H, Acc), T};
+                                            Unknown ->
+                                                {Acc, T}
+                                        end;
+                                        (_Token, {Acc, []}) ->
+                                                    {Acc, []}
+                                end, {maps:new(), Args}, Tokens),
+
+                    %%{Type, Name, StateName, Reason} = case Args of
+                    %%    [TName, _Msg, TStateName, _StateData, TReason] ->
+                    %%        {gen_fsm, TName, TStateName, TReason};
+                    %%    [TName, _Msg, {TStateName, _StateData}, _ExitType, TReason, _FsmType, Stacktrace] ->
+                    %%        {gen_statem, TName, TStateName, {TReason, Stacktrace}};
+                    %%    [TName, _Msg, [{TStateName, _StateData}], _ExitType, TReason, _FsmType, Stacktrace] ->
+                    %%        %% sometimes gen_statem wraps its statename/data in a list for some reason???
+                    %%        {gen_statem, TName, TStateName, {TReason, Stacktrace}}
+                    %%end,
+                    Type = 'state machine',
+                    Name = maps:get(name, FormatArgs),
+                    {StateName, _StateData} = maps:get(state, FormatArgs),
+                    Reason = maps:get(reason, FormatArgs),
                     {Md, Formatted} = format_reason_md(Reason),
-                    ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, [{pid, Pid}, {name, Name} | Md], "~s ~w in state ~w terminated with reason: ~s",
                         [Type, Name, StateName, Formatted]);
                 {false, "** gen_event handler"++_} ->
                     %% gen_event handler terminate
+                    ?CRASH_LOG(Event),
                     [ID, Name, _Msg, _State, Reason] = Args,
                     {Md, Formatted} = format_reason_md(Reason),
-                    ?CRASH_LOG(Event),
                     ?LOGFMT(Sink, error, [{pid, Pid}, {name, Name} | Md], "gen_event ~w installed in ~w terminated with reason: ~s",
                         [ID, Name, Formatted]);
                 {false, "** Cowboy handler"++_} ->
