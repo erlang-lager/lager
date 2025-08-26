@@ -192,16 +192,18 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
     {Meta, Message, Arguments} = handle_args(DefaultAttrs, Line, Arguments0),
     case get(use_logger) of
         true ->
-            case Arguments of
-                {atom, _, none} ->
-                    %% logger:log(Level, Format, Args, Metadata)
-                    {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
-                     [{atom,Line,Severity}, Message, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
-                _ ->
-                    %% logger:log(Level, String, Metadata)
-                    {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
-                     [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]}
-            end;
+            %% Bind logger result to _ to avoid OTP 28 "term constructed but never used" warning
+            {match, Line, {var, Line, '_'},
+             case Arguments of
+                 {atom, _, none} ->
+                     %% logger:log(Level, Format, Args, Metadata)
+                     {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
+                      [{atom,Line,Severity}, Message, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]};
+                 _ ->
+                     %% logger:log(Level, String, Metadata)
+                     {call,Line,{remote, Line, {atom, Line, logger}, {atom, Line, log}},
+                      [{atom,Line,Severity}, Message, Arguments, {call, Line, {remote, Line, {atom, Line, maps}, {atom, Line, from_list}}, [Meta]}]}
+             end};
         false ->
             SeverityAsInt=lager_util:level_to_num(Severity),
             %% Generate some unique variable names so we don't accidentally export from case clauses.
@@ -218,55 +220,57 @@ do_transform(Line, SinkName, Severity, Arguments0, Safety) ->
             %% Wrap the call to lager:dispatch_log/6 in case that will avoid doing any work if this message is not elegible for logging
             %% See lager.erl (lines 89-100) for lager:dispatch_log/6
             %% case {whereis(Sink), whereis(?DEFAULT_SINK), lager_config:get({Sink, loglevel}, {?LOG_NONE, []})} of
-            {'case',Line,
-             {tuple,Line,
-              [{call,Line,{atom,Line,whereis},[{atom,Line,SinkName}]},
-               {call,Line,{atom,Line,whereis},[{atom,Line,?DEFAULT_SINK}]}, 
-               {call,Line,
-                {remote,Line,{atom,Line,lager_config},{atom,Line,get}},
-                [{tuple,Line,[{atom,Line,SinkName},{atom,Line,loglevel}]},
-                 {tuple,Line,[{integer,Line,0},{nil,Line}]}]}]},
-             %% {undefined, undefined, _} -> {error, lager_not_running};
-             [{clause,Line,
-               [{tuple,Line,
-                 [{atom,Line,undefined},{atom,Line,undefined},{var,Line,'_'}]}],
-               [],
-               %% trick the linter into avoiding a 'term constructed but not used' error:
-               %% (fun() -> {error, lager_not_running} end)()
-               [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
-              },
-              %% {undefined, _, _} -> {error, {sink_not_configured, Sink}};
-              {clause,Line,
-               [{tuple,Line,
-                 [{atom,Line,undefined},{var,Line,'_'},{var,Line,'_'}]}],
-               [],
-               %% same trick as above to avoid linter error
-               [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple,Line, [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]}]}}, []}] 
-              },
-              %% {SinkPid, _, {Level, Traces}} when ... -> lager:do_log/9;
-              {clause,Line,
-               [{tuple,Line,
-                 [{var,Line,PidVar},
-                  {var,Line,'_'},
-                  {tuple,Line,[{var,Line,LevelVar},{var,Line,TracesVar}]}]}],
-               [[{op, Line, 'orelse',
-                  {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
-                  {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
-               [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, LogFun}},
-                 [{atom,Line,Severity},
-                  Meta,
-                  Message,
-                  Arguments,
-                  {integer, Line, get(truncation_size)},
-                  {integer, Line, SeverityAsInt},
-                  {var, Line, LevelVar},
-                  {var, Line, TracesVar},
-                  {atom, Line, SinkName},
-                  {var, Line, PidVar}]}]},
-              %% _ -> ok
-              {clause,Line,[{var,Line,'_'}],[],[{atom,Line,ok}]}]}
+            %% Bind case result to _ to avoid OTP 28 "term constructed but never used" warning
+            {match, Line, {var, Line, '_'},
+             {'case',Line,
+              {tuple,Line,
+               [{call,Line,{atom,Line,whereis},[{atom,Line,SinkName}]},
+                {call,Line,{atom,Line,whereis},[{atom,Line,?DEFAULT_SINK}]},
+                {call,Line,
+                 {remote,Line,{atom,Line,lager_config},{atom,Line,get}},
+                 [{tuple,Line,[{atom,Line,SinkName},{atom,Line,loglevel}]},
+                  {tuple,Line,[{integer,Line,0},{nil,Line}]}]}]},
+              %% {undefined, undefined, _} -> {error, lager_not_running};
+              [{clause,Line,
+                [{tuple,Line,
+                  [{atom,Line,undefined},{atom,Line,undefined},{var,Line,'_'}]}],
+                [],
+                %% trick the linter into avoiding a 'term constructed but not used' error:
+                %% (fun() -> {error, lager_not_running} end)()
+                [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple, Line, [{atom, Line, error},{atom, Line, lager_not_running}]}]}]}}, []}]
+               },
+               %% {undefined, _, _} -> {error, {sink_not_configured, Sink}};
+               {clause,Line,
+                [{tuple,Line,
+                  [{atom,Line,undefined},{var,Line,'_'},{var,Line,'_'}]}],
+                [],
+                %% same trick as above to avoid linter error
+                [{call, Line, {'fun', Line, {clauses, [{clause, Line, [],[], [{tuple,Line, [{atom,Line,error}, {tuple,Line,[{atom,Line,sink_not_configured},{atom,Line,SinkName}]}]}]}]}}, []}]
+               },
+               %% {SinkPid, _, {Level, Traces}} when ... -> lager:do_log/9;
+               {clause,Line,
+                [{tuple,Line,
+                  [{var,Line,PidVar},
+                   {var,Line,'_'},
+                   {tuple,Line,[{var,Line,LevelVar},{var,Line,TracesVar}]}]}],
+                [[{op, Line, 'orelse',
+                   {op, Line, '/=', {op, Line, 'band', {var, Line, LevelVar}, {integer, Line, SeverityAsInt}}, {integer, Line, 0}},
+                   {op, Line, '/=', {var, Line, TracesVar}, {nil, Line}}}]],
+                [{call,Line,{remote, Line, {atom, Line, lager}, {atom, Line, LogFun}},
+                  [{atom,Line,Severity},
+                   Meta,
+                   Message,
+                   Arguments,
+                   {integer, Line, get(truncation_size)},
+                   {integer, Line, SeverityAsInt},
+                   {var, Line, LevelVar},
+                   {var, Line, TracesVar},
+                   {atom, Line, SinkName},
+                   {var, Line, PidVar}]}]},
+               %% _ -> ok
+               {clause,Line,[{var,Line,'_'}],[],[{atom,Line,ok}]}]}}
     end.
- 
+
 handle_args(DefaultAttrs, Line, [{cons, LineNum, {tuple, _, _}, _} = Attrs]) ->
     {concat_lists(DefaultAttrs, Attrs), {string, LineNum, ""}, {atom, Line, none}};
 handle_args(DefaultAttrs, Line, [Format]) ->
