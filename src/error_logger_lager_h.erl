@@ -231,7 +231,7 @@ log_event(Event, #state{sink=Sink} = State) ->
                                                 {maps:put(stacktrace, H, Acc), T};
                                             [_, " Time-outs: " |_] ->
                                                 {maps:put(time_outs, H, Acc), T};
-                                            Unknown ->
+                                            _Unknown ->
                                                 {Acc, T}
                                         end;
                                         (_Token, {Acc, []}) ->
